@@ -10,4 +10,4 @@ COPY . .
 
 EXPOSE 5000
 
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "3", "wsgi:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:10000", "high_end_ws_lounge.run:app"]
