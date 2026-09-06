@@ -4,7 +4,7 @@ venv/
 
 # Python Cache
 __pycache__/
-*.pyc
+*.pyc https://github.com/WS-Students-Professionals-Lounge/INTEGRATED-STUDY-HUB-MANAGEMENT-SYSTEM-FOR-WS-STUDENTS-PROFESSIONALS-LOUNGE
 .pytest_cache/
 
 # Sensitive Files & Database
