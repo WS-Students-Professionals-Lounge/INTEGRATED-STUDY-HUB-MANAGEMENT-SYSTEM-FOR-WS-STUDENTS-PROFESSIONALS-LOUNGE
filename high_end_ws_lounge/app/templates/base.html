@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}WS Lounge Pro{% endblock %}</title>
-    
+    <title>{% block title %}WS Students & Professionals Lounge{% endblock %}</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" crossorigin="anonymous">
 
@@ -23,18 +24,30 @@
                 
                 <div class="logo-text-group">
                     <span class="logo-sub-header">STUDENT & PROFESSIONALS</span>
-                    <span class="logo-main-title">LOUNGE</span>
+                    <span class="logo-main-title">WS LOUNGE</span>
                 </div>
             </div>
         </div>
         <div class="sidebar-links">
             {% if current_user.is_authenticated %}
-                <a class="side-link {% if request.endpoint == 'main.dashboard' %}active{% endif %}" href="{{ url_for('main.dashboard') }}">
-                    <i class="fas fa-chart-pie"></i> Dashboard
+                <a class="side-link {% if request.endpoint in ['main.dashboard', 'admin.dashboard'] %}active{% endif %}" href="{{ url_for('main.dashboard') }}">
+                    <i class="fas fa-chart-pie"></i> <span>Dashboard</span>
+
+                    <!-- Total Notifications Badge (Combined) -->
+                    {% if total_notifications_count and total_notifications_count > 0 %}
+                        <span id="total-notif-badge" class="badge rounded-pill bg-danger ms-auto">
+                            {{ total_notifications_count }}
+                        </span>
+                    {% else %}
+                        <span id="total-notif-badge" class="badge rounded-pill bg-danger ms-auto d-none">0</span>
+                    {% endif %}
                 </a>
                 
                 <!-- Member Quick Actions -->
                 {% if current_user.is_authenticated and current_user.role == 'member' %}
+                    <a class="side-link {% if request.endpoint == 'main.profile' %}active{% endif %}" href="{{ url_for('main.profile') }}">
+                        <i class="fas fa-user-circle"></i> My Profile
+                    </a>
                     <a class="side-link {% if request.endpoint == 'main.timelog' %}active{% endif %}" href="{{ url_for('main.timelog') }}">
                         <i class="fas fa-clock"></i> Use Lounge (Time In/Out)
                     </a>
@@ -51,10 +64,27 @@
                         <i class="fas fa-plus-circle"></i> New Reservation
                     </a>
                     <a class="side-link {% if request.endpoint == 'admin.admin_reservations_list' %}active{% endif %}" href="{{ url_for('admin.admin_reservations_list') }}">
-                        <i class="fas fa-calendar-alt"></i> Reservations
+                        <i class="fas fa-calendar-alt"></i> <span>Reservations</span>
+
+                        {% if pending_reservations_count and pending_reservations_count > 0 %}
+                            <span id="res-notif-badge" class="badge rounded-pill bg-danger ms-auto">
+                                {{ pending_reservations_count }}
+                            </span>
+                        {% else %}
+                            <span id="res-notif-badge" class="badge rounded-pill bg-danger ms-auto d-none">0</span>
+                        {% endif %}
                     </a>
                     <a class="side-link {% if request.endpoint == 'admin.members' %}active{% endif %}" href="{{ url_for('admin.members') }}">
-                        <i class="fas fa-user-friends"></i> Members
+                        <i class="fas fa-user-friends"></i>  <span>Members</span>
+
+                        <!-- Pending Solo Plans Badge -->
+                        {% if pending_solo_plans_count and pending_solo_plans_count > 0 %}
+                            <span id="mem-notif-badge" class="badge rounded-pill bg-danger ms-auto">
+                                {{ pending_solo_plans_count }}
+                            </span>
+                        {% else %}
+                            <span id="mem-notif-badge" class="badge rounded-pill bg-danger ms-auto d-none">0</span>
+                        {% endif %}
                     </a>
                 {% endif %}
                 {% if current_user.role == 'admin' %}
@@ -94,6 +124,7 @@
         </main>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>

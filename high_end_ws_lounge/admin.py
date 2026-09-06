@@ -4,7 +4,15 @@ Contains the admin blueprint with all admin routes and daily report helpers.
 """
 import os
 from io import BytesIO
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
+import pytz
+from zoneinfo import ZoneInfo
+
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_LEFT
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from database_fixed import AdminReservationForm, AttendanceLog, DailyReport, Membership, PaymentInfo, Reservation, \
     Room, SoloPlan, TimeLog, User, UserActivityLog, WalkinForm, WalkinReservation, db, generate_customer_id, \
@@ -13,11 +21,108 @@ from flask_mail import Message
 from werkzeug.utils import secure_filename
 from flask_login import current_user, login_required
 from sqlalchemy import and_, func, inspect, or_, text
-from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, send_file, url_for
 from time_utils import format_checkin_time, format_checkout_time, format_date, decimal_hours_to_readable
+from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, send_file, url_for
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
 
+
+def calculate_open_time_minutes_fee(minutes):
+    """
+    Helper function para sa Open Time minute-tier pricing:
+    1-12 mins = ₱5
+    13-24 mins = ₱10
+    25-36 mins = ₱15
+    37-47 mins = ₱20
+    48-60 mins = ₱25
+    """
+    if minutes <= 0:
+        return 0.0
+    elif 1 <= minutes <= 12:
+        return 5.0
+    elif 13 <= minutes <= 24:
+        return 10.0
+    elif 25 <= minutes <= 36:
+        return 15.0
+    elif 37 <= minutes <= 47:
+        return 20.0
+    elif 48 <= minutes <= 60:
+        return 25.0
+    return 35.0  # Fallback for full hour rate
+
+
+def calculate_admin_total_amount(
+    room_rate=0.0,
+    duration_hours=1.0,
+    extra_fee=0.0,
+    addon_subtotal=0.0,
+    discount_rate=0.0,
+    is_open_time=False,
+    duration_minutes=None,  # Optional exact minutes parameter
+):
+    """Calculate an admin reservation/walk-in total using the shared billing formula."""
+    rate = float(room_rate or 35.0)  # Default base rate if 0
+    discount = float(discount_rate or 0.0)
+
+    if is_open_time:
+        # Kon may napasa nga duration_minutes, gamiton ini
+        if duration_minutes is not None:
+            total_mins = int(duration_minutes)
+        else:
+            # Kon duration_hours lang ang ginpasa, i-convert sa minutes
+            total_mins = int(float(duration_hours or 0.0) * 60)
+
+        if total_mins <= 0:
+            room_cost = calculate_open_time_minutes_fee(1)  # Minimum fee (₱5)
+        else:
+            full_hours = total_mins // 60
+            remaining_mins = total_mins % 60
+
+            hourly_fee = full_hours * rate
+            minute_fee = calculate_open_time_minutes_fee(remaining_mins)
+
+            room_cost = hourly_fee + minute_fee
+    else:
+        duration = float(duration_hours or 1.0)
+        room_cost = rate * duration
+
+    # Apply discount sa room cost
+    if discount > 0:
+        room_cost = room_cost * (1 - (discount / 100.0) if discount > 1 else (1 - discount))
+
+    # Add extra fees kag addons
+    total = room_cost + float(extra_fee or 0.0) + float(addon_subtotal or 0.0)
+    
+    return round(total, 2)
+
+def get_custom_tier_rate(room_name, pax_count, default_rate):
+    """
+    I-calculate lang ang dynamic rate para sa Lecture Room kag Event Room.
+    Para sa iban nga rooms, ibalik lang ang ila standard default_rate.
+    """
+    name = room_name.strip().lower()
+    pax = int(pax_count or 1)
+
+    # Specific lang sa Lecture Room
+    if "lecture room" in name:
+        if pax <= 5:
+            return 150.0
+        elif pax <= 10:
+            return 200.0
+        else:
+            return 250.0
+
+    # Specific lang sa Event Room
+    elif "event room" in name:
+        if pax <= 15:
+            return 300.0
+        elif pax <= 30:
+            return 400.0
+        else:
+            return 500.0
+
+    # Para sa tanan nga iban nga rooms (Common Area, Small Meeting Rooms, etc.)
+    return float(default_rate or 0.0)
 
 def require_super_admin():
     if current_user.role != "admin":
@@ -57,39 +162,60 @@ def _solo_plan_credit_hours(plan_name):
     return hour_mapping.get(plan_key, 24.0)
 
 
-def _ensure_approved_solo_plan_membership(user):
-    if user.membership:
-        return False
+def _ensure_approved_solo_plan_membership(member):
+    ph_tz = pytz.timezone("Asia/Manila")
+    now_naive = datetime.now(ph_tz).replace(tzinfo=None)
 
-    plan = SoloPlan.query.filter_by(user_id=user.id).filter(SoloPlan.status.ilike("approved")).order_by(SoloPlan.expiry_date.desc()).first()
-    if not plan:
-        return False
-
-    hours = _solo_plan_credit_hours(plan.plan_name)
-    membership = Membership(
-        user_id=user.id,
-        status="active",
-        start_date=datetime.utcnow(),
-        expiry_date=plan.expiry_date or datetime.utcnow() + timedelta(days=30),
-        total_hours=hours,
-        hours_left=hours,
-        plan_name=plan.plan_name,
-        is_checked_in=False,
+    # LATEST nga approved SoloPlan sang user nga active pa
+    latest_approved_plan = (
+        SoloPlan.query.filter(
+            SoloPlan.user_id == member.id,
+            SoloPlan.status.ilike("approved"),
+            SoloPlan.expiry_date > now_naive  # Dapat WALA PA NAG-EXPIRE
+        )
+        .order_by(SoloPlan.created_at.desc())
+        .first()
     )
-    db.session.add(membership)
-    return True
+
+    if not latest_approved_plan:
+        return False
+
+    membership = Membership.query.filter_by(user_id=member.id).first()
+
+    # if no membership record, i-create sang bag-o
+    if not membership:
+        membership = Membership(
+            user_id=member.id,
+            plan_name=latest_approved_plan.plan_name,
+            status="active",
+            start_date=latest_approved_plan.created_at or now_naive,
+            expiry_date=latest_approved_plan.expiry_date,
+        )
+        db.session.add(membership)
+        return True
+    else:
+        #Kon may daan na nga membership (bisan expired pa), I-UPDATE sa BAG-O NGA PLAN DATES!
+        membership.plan_name = latest_approved_plan.plan_name
+        membership.status = "active"  # Maga-aktibo liwat ang Check-In button!
+        membership.start_date = latest_approved_plan.created_at or now_naive
+        membership.expiry_date = latest_approved_plan.expiry_date
+        return True
 
 
 def _expire_membership_if_needed(membership):
     if not membership or membership.status != "active" or not membership.expiry_date:
         return
 
-    now = datetime.utcnow()
-    if now >= membership.expiry_date:
+    # Philippine Standard Time (+8 Hours)
+    ph_tz = pytz.timezone("Asia/Manila")
+    now_ph = datetime.now(ph_tz).replace(tzinfo=None)
+
+    if now_ph >= membership.expiry_date:
         membership.status = "expired"
         membership.hours_left = 0.0
         membership.is_checked_in = False
 
+        # Auto check-out kon nag-expire ang plan samtang naka-check in
         active_log = membership.attendance_logs.filter(AttendanceLog.check_out_time.is_(None)).first()
         if active_log:
             active_log.check_out_time = membership.expiry_date
@@ -100,18 +226,25 @@ def _expire_membership_if_needed(membership):
 
         db.session.commit()
 
-
-# ---------------------------------------------------------------------------
 # Daily Report Helpers
-# ---------------------------------------------------------------------------
+
 @admin_bp.route("/api/rooms")
 @login_required
 def admin_rooms_api():
     redirect_response = require_admin_or_staff()
     if redirect_response:
-        return jsonify({"status": "error", "message": "Access Restricted: Super Admin Account Required"}), 403
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": "Access Restricted: Executive Admin Account Required",
+                }
+            ),
+            403,
+        )
 
     rooms = Room.query.all()
+
     room_data = [
         {
             "id": room.id,
@@ -122,7 +255,12 @@ def admin_rooms_api():
         }
         for room in rooms
     ]
+
+    room_data = sorted(
+        room_data, key=lambda r: 0 if r["is_common_area"] else 1
+    )
     return jsonify(room_data)
+
 def get_or_create_daily_report(report_date):
     report = DailyReport.query.filter_by(report_date=report_date).first()
     if not report:
@@ -133,6 +271,7 @@ def get_or_create_daily_report(report_date):
             total_timelogged=0,
         )
         db.session.add(report)
+        db.session.commit()
     return report
 
 
@@ -141,11 +280,14 @@ def ensure_address_column():
         inspector = inspect(db.engine)
         if inspector.has_table("reservations"):
             columns = [
-                column["name"] for column in inspector.get_columns("reservations")
+                column["name"]
+                for column in inspector.get_columns("reservations")
             ]
             if "address" not in columns:
                 db.session.execute(
-                    text("ALTER TABLE reservations ADD COLUMN address VARCHAR(128)")
+                    text(
+                        "ALTER TABLE reservations ADD COLUMN address VARCHAR(128)"
+                    )
                 )
                 db.session.commit()
     except Exception:
@@ -181,7 +323,9 @@ def refresh_daily_report(report_date):
     )
 
     report.total_timelogged = total_revenue
-    report.generated_at = datetime.utcnow()
+    ph_tz = ZoneInfo("Asia/Manila")
+    report.generated_at = datetime.now(ph_tz)
+
     db.session.add(report)
     try:
         db.session.commit()
@@ -192,21 +336,29 @@ def refresh_daily_report(report_date):
 
 def get_active_room_reservations(rooms):
     room_ids = [room.id for room in rooms]
-    now = datetime.now()
+
+    ph_tz = pytz.timezone("Asia/Manila")
+    now = datetime.now(ph_tz).replace(tzinfo=None)
+
     reservations = (
         Reservation.query.filter(
             Reservation.room_id.in_(room_ids),
-            Reservation.status.in_(["Confirmed", "Walk-in", "Pending"]),
+            Reservation.status.in_(["Confirmed", "Walk-in"]),
         )
         .order_by(Reservation.start_time.asc())
         .all()
     )
 
     def is_current(reservation):
-        if reservation.start_time and reservation.end_time:
+        if not reservation.start_time:
+            return False
+            
+        if reservation.end_time:
             return reservation.start_time <= now <= reservation.end_time
-        if reservation.start_time and reservation.is_open_time:
+            
+        if reservation.is_open_time or reservation.end_time is None:
             return reservation.start_time <= now
+            
         return False
 
     room_reservations = {}
@@ -236,7 +388,7 @@ def get_active_room_reservations(rooms):
 def check_availability():
     redirect_response = require_admin_or_staff()
     if redirect_response:
-        return jsonify({"status": "error", "message": "Access Restricted: Super Admin Account Required"}), 403
+        return jsonify({"status": "error", "message": "Access Restricted: Executive Admin Account Required"}), 403
 
     room_id = request.args.get("room_id", type=int)
     date_str = request.args.get("date", "")
@@ -245,6 +397,9 @@ def check_availability():
     open_time = request.args.get("open_time", "false").lower() in ["1", "true", "yes"]
 
     try:
+        room = Room.query.get(room_id) if room_id else None
+        is_common_area = room and room.name.strip().lower() == "common area"
+
         if start_str and "T" in start_str:
             start_dt = datetime.strptime(start_str, "%Y-%m-%dT%H:%M")
         else:
@@ -256,7 +411,7 @@ def check_availability():
                 start_dt = datetime.now()
 
         if open_time:
-            end_dt = start_dt + timedelta(hours=12)
+            end_dt = start_dt + timedelta(hours=8)
         elif end_str:
             if "T" in end_str:
                 end_dt = datetime.strptime(end_str, "%Y-%m-%dT%H:%M")
@@ -268,14 +423,25 @@ def check_availability():
         else:
             end_dt = start_dt + timedelta(hours=1)
 
-        conflict = Reservation.check_conflict(room_id, start_dt, end_dt)
-        if conflict:
-            return jsonify(
-                {
-                    "status": "conflict",
-                    "message": "Selected room is not available for the requested time.",
-                }
-            )
+        if not is_common_area:
+            conflict = Reservation.check_conflict(room_id, start_dt, end_dt)
+            if conflict:
+                return jsonify(
+                    {
+                        "status": "conflict",
+                        "message": "Selected room is not available for the requested time.",
+                    }
+                )
+        else:
+            current_occupancy = get_common_area_count() if 'get_common_area_count' in globals() else 0
+            if current_occupancy >= 70:
+                return jsonify(
+                    {
+                        "status": "conflict",
+                        "message": "Common Area is already at full capacity (70/70).",
+                    }
+                )
+
     except Exception as error:
         return jsonify(
             {"status": "error", "message": f"Invalid availability check data: {error}"}
@@ -284,9 +450,8 @@ def check_availability():
     return jsonify({"status": "ok"})
 
 
-# ---------------------------------------------------------------------------
 # Admin Routes
-# ---------------------------------------------------------------------------
+
 @admin_bp.route("/dashboard")
 @login_required
 def dashboard():
@@ -294,17 +459,27 @@ def dashboard():
     if redirect_response:
         return redirect_response
 
-    now = datetime.now()
+    ph_tz = pytz.timezone("Asia/Manila")
+    now = datetime.now(ph_tz).replace(tzinfo=None)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     today_end = today_start + timedelta(days=1)
 
     form = WalkinForm()
     rooms = Room.query.filter(~Room.name.ilike('Test Room%')).all()
+    unique_rooms = []
+    seen_room_names = set()
+    for room in rooms:
+        room_name = room.name.strip().lower()
+        if room_name in seen_room_names:
+            continue
+        seen_room_names.add(room_name)
+        unique_rooms.append(room)
+
     form.room_id.choices = [
         (room.id, f"{room.name} (₱{room.base_rate}/hr)") for room in rooms
     ]
 
-    room_reservations = get_active_room_reservations(rooms)
+    room_reservations = get_active_room_reservations(unique_rooms)
     recent_members = (
         User.query.filter_by(role="member")
         .order_by(User.created_at.desc())
@@ -344,13 +519,12 @@ def dashboard():
     )
 
     updated = False
-    # NOTE: Do not auto-confirm Pending reservations here. Pending (online) reservations
-    # must be reviewed by staff on the confirmation page to verify receipts and payments.
 
     expired_sessions = Reservation.query.filter(
         Reservation.end_time <= now,
         Reservation.status.in_(["Confirmed", "Walk-in"]),
         Reservation.is_open_time == False,
+        Reservation.is_paused == False
     ).all()
     for res in expired_sessions:
         res.status = "Ended"
@@ -365,25 +539,34 @@ def dashboard():
             Reservation.status.in_(["Pending", "Confirmed"]),
             Reservation.start_time >= today_start,
             Reservation.start_time < today_end,
-            Reservation.end_time >= now,
+            or_(
+                Reservation.end_time >= now,
+                Reservation.is_open_time == True
+            )
         )
         .count()
     )
 
     all_res = Reservation.query.filter(
         Reservation.start_time <= now,
-        Reservation.end_time >= today_start,
+        or_(
+            Reservation.end_time >= today_start,
+            Reservation.is_open_time == True
+        ),
         Reservation.status.in_(["Confirmed", "Walk-in", "Ended"]),
     ).all()
 
-    active_reservations = sorted(all_res, key=lambda x: (x.status != "Ended", x.end_time))
+    active_reservations = sorted(all_res, key=lambda x: (x.status != "Ended", x.end_time if x.end_time else datetime.max))
 
     pending_reservations = (
         Reservation.query.filter(
-            Reservation.status.in_(["Pending", "Confirmed"]),
+            Reservation.status == "Pending",
             Reservation.start_time >= today_start,
             Reservation.start_time < today_end,
-            Reservation.end_time >= now,
+            or_(
+                Reservation.end_time >= now,
+                Reservation.is_open_time == True
+            )
         )
         .order_by(Reservation.start_time.asc())
         .limit(7)
@@ -402,8 +585,25 @@ def dashboard():
         if r.room and r.room.name.strip().lower() == "common area"
     ]
 
+    # Fetch active AttendanceLog entries for checked-in members to bind real-time check-in stamp
+    for res in common_area_reservations:
+        if hasattr(res, 'user_id') and res.user_id:
+            active_log = AttendanceLog.query.join(Membership).filter(
+                Membership.user_id == res.user_id,
+                AttendanceLog.check_out_time.is_(None)
+            ).first()
+            
+            if active_log and active_log.check_in_time:
+                # Direct overwrite sang display start_time gamit ang actual AttendanceLog check-in time
+                res.actual_check_in = active_log.check_in_time
+
+    common_area_reservations = sorted(
+        common_area_reservations,
+        key=lambda r: r.end_time if r.end_time is not None else datetime.max
+    )
+
     common_area_occupancy = get_common_area_count()
-    common_area_available_slots = max(0, 50 - common_area_occupancy)
+    common_area_available_slots = max(0, 70 - common_area_occupancy)
 
     return render_template(
         "admin/admin_dashboard.html",
@@ -412,7 +612,7 @@ def dashboard():
         active_plans=active_plans,
         reservations_today=reservations_today,
         revenue_today=revenue_today,
-        rooms=rooms,
+        rooms=unique_rooms,
         room_reservations=room_reservations,
         recent_members=recent_members,
         incomplete_count=incomplete_count,
@@ -424,6 +624,87 @@ def dashboard():
         common_area_available_slots=common_area_available_slots,
         now=now,
     )
+
+@admin_bp.route("/toggle_pause_reservation/<int:reservation_id>", methods=["POST"])
+@login_required
+def toggle_pause_reservation(reservation_id):
+    redirect_response = require_admin_or_staff()
+    if redirect_response:
+        return redirect_response
+
+    reservation = Reservation.query.get_or_404(reservation_id)
+    
+    # Dynamic Philippine Time Alignment (+8 Hours)
+    ph_tz = pytz.timezone("Asia/Manila")
+    now = datetime.now(ph_tz).replace(tzinfo=None)
+
+    if not reservation.is_paused:
+        # --- PAUSE LOGIC ---
+        reservation.is_paused = True
+        reservation.paused_at = now
+        
+    else:
+        # --- RESUME LOGIC ---
+        if reservation.paused_at:
+            # Pila ka segundo nga naka-freeze/pause ang kwarto
+            paused_seconds = (now - reservation.paused_at).total_seconds()
+            
+            current_accumulated = reservation.accumulated_paused_seconds or 0
+            reservation.accumulated_paused_seconds = current_accumulated + int(paused_seconds)
+
+            # TANAN NGA TYPE (Open Time man o Fixed Time):
+            # Dapat i-move forward ang start_time sang eksakto nga segundos sang pagka-pause.
+            # Amo ini ang nagapapunggan sang Live Timer sa paglumpat!
+            if reservation.start_time:
+                reservation.start_time = reservation.start_time + timedelta(seconds=paused_seconds)
+            
+            # Kon Fixed Time, i-move man ang end_time para extended ang session exact sa pause time
+            if not reservation.is_open_time and reservation.end_time:
+                reservation.end_time = reservation.end_time + timedelta(seconds=paused_seconds)
+
+        # Reset state
+        reservation.is_paused = False
+        reservation.paused_at = None
+
+    db.session.commit()
+    return redirect(url_for("admin.dashboard"))
+
+# (Global Notification Context Processor)
+
+@admin_bp.app_context_processor
+def inject_sidebar_notifications():
+    if current_user.is_authenticated and getattr(current_user, 'role', '') in ['admin', 'staff']:
+        # Fetch counts halin sa DB
+        p_res = Reservation.query.filter_by(status="Pending").count()
+        p_plans = SoloPlan.query.filter_by(status="pending").count()
+        total = p_res + p_plans
+        
+        return dict(
+            pending_reservations_count=p_res,
+            pending_solo_plans_count=p_plans,
+            total_notifications_count=total
+        )
+    return dict(
+        pending_reservations_count=0,
+        pending_solo_plans_count=0,
+        total_notifications_count=0
+    )
+
+# API Endpoint para sa JS Polling
+@admin_bp.route('/api/admin/notifications-count')
+@login_required
+def get_admin_notifications_count():
+    if current_user.role not in ['admin', 'staff']:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    p_res = Reservation.query.filter_by(status="Pending").count()
+    p_plans = SoloPlan.query.filter_by(status="pending").count()
+
+    return jsonify({
+        'pending_reservations': p_res,
+        'pending_memberships': p_plans,
+        'total_notifications': p_res + p_plans
+    })
 
 
 @admin_bp.route('/payment_settings', methods=['GET', 'POST'])
@@ -486,6 +767,9 @@ def manage_staff():
         password = request.form.get("password", "")
         role = request.form.get("role", "staff")
 
+        # Strict Alphanumeric Regex (At least 1 letter, 1 number, and ONLY letters & numbers)
+        alphanumeric_regex = r'^(?=.*[A-Za-z])(?=.*\d)[A-Za-z0-9]+$'
+
         if not name or not email or not password or role not in ["admin", "staff"]:
             message = "Please fill in all fields and select a valid role."
         elif User.query.filter(func.lower(User.email) == email).first():
@@ -520,14 +804,20 @@ def toggle_staff_status(user_id):
         return redirect_response
 
     user = User.query.get_or_404(user_id)
+    # 1. Validation checks gamit ang flash messages kag redirect
     if user.role not in ["admin", "staff"]:
-        return jsonify({"status": "error", "message": "Unsupported user type."}), 400
+        flash("Unsupported user type.", "danger")
+        return redirect(url_for("admin.manage_staff"))
+        
     if user.id == current_user.id:
-        return jsonify({"status": "error", "message": "You cannot change your own status."}), 400
+        flash("You cannot change your own status.", "warning")
+        return redirect(url_for("admin.manage_staff"))
 
+    # 2. Toggle Status & Activity Log
     user.is_active = not user.is_active
     action = "reactivated" if user.is_active else "deactivated"
     log_message = f"{action} by {current_user.name}"
+    
     log = UserActivityLog(
         user_id=user.id,
         activity_type=log_message,
@@ -535,7 +825,9 @@ def toggle_staff_status(user_id):
     )
     db.session.add(log)
     db.session.commit()
-    return jsonify({"status": "success", "message": f"Staff account {action}."})
+
+    flash(f"Staff account {action} successfully.", "success")
+    return redirect(url_for("admin.manage_staff"))
 
 
 @admin_bp.route("/walkin_checkin", methods=["POST"])
@@ -572,7 +864,7 @@ def walkin_checkin_modal():
                 start_time = now
 
         if is_open_time:
-            end_time = start_time + timedelta(hours=12)
+            end_time = start_time + timedelta(hours=8)
         else:
             if form.end_time.data:
                 if isinstance(form.end_time.data, str):
@@ -601,7 +893,6 @@ def walkin_checkin_modal():
                 )
                 return redirect(url_for("admin.dashboard"))
         else:
-            # Check Common Area capacity
             if get_common_area_count() >= 50:
                 flash("Common Area has reached maximum capacity of 50 people.")
                 return redirect(url_for("admin.dashboard"))
@@ -615,8 +906,17 @@ def walkin_checkin_modal():
             return redirect(url_for("admin.dashboard"))
 
         total_from_js = request.form.get("total_price")
-        total_amount = (
-            float(total_from_js) if total_from_js and not is_open_time else 0.0
+        extra_fee = float(form.extra_fee.data) if form.extra_fee.data else 0.0
+        addon_subtotal = float(form.addon_subtotal.data) if form.addon_subtotal.data else 0.0
+        pax_count = form.pax_count.data if getattr(form, "pax_count", None) and form.pax_count.data else 1
+        room_rate = get_custom_tier_rate(room.name, pax_count, room.base_rate)
+        total_amount = calculate_admin_total_amount(
+            room_rate=room_rate,
+            duration_hours=1.0,
+            extra_fee=extra_fee,
+            addon_subtotal=addon_subtotal,
+            discount_rate=float(form.discount.data) if getattr(form, "discount", None) else 0.0,
+            is_open_time=is_open_time,
         )
 
         new_walkin = Reservation(
@@ -627,7 +927,8 @@ def walkin_checkin_modal():
             contact_number=form.contact_number.data or "N/A",
             pax_count=form.pax_count.data,
             extra_notes=form.extra_notes.data,
-            extra_fee=float(form.extra_fee.data) if form.extra_fee.data else 0.0,
+            extra_fee=extra_fee,
+            addon_subtotal=addon_subtotal,
             start_time=start_time,
             end_time=end_time,
             is_open_time=is_open_time,
@@ -655,6 +956,7 @@ def walkin_checkin_modal():
             status="Walk-in",
             total_amount=new_walkin.total_amount,
             extra_fee=new_walkin.extra_fee,
+            addon_subtotal=new_walkin.addon_subtotal,
             paid=False,
             added_by=new_walkin.added_by,
         )
@@ -690,22 +992,29 @@ def walkin_checkout(res_id):
     elif res.is_open_time:
         duration_seconds = (now - res.start_time).total_seconds()
         duration_minutes = max(1, int(duration_seconds / 60))
-        room_rate = res.room.base_rate or 0
-        res.total_amount = round(
-            ((duration_minutes / 60) * room_rate) + (res.extra_fee or 0), 2
+        res.total_amount = calculate_admin_total_amount(
+            room_rate=res.room.base_rate or 0,
+            duration_hours=duration_minutes / 60,
+            extra_fee=res.extra_fee or 0,
+            addon_subtotal=res.addon_subtotal or 0,
+            discount_rate=getattr(res, "discount_rate", 0) or 0,
+            is_open_time=True,
         )
         res.end_time = now
     else:
         if not res.total_amount or res.total_amount == 0:
             try:
-                room_rate = res.room.base_rate or 0
                 if res.end_time and res.start_time:
                     diff_hours = (res.end_time - res.start_time).total_seconds() / 3600
                     diff_hours = max(diff_hours, 0)
-                    discount = getattr(res, "discount_rate", 0) or 0
-                    room_cost = room_rate * diff_hours
-                    room_cost = room_cost * (1 - (discount or 0))
-                    res.total_amount = round(room_cost + (res.extra_fee or 0), 2)
+                    res.total_amount = calculate_admin_total_amount(
+                        room_rate=res.room.base_rate or 0,
+                        duration_hours=diff_hours,
+                        extra_fee=res.extra_fee or 0,
+                        addon_subtotal=res.addon_subtotal or 0,
+                        discount_rate=getattr(res, "discount_rate", 0) or 0,
+                        is_open_time=False,
+                    )
             except Exception:
                 pass
         res.end_time = now
@@ -756,25 +1065,34 @@ def process_payment(reservation_id):
         if res.is_open_time or not res.end_time:
             res.end_time = now
     elif res.is_open_time:
+        # Calculate actual minutes spent from start_time until now
         duration_minutes = max(
             1, int((now - res.start_time).total_seconds() / 60)
         )
-        room_rate = res.room.base_rate or 0
-        res.total_amount = round(
-            ((duration_minutes / 60) * room_rate) + (res.extra_fee or 0), 2
+        res.total_amount = calculate_admin_total_amount(
+            room_rate=res.room.base_rate or 0,
+            duration_hours=duration_minutes / 60,
+            duration_minutes=duration_minutes,  # Direkta nga i-pasa ang exact minutes!
+            extra_fee=res.extra_fee or 0,
+            addon_subtotal=res.addon_subtotal or 0,
+            discount_rate=getattr(res, "discount_rate", 0) or 0,
+            is_open_time=True,
         )
         res.end_time = now
 
     if not res.is_open_time and (not res.total_amount or res.total_amount == 0):
         try:
-            room_rate = res.room.base_rate or 0
             if res.end_time and res.start_time:
                 diff_hours = (res.end_time - res.start_time).total_seconds() / 3600
                 diff_hours = max(diff_hours, 0)
-                discount = getattr(res, "discount_rate", 0) or 0
-                room_cost = room_rate * diff_hours
-                room_cost = room_cost * (1 - (discount or 0))
-                res.total_amount = round(room_cost + (res.extra_fee or 0), 2)
+                res.total_amount = calculate_admin_total_amount(
+                    room_rate=res.room.base_rate or 0,
+                    duration_hours=diff_hours,
+                    extra_fee=res.extra_fee or 0,
+                    addon_subtotal=res.addon_subtotal or 0,
+                    discount_rate=getattr(res, "discount_rate", 0) or 0,
+                    is_open_time=False,
+                )
         except Exception:
             pass
 
@@ -905,6 +1223,17 @@ def admin_reservations():
                     "admin/admin_reservations.html", form=form, rooms=rooms
                 )
 
+            # === 1. BACKEND PAX LIMIT VALIDATION ===
+            pax_val = form.pax_count.data or 1
+            room_name_lower = room.name.strip().lower()
+
+            if "lecture room" in room_name_lower and pax_val > 15:
+                flash("Error: Lecture Room capacity is strictly limited to a maximum of 15 pax.")
+                return render_template(
+                    "admin/admin_reservations.html", form=form, rooms=rooms
+                )
+
+            # === 2. DATE & TIME PARSING ===
             try:
                 if is_open_time:
                     full_start = datetime.now()
@@ -928,7 +1257,8 @@ def admin_reservations():
                     else:
                         full_end = full_start + timedelta(hours=1)
 
-                if room.name.strip().lower() != "common area":
+                # Overlap checking for non-common area
+                if room_name_lower != "common area":
                     conflict = Reservation.query.filter(
                         Reservation.room_id == room.id,
                         Reservation.status.in_(["Confirmed", "Walk-in", "Pending"]),
@@ -951,7 +1281,7 @@ def admin_reservations():
                 )
 
             # Generate customer_id based on room type
-            room_type = "common area" if room.name.strip().lower() == "common area" else "other"
+            room_type = "common area" if room_name_lower == "common area" else "other"
             try:
                 customer_id = generate_customer_id(room_type)
             except ValueError as e:
@@ -966,7 +1296,7 @@ def admin_reservations():
                 room_id=form.room_id.data,
                 customer_name=form.customer_name.data,
                 contact_number=request.form.get("contact_number", "N/A"),
-                pax_count=form.pax_count.data,
+                pax_count=pax_val,
                 start_time=full_start,
                 end_time=full_end,
                 is_open_time=is_open_time,
@@ -974,6 +1304,7 @@ def admin_reservations():
                 added_by=current_user.name,
                 extra_notes=form.extra_notes.data,
                 extra_fee=float(form.extra_fee.data) if form.extra_fee.data else 0.0,
+                addon_subtotal=float(form.addon_subtotal.data) if form.addon_subtotal.data else 0.0,
                 total_amount=round(float(total_from_js or 0), 2),
                 discount_rate=(
                     float(form.discount.data)
@@ -986,26 +1317,41 @@ def admin_reservations():
             now = datetime.now()
             if (
                 room
-                and room.name.strip().lower() != "common area"
+                and room_name_lower != "common area"
                 and full_start <= now
             ):
                 room.status = "unavailable"
 
             db.session.add(reservation)
-            if not is_open_time and (
-                not reservation.total_amount or reservation.total_amount == 0
-            ):
+
+            # === 3. SERVER-SIDE TIER PRICING FALLBACK CALCULATION ===
+            if not is_open_time and (not reservation.total_amount or reservation.total_amount == 0):
                 try:
-                    base_rate = room.base_rate or 0
-                    diff_hours = (
-                        reservation.end_time - reservation.start_time
-                    ).total_seconds() / 3600
+                    diff_hours = (reservation.end_time - reservation.start_time).total_seconds() / 3600
                     diff_hours = max(diff_hours, 0)
                     discount = reservation.discount_rate or 0.0
-                    room_cost = base_rate * diff_hours
-                    room_cost = room_cost * (1 - (discount or 0))
+
+                    # Tier Rate Engine
+                    if "lecture room" in room_name_lower:
+                        if pax_val <= 5:
+                            base_rate = 150.0
+                        elif pax_val <= 10:
+                            base_rate = 200.0
+                        else:
+                            base_rate = 250.0
+                    elif "event room" in room_name_lower:
+                        if pax_val <= 15:
+                            base_rate = 300.0
+                        elif pax_val <= 30:
+                            base_rate = 400.0
+                        else:
+                            base_rate = 500.0
+                    else:
+                        base_rate = float(room.base_rate or 0)
+
+                    room_cost = base_rate * diff_hours * (1 - discount)
                     reservation.total_amount = round(
-                        room_cost + (reservation.extra_fee or 0), 2
+                        room_cost + (reservation.extra_fee or 0) + (reservation.addon_subtotal or 0), 2
                     )
                 except Exception:
                     reservation.total_amount = round(float(total_from_js or 0), 2)
@@ -1073,7 +1419,7 @@ def admin_confirm_reservations():
 
     pending_reservations = (
         Reservation.query.filter_by(status="Pending")
-        .order_by(Reservation.start_time.asc())
+        .order_by(Reservation.created_at.desc(), Reservation.start_time.desc())
         .all()
     )
     return render_template(
@@ -1109,7 +1455,11 @@ def approve_membership(req_id):
     plan = SoloPlan.query.get_or_404(req_id)
     plan.approved_by_id = current_user.id
     plan.status = "approved"
-    plan.set_expiry_date(datetime.utcnow())
+
+    ph_tz = pytz.timezone('Asia/Manila')
+    now_ph = datetime.now(ph_tz)
+    plan.set_expiry_date(now_ph)
+
     if not plan.customer_id:
         plan.customer_id = generate_customer_id("other")
 
@@ -1134,41 +1484,107 @@ def reject_membership(req_id):
     flash(f"Membership rejected for {plan.user.name}")
     return redirect(url_for("admin.members", tab="requests"))
 
-
 @admin_bp.route("/renew_member", methods=["POST"])
+@admin_bp.route("/admin/renew_member", methods=["POST"])
 @login_required
 def renew_member():
-    redirect_response = require_super_admin_json()
-    if redirect_response:
-        return redirect_response
+    try:
+        data = request.get_json(silent=True) or request.form or {}
+        user_id = data.get("user_id")
 
-    data = request.get_json(silent=True) or request.form
-    user_id = data.get("user_id") or request.form.get("user_id")
+        if not user_id:
+            return jsonify({"status": "error", "message": "Missing user ID."}), 400
 
-    if not user_id:
-        return jsonify({"status": "error", "message": "Missing user ID."}), 400
+        user = User.query.get(int(user_id))
+        if not user:
+            return jsonify({"status": "error", "message": "Member not found."}), 404
 
-    user = User.query.get(int(user_id))
-    if not user:
-        return jsonify({"status": "error", "message": "Member not found."}), 404
+        membership = Membership.query.filter_by(user_id=user.id).first()
 
-    latest_plan = (
-        SoloPlan.query.filter_by(user_id=user.id, status="approved")
-        .order_by(SoloPlan.expiry_date.desc())
-        .first()
-    )
-    if not latest_plan:
-        return jsonify({"status": "error", "message": "No active membership plan to renew."}), 400
+        # Dili magsugot kon kasamtangan nga naka Check-In
+        if membership and membership.is_checked_in:
+            return jsonify({
+                "status": "error", 
+                "message": "Cannot renew while customer is checked in. Please check out first."
+            }), 400
 
-    now = datetime.now()
-    if latest_plan.expiry_date and latest_plan.expiry_date > now:
-        latest_plan.expiry_date += timedelta(days=30)
-    else:
-        latest_plan.expiry_date = now + timedelta(days=30)
-    db.session.commit()
+        latest_plan = (
+            SoloPlan.query.filter_by(user_id=user.id)
+            .order_by(SoloPlan.id.desc())
+            .first()
+        )
 
-    return jsonify({"status": "success", "message": "Membership renewed successfully."})
+        now_ph = datetime.utcnow() + timedelta(hours=8)
 
+        # Kuhaon ang duration sa plan
+        fresh_hours = 1.0
+        if latest_plan:
+            extracted = (
+                getattr(latest_plan, 'hours', None) or 
+                getattr(latest_plan, 'duration_hours', None) or 
+                getattr(latest_plan, 'hours_left', None) or 
+                getattr(latest_plan, 'duration', None)
+            )
+            if extracted:
+                try:
+                    fresh_hours = float(extracted)
+                except (ValueError, TypeError):
+                    fresh_hours = 1.0
+
+        # =========================================================
+        # CRITICAL FIX FOR DASHBOARD: ZERO OUT ALL PAUSE COUNTERS
+        # =========================================================
+        if membership:
+            membership.is_checked_in = False
+            membership.is_checked_out = True
+            membership.is_paused = False
+            membership.status = "active"
+            membership.start_date = None
+            membership.expiry_date = None
+            membership.hours_left = fresh_hours
+            membership.total_hours = fresh_hours
+            membership.updated_at = now_ph
+            
+            # WIPE PAUSE DATA IN MEMBERSHIP
+            if hasattr(membership, 'total_paused_duration'):
+                membership.total_paused_duration = 0
+            if hasattr(membership, 'accumulated_paused_seconds'):
+                membership.accumulated_paused_seconds = 0
+            if hasattr(membership, 'paused_at'):
+                membership.paused_at = None
+
+        if latest_plan:
+            latest_plan.status = "approved"
+            latest_plan.is_paused = False
+            latest_plan.start_date = None
+            latest_plan.expiry_date = None
+            latest_plan.updated_at = now_ph
+            
+            # WIPE PAUSE DATA IN SOLOPLAN
+            if hasattr(latest_plan, 'total_paused_duration'):
+                latest_plan.total_paused_duration = 0
+            if hasattr(latest_plan, 'accumulated_paused_seconds'):
+                latest_plan.accumulated_paused_seconds = 0
+            if hasattr(latest_plan, 'paused_at'):
+                latest_plan.paused_at = None
+
+        # Clear active attendance logs
+        if membership:
+            AttendanceLog.query.filter_by(membership_id=membership.id, check_out_time=None).update({"check_out_time": now_ph})
+
+        db.session.commit()
+        db.session.expire_all() # Clear ORM cache completely
+
+        return jsonify({
+            "status": "success",
+            "message": "Membership renewed successfully! Please click Check In to start.",
+            "hours_left": fresh_hours
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"status": "error", "message": str(e)}), 500
+    
 
 @admin_bp.route("/deactivate_member", methods=["POST"])
 @login_required
@@ -1180,25 +1596,29 @@ def deactivate_member():
     data = request.get_json(silent=True) or request.form
     user_id = data.get("user_id") or request.form.get("user_id")
 
-    if not user_id:
-        return jsonify({"status": "error", "message": "Missing user ID."}), 400
-
     user = User.query.get(int(user_id))
     if not user:
         return jsonify({"status": "error", "message": "Member not found."}), 404
 
-    if user.role == "admin":
-        return jsonify({"status": "error", "message": "Cannot deactivate admin account."}), 400
-
+    # Soft-deactivate the user
     user.is_active = False
+    # Gamiton ang local server time para sakto ang adlaw
+    user.last_deactivated_at = datetime.now()
+
+    # I-update ang membership status kon may ara
+    membership = Membership.query.filter_by(user_id=user.id).order_by(Membership.id.desc()).first()
+    if membership:
+        membership.status = 'deactivated'
+
     log = UserActivityLog(
         user_id=user.id,
-        activity_type=f"deactivated|Manual soft deactivation by {current_user.name}",
+        activity_type=f"deactivated|Account deactivated by {current_user.name}",
         ip_address=request.remote_addr or "unknown",
     )
     db.session.add(log)
     db.session.commit()
-    return jsonify({"status": "success", "message": "Member account deactivated."})
+
+    return jsonify({"status": "success", "message": "Member account deactivated successfully."})
 
 
 @admin_bp.route("/reactivate_member", methods=["POST"])
@@ -1218,40 +1638,25 @@ def reactivate_member():
     if not user:
         return jsonify({"status": "error", "message": "Member not found."}), 404
 
-    if user.role == "admin":
-        return jsonify({"status": "error", "message": "Cannot reactivate admin account."}), 400
-
-    if user.is_active:
-        return jsonify({"status": "error", "message": "Account is already active."}), 400
-
+    # 1. Clear soft-deactivation flags sa User
     user.is_active = True
+    user.last_deactivated_at = None
+
+    # 2. Re-activate associated membership (status lang ang bag-ohon)
+    membership = Membership.query.filter_by(user_id=user.id).order_by(Membership.id.desc()).first()
+    if membership:
+        membership.status = 'active'
+
+    # 3. Log activity
     log = UserActivityLog(
         user_id=user.id,
-        activity_type=f"reactivated by {current_user.name}",
+        activity_type=f"reactivated|Account reactivated by {current_user.name}",
         ip_address=request.remote_addr or "unknown",
     )
     db.session.add(log)
     db.session.commit()
 
-    sender = current_app.config.get("MAIL_DEFAULT_SENDER") or current_app.config.get("MAIL_USERNAME") or "no-reply@lounge.com"
-    if user.email and current_app.config.get("MAIL_SERVER"):
-        try:
-            msg = Message(
-                subject="Your lounge account has been reactivated",
-                sender=sender,
-                recipients=[user.email],
-                body=(
-                    f"Hello {user.name},\n\n"
-                    f"Your account has been reactivated by {current_user.name}. You may now log in again.\n\n"
-                    "If you did not request this change, please contact support immediately.\n\n"
-                    "Thank you,\nThe Lounge Team"
-                ),
-            )
-            mail.send(msg)
-        except Exception as exc:
-            current_app.logger.warning("Failed to send reactivation email: %s", exc)
-
-    return jsonify({"status": "success", "message": "Member account reactivated."})
+    return jsonify({"status": "success", "message": "Member account reactivated successfully."})
 
 
 @admin_bp.route("/approve_solo_plan/<int:plan_id>", methods=["POST"])
@@ -1264,9 +1669,20 @@ def approve_solo_plan(plan_id):
     plan = SoloPlan.query.get_or_404(plan_id)
     plan.status = "approved"
     plan.approved_by_id = current_user.id
-    plan.set_expiry_date()
+    plan.set_expiry_date()  # Set expiry date on SoloPlan
+
+    # Siguraduhon nga nakakabit ang membership record
+    _ensure_approved_solo_plan_membership(plan.user)
+
+    # Reset checkout & checkin flags
+    membership = Membership.query.filter_by(user_id=plan.user.id).first()
+    if membership:
+        membership.is_checked_in = False
+        membership.is_checked_out = False
+        membership.status = "active"
+
     db.session.commit()
-    flash(f"Plan approved for {plan.user.name}")
+    flash(f"Plan approved for {plan.user.name}", "success")
     return redirect(url_for("admin.solo_applications"))
 
 
@@ -1280,8 +1696,39 @@ def reject_solo_plan(plan_id):
     plan = SoloPlan.query.get_or_404(plan_id)
     plan.status = "rejected"
     db.session.commit()
-    flash(f"Plan rejected for {plan.user.name}")
+    flash(f"Plan rejected for {plan.user.name}", "info")
     return redirect(url_for("admin.solo_applications"))
+
+@admin_bp.route("/checkout_user/<int:user_id>", methods=["POST"])
+@login_required
+def admin_checkout_user(user_id):
+    if current_user.role != "admin":
+        flash("Unauthorized access.", "danger")
+        return redirect(url_for("main.dashboard"))
+
+    ph_tz = pytz.timezone("Asia/Manila")
+    now_naive = datetime.now(ph_tz).replace(second=0, microsecond=0, tzinfo=None)
+
+    # 1. Papatyon ang active SoloPlan sang user
+    active_plan = SoloPlan.query.filter(
+        SoloPlan.user_id == user_id,
+        SoloPlan.status.ilike("approved"),
+        SoloPlan.expiry_date > now_naive
+    ).first()
+
+    if active_plan:
+        active_plan.expiry_date = now_naive
+        active_plan.status = "completed"
+
+    # 2. Papatyon man ang Membership status sang user
+    membership = Membership.query.filter_by(user_id=user_id).first()
+    if membership:
+        membership.expiry_date = now_naive
+        membership.status = "expired"
+
+    db.session.commit()
+    flash("Customer has been successfully checked out by Admin.", "success")
+    return redirect(url_for("admin.manage_users"))
 
 
 @admin_bp.route("/confirm_reservation/<int:res_id>", methods=["POST"])
@@ -1459,14 +1906,132 @@ def generate_completed_sessions_pdf():
     start_date = request.args.get("start_date", "")
     end_date = request.args.get("end_date", "")
 
-    if start_date or end_date:
-        flash(
-            f"PDF generation for completed sessions from {start_date or 'the beginning'} to {end_date or 'today'} is being initialized."
-        )
-    else:
-        flash("PDF generation for completed sessions is being initialized.")
+    parsed_start_date = None
+    parsed_end_date = None
 
-    return redirect(url_for("admin.reports", start_date=start_date, end_date=end_date))
+    if start_date:
+        try:
+            parsed_start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
+        except ValueError:
+            parsed_start_date = None
+
+    if end_date:
+        try:
+            parsed_end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
+        except ValueError:
+            parsed_end_date = None
+
+    query = Reservation.query.filter(
+        Reservation.status.in_(["Checked-Out", "Cancelled"])
+    )
+
+    if parsed_start_date:
+        query = query.filter(func.date(Reservation.end_time) >= parsed_start_date)
+    if parsed_end_date:
+        query = query.filter(func.date(Reservation.end_time) <= parsed_end_date)
+
+    sessions = query.order_by(Reservation.end_time.desc()).all()
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=letter,
+        rightMargin=36,
+        leftMargin=36,
+        topMargin=36,
+        bottomMargin=36,
+    )
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "ReportTitle",
+        parent=styles["Heading1"],
+        fontSize=16,
+        leading=20,
+        spaceAfter=8,
+        textColor=colors.HexColor("#1f4e79"),
+    )
+    subtitle_style = ParagraphStyle(
+        "ReportSubtitle",
+        parent=styles["BodyText"],
+        fontSize=9,
+        leading=11,
+        textColor=colors.grey,
+        spaceAfter=10,
+    )
+    body_style = styles["BodyText"]
+
+    ph_tz = timezone(timedelta(hours=8))
+    now_ph = datetime.now(ph_tz)
+
+    elements = [
+        Paragraph("Completed Sessions Report", title_style),
+        Paragraph(
+            f"Generated: {now_ph.strftime('%Y-%m-%d %I:%M %p')}",
+            subtitle_style,
+        ),
+        Paragraph(
+            f"Date range: {parsed_start_date or 'Beginning'} to {parsed_end_date or 'Today'}",
+            subtitle_style,
+        ),
+        Spacer(1, 8),
+    ]
+
+    if not sessions:
+        elements.append(Paragraph("No completed sessions found for the selected date range.", body_style))
+    else:
+        table_data = [[
+            "Customer",
+            "Contact",
+            "Room",
+            "Status",
+            "Staff",
+            "Start",
+            "End",
+            "Total Bill",
+        ]]
+
+        for session in sessions:
+            table_data.append([
+                session.customer_name or "N/A",
+                session.contact_number or "N/A",
+                session.room.name if session.room else "Unknown",
+                session.status or "N/A",
+                (session.approved_by.name if session.approved_by else (session.user.name if session.user else session.added_by or "Unknown")),
+                session.start_time.strftime("%b %d, %Y %I:%M %p") if session.start_time else "N/A",
+                session.end_time.strftime("%b %d, %Y %I:%M %p") if session.end_time else "N/A",
+                f"PHP{session.total_amount:,.2f}" if session.total_amount is not None else "PHP0.00",
+            ])
+
+        table = Table(table_data, repeatRows=1)
+        table.setStyle(
+            TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1f4e79")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, 0), 9),
+                ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
+                ("TOPPADDING", (0, 0), (-1, 0), 8),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                ("ALIGN", (0, 1), (-1, -1), "LEFT"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+                ("FONTSIZE", (0, 1), (-1, -1), 8),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.whitesmoke, colors.white]),
+                ("LEFTPADDING", (0, 0), (-1, -1), 4),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+            ])
+        )
+        elements.append(table)
+
+    doc.build(elements)
+    buffer.seek(0)
+
+    return send_file(
+        buffer,
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name="completed_sessions_report.pdf",
+    )
 
 
 @admin_bp.route("/members")
@@ -1476,13 +2041,21 @@ def members():
     if redirect_response:
         return redirect_response
 
+    ph_tz = pytz.timezone("Asia/Manila")
+    now_naive = datetime.now(ph_tz).replace(tzinfo=None)
+
     active_tab = request.args.get("tab", "requests")
     search = request.args.get("search", "")
-    # Include users with explicit role 'member' OR users who have an active/approved SoloPlan
-    approved_solo_users = db.session.query(SoloPlan.user_id).filter(SoloPlan.status.ilike('approved'))
+
+    approved_solo_users = db.session.query(SoloPlan.user_id).filter(
+        SoloPlan.status.ilike('approved'),
+        or_(SoloPlan.expiry_date.is_(None), SoloPlan.expiry_date > now_naive)
+    )
+
     query = User.query.filter(
         or_(User.role == "member", User.id.in_(approved_solo_users))
     )
+
     if search:
         search_pattern = f"%{search}%"
         filters = [
@@ -1499,11 +2072,12 @@ def members():
 
     all_members = query.order_by(User.created_at.desc()).all()
 
-    # Ensure any approved solo-plan user without an explicit membership record can still be checked in.
+    # Siguraduhon nga ma-sync ang membership status sa bag-o nga SoloPlan
     created_membership = False
     for member in all_members:
         if member.id in approved_solo_user_ids_set:
-            created_membership = created_membership or _ensure_approved_solo_plan_membership(member)
+            created_membership = _ensure_approved_solo_plan_membership(member) or created_membership
+
     if created_membership:
         db.session.commit()
         all_members = query.order_by(User.created_at.desc()).all()
@@ -1513,6 +2087,7 @@ def members():
         .order_by(SoloPlan.created_at.desc())
         .all()
     )
+
     return render_template(
         "admin/members.html",
         members=all_members,
@@ -1522,38 +2097,54 @@ def members():
         approved_solo_user_ids=approved_solo_user_ids,
     )
 
-
+# PERMANENT DELETE ROUTE
 @admin_bp.route("/delete_member/<int:user_id>", methods=["POST"])
 @login_required
 def delete_member(user_id):
-    if request.is_json:
-        redirect_response = require_super_admin_json()
-        if redirect_response:
-            return redirect_response
-    else:
-        redirect_response = require_super_admin()
-        if redirect_response:
-            return redirect_response
+    redirect_response = require_super_admin_json()
+    if redirect_response:
+        return redirect_response
 
     user = User.query.get_or_404(user_id)
     if user.role == "admin":
-        if request.is_json:
-            return jsonify({"status": "error", "message": "Cannot delete admin account."}), 400
-        flash("Cannot delete admin account.")
-        return redirect(url_for("admin.members"))
+        return jsonify({"status": "error", "message": "Cannot delete admin account."}), 400
 
-    db.session.delete(user)
-    db.session.commit()
-    if request.is_json:
-        return jsonify({"status": "success", "message": "Member deleted permanently."})
+    try:
+        # 1. Clear attendance_logs nga nakakabit sa memberships sang user
+        db.session.execute(
+            text("""
+                DELETE FROM attendance_logs 
+                WHERE membership_id IN (
+                    SELECT id FROM memberships WHERE user_id = :uid
+                )
+            """), 
+            {"uid": user.id}
+        )
 
-    flash(f"Member {user.name} has been deleted.")
-    return redirect(url_for("admin.members"))
+        # 2. Clear attendance_logs kon may direct user_id column man ini
+        try:
+            db.session.execute(text("DELETE FROM attendance_logs WHERE user_id = :uid"), {"uid": user.id})
+        except Exception:
+            pass  # Sagap lang kon wala sang direct user_id column
+
+        # 3. Clear child tables sang user
+        db.session.execute(text("DELETE FROM solo_plans WHERE user_id = :uid"), {"uid": user.id})
+        db.session.execute(text("DELETE FROM user_activity_logs WHERE user_id = :uid"), {"uid": user.id})
+        db.session.execute(text("DELETE FROM memberships WHERE user_id = :uid"), {"uid": user.id})
+
+        # 4. Permanent Delete sa User
+        db.session.delete(user)
+        db.session.commit()
+
+        return jsonify({"status": "success", "message": "Member account permanently deleted."})
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"Permanent Delete Error: {str(e)}")
+        return jsonify({"status": "error", "message": f"Failed to delete: {str(e)}"}), 500
 
 
-# ---------------------------------------------------------------------------
 # Membership Management Routes
-# ---------------------------------------------------------------------------
 @admin_bp.route("/official_members")
 @login_required
 def official_members():
@@ -1563,6 +2154,7 @@ def official_members():
         return redirect_response
 
     search = request.args.get("search", "")
+    active_tab = request.args.get("tab", "member_list")
     
     # Get all memberships with their user info
     query = Membership.query.join(User).order_by(Membership.status.desc(), User.name.asc())
@@ -1587,105 +2179,309 @@ def official_members():
         active_memberships=active_memberships,
         pending_memberships=pending_memberships,
         expired_memberships=expired_memberships,
-        search=search
+        search=search,
+        active_tab=active_tab
     )
 
 
-@admin_bp.route("/api/member/<int:membership_id>/check-in", methods=["POST"])
+@admin_bp.route("/api/member/<int:user_or_membership_id>/check-in", methods=["POST"])
 @login_required
-def membership_check_in(membership_id):
-    """Check in a member and start their session timer."""
+def membership_check_in(user_or_membership_id):
+    """Check in a member with 100% clean timer reset."""
     redirect_response = require_admin_or_staff_json()
     if redirect_response:
         return redirect_response
 
-    membership = Membership.query.get_or_404(membership_id)
+    membership = Membership.query.filter_by(id=user_or_membership_id).first()
+    if membership:
+        user = membership.user
+    else:
+        user = User.query.get_or_404(user_or_membership_id)
+        membership = Membership.query.filter_by(user_id=user.id).first()
+
+    now_ph = datetime.utcnow() + timedelta(hours=8)
+
+    latest_plan = SoloPlan.query.filter(
+        SoloPlan.user_id == user.id
+    ).order_by(SoloPlan.id.desc()).first()
+
+    # Determine hours
+    allocated_hours = 1.0
+    actual_plan_name = "INDIVIDUAL RATE"
+
+    plan_hours_map = {
+        "INDIVIDUAL RATE": 1.0,
+        "INDIVIDUAL RATE (4HRS)": 4.0,
+        "DAY/NIGHT PASS": 24.0,
+        "WEEKLY PASS (DAY/NIGHT)": 168.0,
+        "WEEKLY PASS (24HRS)": 168.0,
+        "MONTHLY PASS (DAY/NIGHT)": 720.0,
+        "MONTHLY PASS (24HRS)": 720.0,
+        "WORKSTATION (24HRS)": 720.0,
+        "ACTIVE PLAN": 720.0
+    }
     
-    if not membership.is_active:
-        return jsonify({"status": "error", "message": "Membership is not active"}), 400
-    
-    if membership.is_checked_in:
-        return jsonify({"status": "error", "message": "Member is already checked in"}), 400
-    
-    if membership.hours_left <= 0:
-        return jsonify({"status": "error", "message": "No hours remaining"}), 400
-    
-    # Create attendance log
-    now = datetime.utcnow()
+    if latest_plan:
+        actual_plan_name = latest_plan.plan_name or "Custom Plan"
+        extracted_hours = (
+            getattr(latest_plan, 'hours', None) or 
+            getattr(latest_plan, 'duration_hours', None) or 
+            getattr(latest_plan, 'hours_left', None) or 
+            getattr(latest_plan, 'duration', None)
+        )
+        if extracted_hours is not None:
+            try:
+                allocated_hours = float(extracted_hours)
+            except (ValueError, TypeError):
+                clean_name = actual_plan_name.strip().upper()
+                allocated_hours = plan_hours_map.get(clean_name, 1.0)
+        else:
+            clean_name = actual_plan_name.strip().upper()
+            allocated_hours = plan_hours_map.get(clean_name, 1.0)
+    else:
+        actual_plan_name = getattr(membership, 'plan_name', 'Standard Plan') if membership else 'Standard Plan'
+        allocated_hours = getattr(membership, 'total_hours', 1.0) if membership else 1.0
+
+    # CRITICAL: COMPUTATION DIRI GID SANG EXACT EXPIRY
+    calculated_expiry = now_ph + timedelta(hours=allocated_hours)
+
+    if membership:
+        membership.plan_name = actual_plan_name
+        membership.start_date = now_ph
+        membership.expiry_date = calculated_expiry
+        membership.total_hours = float(allocated_hours)
+        membership.hours_left = float(allocated_hours)
+        membership.is_checked_in = True
+        membership.is_checked_out = False
+        membership.is_paused = False
+        membership.status = "active"
+        membership.updated_at = now_ph
+
+        # FORCE RESET PAUSE ON CHECK IN
+        if hasattr(membership, 'total_paused_duration'):
+            membership.total_paused_duration = 0
+        if hasattr(membership, 'accumulated_paused_seconds'):
+            membership.accumulated_paused_seconds = 0
+        if hasattr(membership, 'paused_at'):
+            membership.paused_at = None
+
+    if latest_plan:
+        latest_plan.status = "approved"
+        latest_plan.is_paused = False
+        latest_plan.start_date = now_ph
+        latest_plan.expiry_date = calculated_expiry
+        latest_plan.updated_at = now_ph
+        if hasattr(latest_plan, 'total_paused_duration'):
+            latest_plan.total_paused_duration = 0
+        if hasattr(latest_plan, 'accumulated_paused_seconds'):
+            latest_plan.accumulated_paused_seconds = 0
+        if hasattr(latest_plan, 'paused_at'):
+            latest_plan.paused_at = None
+
+    # Close any old open logs
+    AttendanceLog.query.filter_by(membership_id=membership.id, check_out_time=None).update({"check_out_time": now_ph})
+
+    # =========================================================
+    # CREATE FRESH ATTENDANCE LOG WITH EXACT 0 PAUSED SECONDS
+    # =========================================================
     log = AttendanceLog(
         membership_id=membership.id,
-        check_in_time=now
+        check_in_time=now_ph,
+        is_paused=False,
+        accumulated_paused_seconds=0  # FORCE 0 HERE FOR MEMBER DASHBOARD
     )
-    membership.is_checked_in = True
-    membership.updated_at = now
-    
     db.session.add(log)
     db.session.commit()
+    db.session.expire_all()
+
+    return jsonify({
+        "status": "success",
+        "message": f"{user.name} checked in successfully!",
+        "check_in_time": now_ph.isoformat(),
+        "expires_on": calculated_expiry.isoformat()
+    })
+
+@admin_bp.route("/api/member/<int:user_or_membership_id>/toggle-pause", methods=["POST"])
+@login_required
+def membership_toggle_pause(user_or_membership_id):
+    """Toggle Pause / Resume state sang active session sang member/solo plan."""
+    redirect_response = require_admin_or_staff_json()
+    if redirect_response:
+        return redirect_response
+
+    # 1. Pangitaon ang Membership by ID or by User ID
+    membership = Membership.query.filter_by(id=user_or_membership_id).first()
+    if not membership:
+        membership = Membership.query.filter_by(user_id=user_or_membership_id).order_by(Membership.id.desc()).first()
+
+    if not membership or not membership.is_checked_in:
+        return jsonify({
+            "status": "error", 
+            "message": "No active checked-in session found for this user."
+        }), 400
+
+    now_ph = datetime.utcnow() + timedelta(hours=8)
+    
+    # 2. Pangitaon ang active AttendanceLog nga wala pa sing check_out_time
+    current_log = AttendanceLog.query.filter_by(
+        membership_id=membership.id,
+        check_out_time=None
+    ).order_by(AttendanceLog.id.desc()).first()
+
+    # 3. Pangitaon ang Active / Approved SoloPlan sang User
+    active_solo = SoloPlan.query.filter(
+        SoloPlan.user_id == membership.user_id,
+        SoloPlan.status.ilike("approved")
+    ).order_by(SoloPlan.id.desc()).first()
+
+    # Determine current status kag i-toggle
+    is_currently_paused = getattr(membership, 'is_paused', False)
+    target_pause_state = not is_currently_paused
+
+    # ==========================================
+    # A. UPDATE MEMBERSHIP STATE & STATUS STRING
+    # ==========================================
+    membership.is_paused = target_pause_state
+    
+    # IMPORTANTE: I-update ang status column sang Membership!
+    if hasattr(membership, 'status'):
+        membership.status = "Paused" if target_pause_state else "Checked In"
+
+    # ==========================================
+    # B. TOGGLE ATTENDANCE LOG PAUSE STATE
+    # ==========================================
+    if current_log:
+        current_log.is_paused = target_pause_state
+        if hasattr(current_log, 'status'):
+            current_log.status = "Paused" if target_pause_state else "Checked In"
+
+        if target_pause_state:
+            current_log.paused_at = now_ph
+        else:
+            if current_log.paused_at:
+                paused_duration = (now_ph - current_log.paused_at).total_seconds()
+                current_log.accumulated_paused_seconds = (current_log.accumulated_paused_seconds or 0) + int(paused_duration)
+            current_log.paused_at = None
+
+    # ==========================================
+    # C. TOGGLE SOLOPLAN PAUSE STATE
+    # ==========================================
+    if active_solo:
+        active_solo.is_paused = target_pause_state
+        if target_pause_state:
+            active_solo.paused_at = now_ph
+        else:
+            if active_solo.paused_at and active_solo.expiry_date:
+                paused_duration = (now_ph - active_solo.paused_at).total_seconds()
+                active_solo.accumulated_paused_seconds = (active_solo.accumulated_paused_seconds or 0) + int(paused_duration)
+                # Extend expiry date base sa gidangatan sang paused duration
+                active_solo.expiry_date = active_solo.expiry_date + timedelta(seconds=paused_duration)
+            active_solo.paused_at = None
+
+    # Save sa Database
+    db.session.commit()
+
+    user_name = membership.user.name if (membership and membership.user) else "Member"
+    action_str = "PAUSED" if target_pause_state else "RESUMED"
+    new_status_str = "Paused" if target_pause_state else "Checked In"
     
     return jsonify({
         "status": "success",
-        "message": f"{membership.user.name} checked in",
-        "check_in_time": now.isoformat(),
-        "hours_left": membership.hours_left
+        "message": f"Session for {user_name} is now {action_str.lower()}.",
+        "is_paused": target_pause_state,
+        "member_status": new_status_str,
+        "user_name": user_name
     })
 
 
-@admin_bp.route("/api/member/<int:membership_id>/check-out", methods=["POST"])
+@admin_bp.route("/api/member/<int:user_or_membership_id>/check-out", methods=["POST"])
 @login_required
-def membership_check_out(membership_id):
-    """Check out a member, end session, and deduct hours."""
+def membership_check_out(user_or_membership_id):
+    """Check out a member/solo user, end active session, and deduct hours dynamically."""
     redirect_response = require_admin_or_staff_json()
     if redirect_response:
         return redirect_response
 
-    membership = Membership.query.get_or_404(membership_id)
-    
-    if not membership.is_checked_in:
-        return jsonify({"status": "error", "message": "Member is not checked in"}), 400
-    
-    # Get the current attendance log
-    current_log = membership.attendance_logs.filter(
-        AttendanceLog.check_out_time.is_(None)
-    ).first()
-    
-    if not current_log:
-        return jsonify({"status": "error", "message": "No active session found"}), 400
-    
-    now = datetime.utcnow()
-    current_log.check_out_time = now
-    
-    # Calculate hours spent
-    duration = (now - current_log.check_in_time).total_seconds() / 3600
-    hours_deducted = round(duration, 2)
-    
-    # Ensure we don't deduct more than available
-    if hours_deducted > membership.hours_left:
-        hours_deducted = membership.hours_left
-    
-    current_log.hours_deducted = hours_deducted
-    membership.hours_left = round(membership.hours_left - hours_deducted, 2)
-    membership.is_checked_in = False
-    membership.updated_at = now
-    
-    # Check if membership should expire
-    if membership.hours_left <= 0:
-        membership.status = "expired"
-    
+    # Pangitaon ang Membership O ang User ID
+    membership = Membership.query.filter_by(id=user_or_membership_id).first()
+    if not membership:
+        membership = Membership.query.filter_by(user_id=user_or_membership_id).first()
+
+    target_user_id = membership.user_id if membership else user_or_membership_id
+
+    # Pangitaon ang tanan nga active / approved SoloPlan sang user
+    active_solos = SoloPlan.query.filter(
+        SoloPlan.user_id == target_user_id,
+        SoloPlan.status.ilike("approved")
+    ).all()
+
+    now_ph = datetime.utcnow() + timedelta(hours=8)
+
+    # Close Attendance Log & Deduct Hours
+    m_id = membership.id if membership else None
+    if m_id:
+        current_log = AttendanceLog.query.filter_by(
+            membership_id=m_id,
+            check_out_time=None
+        ).first()
+
+        if current_log:
+            current_log.check_out_time = now_ph
+
+            # --- UPDATED DURATION COMPUTATION WITH PAUSE DEDUCTION ---
+            total_elapsed_seconds = (now_ph - current_log.check_in_time).total_seconds()
+            accumulated_pause = current_log.accumulated_paused_seconds or 0
+
+            # Kon guin-check out samtang naga-pause, idagdag man ang unrecorded pause time
+            if current_log.is_paused and current_log.paused_at:
+                accumulated_pause += (now_ph - current_log.paused_at).total_seconds()
+
+            active_seconds = max(0, total_elapsed_seconds - accumulated_pause)
+            duration_hours = active_seconds / 3600
+            hours_deducted = round(duration_hours, 2)
+
+            if membership and membership.hours_left is not None:
+                if hours_deducted > membership.hours_left:
+                    hours_deducted = membership.hours_left
+                membership.hours_left = round(max(0.0, membership.hours_left - hours_deducted), 2)
+                if membership.hours_left <= 0:
+                    membership.status = "expired"
+
+            current_log.hours_deducted = hours_deducted
+            current_log.is_paused = False
+            current_log.paused_at = None
+
+    # I-set ang status flags sa CHECKED OUT
+    if membership:
+        membership.is_checked_in = False
+        membership.is_checked_out = True
+
+        if membership.status and membership.status.lower() in ["checked in", "checked_in", "paused", "session paused", "session_paused"]:
+            membership.status = "active" if membership.hours_left > 0 else "expired"
+
+
+
+        membership.updated_at = now_ph
+
+    for solo in active_solos:
+        solo.status = "checked_out"
+        solo.updated_at = now_ph
+
     db.session.commit()
-    
+
+    user_name = membership.user.name if (membership and membership.user) else "User"
+
     return jsonify({
         "status": "success",
-        "message": f"{membership.user.name} checked out - {hours_deducted} hours deducted",
-        "hours_deducted": hours_deducted,
-        "hours_left": membership.hours_left,
-        "check_out_time": now.isoformat()
+        "message": f"{user_name} checked out successfully!",
+        "hours_left": membership.hours_left if membership else 0.0
     })
 
 
 @admin_bp.route("/api/member/<int:membership_id>/attendance", methods=["GET"])
 @login_required
 def member_attendance_history(membership_id):
-    """Get attendance history for a member."""
+    """Get attendance history using direct raw database formatting."""
     redirect_response = require_admin_or_staff_json()
     if redirect_response:
         return redirect_response
@@ -1695,13 +2491,22 @@ def member_attendance_history(membership_id):
     logs = membership.attendance_logs.order_by(AttendanceLog.check_in_time.desc()).all()
     
     attendance_data = []
+
     for log in logs:
+        c_in = log.check_in_time
+        c_out = log.check_out_time
+
+        # Direct String Formatting (%b %d, %Y kag %I:%M %p)
+        date_str = c_in.strftime("%b %d, %Y") if c_in else "-"
+        check_in_str = c_in.strftime("%I:%M %p") if c_in else "-"
+        check_out_str = c_out.strftime("%I:%M %p") if c_out else "-"
+
         attendance_data.append({
             "id": log.id,
-            "date": format_date(log.check_in_time),
-            "check_in": format_checkin_time(log.check_in_time),
-            "check_out": format_checkout_time(log.check_out_time),
-            "hours": decimal_hours_to_readable(log.hours_deducted) if log.hours_deducted > 0 else "-"
+            "date": date_str,
+            "check_in": check_in_str,
+            "check_out": check_out_str,
+            "hours": decimal_hours_to_readable(log.hours_deducted) if (log.hours_deducted and log.hours_deducted > 0) else "-"
         })
     
     return jsonify({
@@ -1721,7 +2526,6 @@ def common_area_occupants():
     if redirect_response:
         return redirect_response
 
-    # Get all members currently checked in
     checked_in = db.session.query(Membership).filter(
         Membership.is_checked_in == True
     ).all()
@@ -1732,19 +2536,21 @@ def common_area_occupants():
         if membership.status != "active" or not membership.is_checked_in:
             continue
 
-        # Get the current active log
         active_log = membership.attendance_logs.filter(
             AttendanceLog.check_out_time.is_(None)
         ).first()
         
-        if active_log:
-            elapsed = (datetime.utcnow() - active_log.check_in_time).total_seconds() / 3600
+        if active_log and active_log.check_in_time:
+            formatted_check_in = active_log.check_in_time.strftime("%I:%M %p")
+            
+            epoch_time_ms = int(active_log.check_in_time.timestamp() * 1000)
+
             occupants.append({
                 "id": membership.id,
                 "name": membership.user.name,
                 "check_in_time": active_log.check_in_time.isoformat(),
-                "formatted_check_in": format_checkin_time(active_log.check_in_time),
-                "elapsed_hours": round(elapsed, 2),
+                "check_in_ms": epoch_time_ms,
+                "formatted_check_in": formatted_check_in,
                 "hours_left": membership.hours_left
             })
     

@@ -45,7 +45,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-
+    
     function formatTime(seconds) {
         const h = Math.floor(seconds / 3600);
         const m = Math.floor((seconds % 3600) / 60);
@@ -53,50 +53,154 @@ document.addEventListener('DOMContentLoaded', function() {
         return `(${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')})`;
     }
 
+    function parseIsoDate(dateStr) {
+        if (!dateStr) return null;
+        let cleanStr = dateStr.trim();
+        if (!cleanStr.endsWith('Z') && !cleanStr.includes('+') && !cleanStr.includes('-')) {
+            cleanStr = cleanStr.replace(' ', 'T');
+        }
+        const parsed = new Date(cleanStr);
+        return isNaN(parsed.getTime()) ? null : parsed;
+    }
+
+    // Map para i-store ang offset sang tagsa ka timer para exact 0s ang sugod sang bag-o nga sessions
+    const sessionInitialOffsets = {};
+
     function updateTimers() {
         const timers = document.querySelectorAll('.timer-text');
         const cards = document.querySelectorAll('.room-card');
         const now = new Date();
         let newlyExpired = false;
 
-        // 1. Update Live Timers (Count up for Open Time)
+        // 1. Live Timers & Remaining Timers
         timers.forEach(timer => {
+            const card = timer.closest('.room-card');
+            const isPaused = (card && card.getAttribute('data-is-paused') === 'true') || timer.getAttribute('data-is-paused') === 'true';
             const startStr = timer.getAttribute('data-starttime');
+            const endStr = timer.getAttribute('data-endtime');
+            const remainingElem = card ? card.querySelector('.remaining-text') : null;
+
             if (!startStr) {
+                timer.textContent = "(00:00:00)";
+                if (remainingElem) remainingElem.textContent = "(00:00:00)";
+                return;
+            }
+
+            const startTime = parseIsoDate(startStr);
+            if (!startTime) {
                 timer.textContent = "(00:00:00)";
                 return;
             }
-            const startTime = new Date(startStr);
-            const elapsed = Math.max(0, Math.floor((now - startTime) / 1000));
+
+            const endTime = parseIsoDate(endStr);
             
-            if (elapsed < 2) {
-                timer.textContent = formatTime(0);
-            } else {
-                timer.textContent = formatTime(elapsed);
+            // Unique key para sa tagsa ka room/reservation timer
+            const timerKey = startStr + (endStr || '');
+
+            // KON BAG-O LANG Nagsugod (less than 2 mins gap halin sa creation),
+            // I-calibrate ang initial offset para mag-start gid sa exact 0 seconds
+            if (!(timerKey in sessionInitialOffsets)) {
+                const rawElapsed = Math.floor((now - startTime) / 1000);
+                // Kon bag-o lang gin-create ang session (within 3 minutes gap) pero may offset ang server clock:
+                if (rawElapsed > 0 && rawElapsed < 180 && !isPaused) {
+                    sessionInitialOffsets[timerKey] = rawElapsed;
+                } else {
+                    sessionInitialOffsets[timerKey] = 0;
+                }
             }
-        });
 
-        // 2. Check for Expired Sessions (For Fixed Time)
-        cards.forEach(card => {
-            const endStr = card.getAttribute('data-endtime');
-            const isOpenTime = card.getAttribute('data-isopentime') === 'true';
+            const clockOffset = sessionInitialOffsets[timerKey] || 0;
 
-            if (endStr && !isOpenTime) {
-                const endTime = new Date(endStr);
-                if (now > endTime) {
-                    if (!card.classList.contains('session-expired')) {
-                        card.classList.add('session-expired');
-                        newlyExpired = true;
-                    }
+            // KON NAKA-PAUSE
+            if (isPaused) {
+                const pausedAtStr = timer.getAttribute('data-pausedat');
+                let freezeEndTime = now;
+                
+                if (pausedAtStr) {
+                    freezeEndTime = parseIsoDate(pausedAtStr) || now;
+                }
+
+                const pausedElapsed = Math.max(0, Math.floor((freezeEndTime - startTime) / 1000) - clockOffset);
+                timer.textContent = `${formatTime(pausedElapsed)} ⏸ (PAUSED)`;
+
+                if (remainingElem && endTime) {
+                    const pausedRemaining = Math.max(0, Math.floor((endTime - freezeEndTime) / 1000) + clockOffset);
+                    remainingElem.textContent = `${formatTime(pausedRemaining)} ⏸`;
+                }
+                return;
+            }
+
+            // KON RUNNING (ACTIVE)
+            const elapsed = Math.max(0, Math.floor((now - startTime) / 1000) - clockOffset);
+            timer.textContent = formatTime(elapsed);
+
+            // Compute active remaining time
+            if (remainingElem && endTime) {
+                const remaining = Math.max(0, Math.floor((endTime - now) / 1000) + clockOffset);
+                remainingElem.textContent = formatTime(remaining);
+                
+                if (remaining <= 300 && remaining > 0) {
+                    remainingElem.style.color = "#ef4444"; 
+                } else if (remaining === 0) {
+                    remainingElem.textContent = "(EXPIRED)";
+                    remainingElem.style.color = "#b91c1c";
+                } else {
+                    remainingElem.style.color = "#2563eb";
                 }
             }
         });
 
-        // Move expired cards to top if new ones were detected
-        if (newlyExpired) {
+        // 2. Expired Checkers
+        cards.forEach(card => {
+            const endStr = card.getAttribute('data-endtime') || (card.querySelector('.timer-text') ? card.querySelector('.timer-text').getAttribute('data-endtime') : null);
+            const isOpenTime = card.getAttribute('data-isopentime') === 'true';
+            const isPaused = card.getAttribute('data-is-paused') === 'true';
+
+            if (isPaused) {
+                card.classList.remove('session-expired');
+                return;
+            }
+
+            if (endStr && !isOpenTime) {
+                const endTime = parseIsoDate(endStr);
+                if (endTime && now >= endTime) {
+                    if (!card.classList.contains('session-expired')) {
+                        card.classList.add('session-expired');
+                        newlyExpired = true;
+                    }
+                } else {
+                    card.classList.remove('session-expired');
+                }
+            }
+        });
+
+        if (newlyExpired && typeof sortExpiredCards === 'function') {
             sortExpiredCards();
         }
     }
+
+    updateTimers();
+    setInterval(updateTimers, 1000);
+
+    // PAUSE BUTTON TRANSITION
+    function handlePauseTransition(event, formElement) {
+        event.preventDefault();
+
+        const btn = formElement.querySelector('button[type="submit"]');
+        if (btn) {
+            btn.innerHTML = "⏸ Pausing...";
+            btn.style.backgroundColor = "#ffc107";
+            btn.style.color = "#000";
+            btn.disabled = true;
+        }
+
+        setTimeout(() => {
+            formElement.submit();
+        }, 1500); 
+    }
+
+    // Global scope registration para sa HTML
+    window.handlePauseTransition = handlePauseTransition;
 
     // Function to move expired cards to the top of their grid
     function sortExpiredCards() {
@@ -182,118 +286,156 @@ document.addEventListener('DOMContentLoaded', function() {
         return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     }
 
-    function renderOccupants(list) {
-        const container = document.getElementById('occupantsList');
-        const countEl = document.getElementById('occupantsCount');
 
-        if (!container || !countEl) {
-            return;
-        }
+function renderOccupants(list) {
+    const container = document.getElementById('occupantsList');
+    const countEl = document.getElementById('occupantsCount');
 
-        container.innerHTML = '';
-        countEl.textContent = list.length.toString();
-
-        if (!list.length) {
-            const empty = document.createElement('p');
-            empty.className = 'no-occupants';
-            empty.textContent = 'No active common area occupants.';
-            container.appendChild(empty);
-            return;
-        }
-
-        list.forEach(member => {
-            const item = document.createElement('div');
-            item.className = 'occupant-item';
-            item.innerHTML = `
-                <div class="occupant-name">${member.name}</div>
-                <div class="occupant-time">Checked in: ${member.formatted_check_in || 'N/A'}</div>
-                <div class="occupant-elapsed">Time Used: <span class="time-used" data-starttime="${member.check_in_time}">00:00:00</span></div>
-            `;
-            container.appendChild(item);
-        });
-
-        updateOccupantTimers();
+    if (!container || !countEl) {
+        return;
     }
 
-    function updateOccupantTimers() {
-        const now = new Date();
-        document.querySelectorAll('.time-used').forEach(el => {
-            const startTime = new Date(el.dataset.starttime);
-            if (isNaN(startTime)) {
-                el.textContent = '00:00:00';
-                return;
+    container.innerHTML = '';
+    countEl.textContent = list.length.toString();
+
+    if (!list.length) {
+        const empty = document.createElement('p');
+        empty.className = 'no-occupants';
+        empty.textContent = 'No active common area occupants.';
+        container.appendChild(empty);
+        return;
+    }
+
+    list.forEach(member => {
+        const item = document.createElement('div');
+        item.className = 'occupant-item';
+        
+        // Gamit sang member.check_in_ms para sa exact timer accuracy
+        item.innerHTML = `
+            <div class="occupant-name">${member.name}</div>
+            <div class="occupant-time">Checked in: ${member.formatted_check_in || 'N/A'}</div>
+            <div class="occupant-elapsed">Time Used: <span class="time-used" data-startms="${member.check_in_ms || ''}" data-starttime="${member.check_in_time}">00:00:00</span></div>
+        `;
+        container.appendChild(item);
+    });
+
+    updateOccupantTimers();
+}
+
+function updateOccupantTimers() {
+    const now = Date.now();
+    document.querySelectorAll('.time-used').forEach(el => {
+        const startMs = parseInt(el.dataset.startms);
+        let startTime = !isNaN(startMs) ? startMs : new Date(el.dataset.starttime).getTime();
+
+        if (isNaN(startTime)) {
+            el.textContent = '00:00:00';
+            return;
+        }
+
+        const elapsedSeconds = Math.max(0, Math.floor((now - startTime) / 1000));
+        el.textContent = formatDuration(elapsedSeconds);
+    });
+}
+
+// Helper Function para sa Open Time Minute Tiers Pricing
+function calculateOpenTimeFee(totalMinutes, hourlyRate = 35) {
+    if (totalMinutes <= 0) return 0;
+
+    const fullHours = Math.floor(totalMinutes / 60);
+    const remMins = totalMinutes % 60;
+
+    let minuteFee = 0;
+    if (remMins >= 1 && remMins <= 12) minuteFee = 5;
+    else if (remMins >= 13 && remMins <= 24) minuteFee = 10;
+    else if (remMins >= 25 && remMins <= 36) minuteFee = 15;
+    else if (remMins >= 37 && remMins <= 47) minuteFee = 20;
+    else if (remMins >= 48 && remMins <= 59) minuteFee = 25;
+    else if (remMins === 0 && fullHours > 0) minuteFee = 0;
+
+    return (fullHours * hourlyRate) + minuteFee;
+}
+
+function fetchCommonAreaOccupants() {
+    fetch('/admin/api/dashboard/common-area-occupants')
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success' && Array.isArray(data.occupants)) {
+                renderOccupants(data.occupants);
             }
-            const elapsedSeconds = Math.max(0, Math.floor((now - startTime) / 1000));
-            el.textContent = formatDuration(elapsedSeconds);
+        })
+        .catch(err => {
+            console.error('Failed to load common area occupants', err);
         });
+}
+
+fetchCommonAreaOccupants();
+setInterval(fetchCommonAreaOccupants, 10000);
+setInterval(updateOccupantTimers, 1000);
+
+// End Session Button Logic
+window.handleCheckout = function(resId) {
+    // Updated selector to be more robust
+    const btn = document.querySelector(`.end-session-btn[data-reservation-id="${resId}"]`);
+    if (!btn) {
+        console.error("End Session button not found for ID:", resId);
+        return;
     }
 
-    function fetchCommonAreaOccupants() {
-        fetch('/admin/api/dashboard/common-area-occupants')
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success' && Array.isArray(data.occupants)) {
-                    renderOccupants(data.occupants);
-                }
-            })
-            .catch(err => {
-                console.error('Failed to load common area occupants', err);
-            });
-    }
+    const customerName = btn.dataset.customerName || 'Customer';
+    const roomName = btn.dataset.roomName || 'Room';
+    
+    const storedTotal = parseFloat(btn.getAttribute('data-total-amount')) || 0;
+    const rate = parseFloat(btn.getAttribute('data-room-rate')) || 35;
+    const extra = parseFloat(btn.getAttribute('data-extra-fee')) || 0;
+    const startStr = btn.getAttribute('data-start-time');
+    const isOpenTime = btn.getAttribute('data-is-open-time') === 'true';
+    
+    let total = 0;
+    let displayDuration = "";
 
-    fetchCommonAreaOccupants();
-    setInterval(fetchCommonAreaOccupants, 10000);
-    setInterval(updateOccupantTimers, 1000);
-
-    // End Session Button Logic
-    window.handleCheckout = function(resId) {
-        // Updated selector to be more robust
-        const btn = document.querySelector(`.end-session-btn[data-reservation-id="${resId}"]`);
-        if (!btn) {
-            console.error("End Session button not found for ID:", resId);
-            return;
-        }
-
-        const customerName = btn.dataset.customerName || 'Customer';
-        const roomName = btn.dataset.roomName || 'Room';
+    // CHECKOUT LOGIC:
+    if (!isOpenTime) {
+        total = storedTotal.toFixed(2);
+        displayDuration = "Fixed Session (Original Time)";
+    } 
+    // If Open Time: Calculate based on Minute Tiers
+    else if (isOpenTime && startStr) {
+        const start = new Date(startStr);
+        const now = new Date();
+        const diffMs = Math.max(60000, now - start);
         
-        const storedTotal = parseFloat(btn.getAttribute('data-total-amount')) || 0;
-        const rate = parseFloat(btn.getAttribute('data-room-rate')) || 0;
-        const extra = parseFloat(btn.getAttribute('data-extra-fee')) || 0;
-        const startStr = btn.getAttribute('data-start-time');
-        const isOpenTime = btn.getAttribute('data-is-open-time') === 'true';
+        // Exact total minutes
+        const totalMinutes = Math.max(1, Math.floor(diffMs / 60000));
         
-        let total = 0;
-        let displayDuration = "";
-
-        // CHECKOUT LOGIC:
-        if (!isOpenTime) {
-            total = storedTotal.toFixed(2);
-            displayDuration = "Fixed Session (Original Time)";
-        } 
-        // If Open Time: Calculate based on CURRENT time
-        else if (isOpenTime && startStr) {
-            const start = new Date(startStr);
-            const now = new Date();
-            const diffMs = Math.max(60000, now - start);
-            const hours = Math.ceil(diffMs / (1000 * 60 * 60)); 
-            total = (hours * rate + extra).toFixed(2);
-            displayDuration = `${(diffMs / 60000).toFixed(0)} mins (${hours} hr/s)`;
+        // Compute tiered room fee + extra fee
+        const roomFee = calculateOpenTimeFee(totalMinutes, rate);
+        total = (roomFee + extra).toFixed(2);
+        
+        // Format display duration
+        const fullHours = Math.floor(totalMinutes / 60);
+        const remMins = totalMinutes % 60;
+        
+        if (fullHours > 0) {
+            displayDuration = `${totalMinutes} mins (${fullHours} hr/s ${remMins} mins)`;
         } else {
-            total = (rate + extra).toFixed(2);
-            displayDuration = "Fixed Session";
+            displayDuration = `${totalMinutes} mins`;
         }
-        
-        const confirmMsg = `End session for ${customerName} (${roomName})?\n\n` +
-                           `Duration: ${displayDuration}\n` +
-                           `Total Payable: ₱${total}`;
+    } else {
+        total = (rate + extra).toFixed(2);
+        displayDuration = "Fixed Session";
+    }
+    
+    const confirmMsg = `End session for ${customerName} (${roomName})?\n\n` +
+                       `Duration: ${displayDuration}\n` +
+                       `Total Payable: ₱${total}`;
 
-        confirmAction('End Session?', confirmMsg, 'End Session', 'Cancel').then(confirmed => {
-            if (!confirmed) return;
-            // Redirect to the backend route to finalize the checkout
-            window.location.href = `/admin/walkin_checkout/${resId}?final_bill=${total}`;
-        });
-    };
+    confirmAction('End Session?', confirmMsg, 'End Session', 'Cancel').then(confirmed => {
+        if (!confirmed) return;
+        // Redirect to the backend route to finalize the checkout
+        window.location.href = `/admin/walkin_checkout/${resId}?final_bill=${total}`;
+    });
+};
 
     const addTimeModal = document.getElementById('addTimeModal');
     const extendHoursInput = document.getElementById('extendHoursInput');
@@ -482,4 +624,5 @@ document.addEventListener('DOMContentLoaded', function() {
 
     updateClock();
     setInterval(updateClock, 1000);
+
 });

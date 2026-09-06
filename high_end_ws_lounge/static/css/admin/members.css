@@ -390,7 +390,13 @@
 
 .btn-check-in:disabled {
     opacity: 0.55;
-    cursor: not-allowed;
+    cursor: not-allowed !important;
+}
+
+.btn-renew:disabled {
+    opacity: 0.65;
+    cursor: not-allowed !important;
+    background-color: #0f2847;
 }
 
 .btn-deactivate,
@@ -448,7 +454,7 @@
     overflow: hidden;
 }
 
-..modal-header {
+.modal-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -688,6 +694,38 @@ button:focus, .tab-btn:focus, .plan-selector-box:focus {
 .reg-input:focus {
     background: #ffffff;
     border-color: var(--primary);
+
+}
+
+.btn-pause-session {
+    border: none;
+    border-radius: 6px;
+    font-weight: 750;
+    font-size: 1rem !important; /* Uniform text size */
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: #ffffff;
+    padding-top: 30px;
+    padding-bottom: 30px;
+    
+    /* Layout & Sizing Lock Fix */
+    width: 160% !important;        /* Same width sa adjacent buttons */
+    height: 50px !important;       /* Strict uniform height */
+    line-height: 1.5 !important;
+}
+
+/* Background Color State */
+.btn-pause-session.btn-warning,
+.btn-pause-session[data-is-paused="true"] {
+    background-color: #f59e0b !important; /* Yellow / Orange (Resume State) */
+}
+
+.btn-pause-session.btn-secondary,
+.btn-pause-session[data-is-paused="false"] {
+    background-color: #6b7280 !important; /* Gray (Pause State) */
 }
 
 /* Small helper for a muted placeholder when no plan selected */

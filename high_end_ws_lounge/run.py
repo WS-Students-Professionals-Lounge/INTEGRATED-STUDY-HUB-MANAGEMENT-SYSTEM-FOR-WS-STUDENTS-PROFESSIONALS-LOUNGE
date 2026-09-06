@@ -21,9 +21,13 @@ from database_fixed import (
     socketio,
 )
 from flask import Flask
+from flask_mail import Mail
+from itsdangerous import URLSafeTimedSerializer
 from sqlalchemy import inspect, text
 from time_utils import format_checkin_time, format_checkout_time, format_date, decimal_hours_to_readable
 
+mail = Mail()
+serializer = None
 
 def create_app(config_class=Config):
     root_dir = os.path.dirname(os.path.abspath(__file__))
@@ -34,7 +38,8 @@ def create_app(config_class=Config):
         static_url_path="/static",
     )
     app.config.from_object(config_class)
-
+    app.config['WTF_CSRF_ENABLED'] = False
+    
     db.init_app(app)
     login_manager.init_app(app)
     login_manager.login_view = "auth.login"
@@ -54,13 +59,14 @@ def create_app(config_class=Config):
     def ensure_default_rooms():
         with app.app_context():
             default_rooms = [
-                {"name": "Small Meeting Room", "base_rate": 50.0, "category": "meeting"},
+                {"name": "Common Area", "base_rate": 35.0, "category": "solo"},
+                {"name": "Small Meeting Room 1", "base_rate": 50.0, "category": "meeting"},
+                {"name": "Small Meeting Room 2", "base_rate": 50.0, "category": "meeting"},
                 {"name": "Lecture Room", "base_rate": 150.0, "category": "lecture"},
                 {"name": "Conference Room", "base_rate": 250.0, "category": "conference"},
                 {"name": "Comfy Room", "base_rate": 150.0, "category": "comfy"},
                 {"name": "Event Room 1", "base_rate": 300.0, "category": "event"},
                 {"name": "Event Room 2", "base_rate": 300.0, "category": "event"},
-                {"name": "Common Area", "base_rate": 35.0, "category": "solo"},
             ]
             for room_data in default_rooms:
                 if not Room.query.filter_by(name=room_data["name"]).first():
@@ -98,6 +104,13 @@ def create_app(config_class=Config):
                 db.session.execute(text("ALTER TABLE reservations ADD COLUMN receipt_image VARCHAR(255)"))
             if "approved_by_id" not in columns:
                 db.session.execute(text("ALTER TABLE reservations ADD COLUMN approved_by_id INTEGER"))
+            if "addon_subtotal" not in columns:
+                db.session.execute(text("ALTER TABLE reservations ADD COLUMN addon_subtotal FLOAT DEFAULT 0.0"))
+
+            if inspector.has_table("walkin_reservations"):
+                walkin_columns = {column["name"] for column in inspector.get_columns("walkin_reservations")}
+                if "addon_subtotal" not in walkin_columns:
+                    db.session.execute(text("ALTER TABLE walkin_reservations ADD COLUMN addon_subtotal FLOAT DEFAULT 0.0"))
 
             if inspector.has_table("solo_plans"):
                 solo_columns = {column["name"] for column in inspector.get_columns("solo_plans")}
@@ -182,11 +195,14 @@ def seed_db():
     # Rooms
     if not Room.query.first():
         rooms = [
-            Room(name="Conference Room", base_rate=50.0, category="conference"),
-            Room(name="Room 101", base_rate=35.0, category="standard"),
-            Room(name="Room 102", base_rate=50.0, category="premium"),
-            Room(name="Sleeping Pod", base_rate=100.0, category="pod"),
-            Room("Common Area", base_rate=35.0, category="solo"),
+            Room(name="Common Area", base_rate=35.0, category="solo"),
+            Room(name="Small Meeting Room 1", base_rate=50.0, category="meeting"),
+            Room(name="Small Meeting Room 2", base_rate=50.0, category="meeting"),
+            Room(name="Lecture Room", base_rate=150.0, category="lecture"),
+            Room(name="Conference Room", base_rate=250.0, category="conference"),
+            Room(name="Comfy Room", base_rate=150.0, category="comfy"),
+            Room(name="Event Room 1", base_rate=300.0, category="event"),
+            Room(name="Event Room 2", base_rate=300.0, category="event"),
         ]
         for room in rooms:
             db.session.add(room)

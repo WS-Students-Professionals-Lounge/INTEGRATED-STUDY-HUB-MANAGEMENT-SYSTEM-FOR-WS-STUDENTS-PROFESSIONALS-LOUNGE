@@ -1,12 +1,27 @@
-/**
- * =========================================
- * ADMIN MEMBERS PAGE - JavaScript Logic
- * Handling Tabs, Modals, and Search
- * =========================================
- */
-
 document.addEventListener('DOMContentLoaded', function() {
     
+    // === HELPER FALLBACKS (Prevents Uncaught ReferenceErrors) ===
+    function showToastFallback(message, type = 'info') {
+        if (typeof window.showToast === 'function') {
+            window.showToast(message, type);
+        } else {
+            alert(`[${type.toUpperCase()}]: ${message}`);
+        }
+    }
+
+    async function confirmActionFallback(title, message, confirmBtnText = 'Confirm', cancelBtnText = 'Cancel') {
+        if (typeof window.confirmAction === 'function') {
+            return await window.confirmAction(title, message, confirmBtnText, cancelBtnText);
+        } else {
+            return window.confirm(`${title}\n\n${message}`);
+        }
+    }
+
+    function showAlert(message, type = 'info') {
+        showToastFallback(message, type);
+    }
+
+
     // === 1. TAB SWITCHING LOGIC ===
     const tabButtons = document.querySelectorAll('.tab-btn');
     const tabPanels = document.querySelectorAll('.tab-panel');
@@ -15,116 +30,21 @@ document.addEventListener('DOMContentLoaded', function() {
         button.addEventListener('click', () => {
             const targetTab = button.getAttribute('data-tab');
 
-            // Remove active class from all buttons and panels
             tabButtons.forEach(btn => btn.classList.remove('active'));
             tabPanels.forEach(panel => panel.classList.remove('active'));
 
-            // Add active class to clicked button and target panel
             button.classList.add('active');
-            document.getElementById(targetTab).classList.add('active');
+            const targetPanel = document.getElementById(targetTab);
+            if (targetPanel) {
+                targetPanel.classList.add('active');
+            }
         });
     });
 
-    // === 2.a MOCK: Membership Requests injection (frontend-only) ===
-    const requestsList = document.getElementById('requestsList');
-    let mockMode = false;
 
-    function showAlert(message, type = 'info') {
-        showToast(message, type);
-    }
-
-    function createRequestCard(req, container, useMock) {
-        const card = document.createElement('div');
-        card.className = 'request-card';
-        card.setAttribute('data-request', JSON.stringify(req));
-
-        const info = document.createElement('div');
-        info.className = 'request-info';
-        info.innerHTML = `<h3 class="customer-name">${req.user?.name || 'Unknown'}</h3>
-            <p class="detail-text">Email: ${req.user?.email || 'N/A'}</p>
-            <p class="detail-text">Contact Number: ${req.user?.phone || 'N/A'}</p>`;
-
-        const plan = document.createElement('div');
-        plan.className = 'request-plan';
-        const created = new Date(req.created_at || Date.now()).toLocaleString();
-        plan.innerHTML = `<h4 class="column-title">Selected Plan</h4>
-            <p class="plan-name">${req.plan_name || 'N/A'}</p>
-            <p class="detail-text">Date Requested: ${created}</p>`;
-
-        const pay = document.createElement('div');
-        pay.className = 'request-payment';
-        pay.innerHTML = `<h4 class="column-title">Payment Verification</h4>
-            <button class="btn-check-receipt">Check</button>`;
-
-        const actions = document.createElement('div');
-        actions.className = 'request-actions';
-
-        const approveForm = document.createElement('form');
-        approveForm.method = 'POST';
-        approveForm.action = '#';
-        approveForm.innerHTML = `<button type="submit" class="btn-approve">Approve</button>`;
-
-        const rejectForm = document.createElement('form');
-        rejectForm.method = 'POST';
-        rejectForm.action = '#';
-        rejectForm.innerHTML = `<button type="submit" class="btn-reject">Reject</button>`;
-
-        actions.appendChild(approveForm);
-        actions.appendChild(rejectForm);
-
-        card.appendChild(info);
-        card.appendChild(plan);
-        card.appendChild(pay);
-        card.appendChild(actions);
-
-        container.appendChild(card);
-
-        // Attach handlers
-        const checkBtn = card.querySelector('.btn-check-receipt');
-        checkBtn.addEventListener('click', () => {
-            showAlert(`Mock: Open receipt for ${req.user?.name || 'user'}`);
-        });
-
-        if (useMock) {
-            approveForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                card.style.opacity = 0.6;
-                card.style.transition = 'opacity 0.25s';
-                card.querySelector('.request-plan .plan-name').innerText += ' (Activated)';
-                const btn = approveForm.querySelector('button');
-                btn.innerText = 'Approved';
-                btn.disabled = true;
-                // Remove the card after a short delay to simulate backend update
-                setTimeout(() => card.remove(), 800);
-            });
-
-            rejectForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                const btn = rejectForm.querySelector('button');
-                btn.innerText = 'Rejected';
-                btn.disabled = true;
-                card.style.opacity = 0.6;
-                setTimeout(() => card.remove(), 600);
-            });
-        }
-    }
-
-    // Render server-provided membership request cards.
-    // Disable/mock seeding for real deployments.
-    if (requestsList) {
-        try {
-            const raw = JSON.parse(requestsList.getAttribute('data-requests') || '[]');
-            const pending = (raw && raw.length) ? raw.filter(r => (r.status || '').toString().toLowerCase() === 'pending') : [];
-
-            // If server already rendered cards, don't override.
-            const existing = requestsList.querySelectorAll('.request-card');
-            if (existing.length === 0 && pending.length > 0) {
-                pending.forEach(r => createRequestCard(r, requestsList, false));
-            }
-        } catch (e) {
-            console.warn('Failed to parse membership requests data', e);
-        }
-    }
+    // === 2. MODAL HELPER FUNCTIONS ===
+    const receiptModal = document.getElementById('receiptModal');
+    const recordsModal = document.getElementById('recordsModal');
 
     function openModal(modal) {
         if (!modal) return;
@@ -151,7 +71,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        const isImage = /\.(png|jpe?g|gif)$/i.test(receiptUrl);
+        const isImage = /\.(png|jpe?g|gif|webp)$/i.test(receiptUrl);
         if (isImage) {
             const img = document.createElement('img');
             img.src = receiptUrl;
@@ -170,9 +90,105 @@ document.addEventListener('DOMContentLoaded', function() {
         body.appendChild(link);
     }
 
-    const receiptModal = document.getElementById('receiptModal');
-    const recordsModal = document.getElementById('recordsModal');
 
+    // === 3. MEMBERSHIP REQUEST CARD INJECTION ===
+    function createRequestCard(req, container, useMock = false) {
+        const card = document.createElement('div');
+        card.className = 'request-card';
+        card.setAttribute('data-request', JSON.stringify(req));
+
+        const info = document.createElement('div');
+        info.className = 'request-info';
+        info.innerHTML = `<h3 class="customer-name">${req.user?.name || 'Unknown'}</h3>
+            <p class="detail-text">Email: ${req.user?.email || 'N/A'}</p>
+            <p class="detail-text">Contact Number: ${req.user?.phone || 'N/A'}</p>`;
+
+        const plan = document.createElement('div');
+        plan.className = 'request-plan';
+        const created = new Date(req.created_at || Date.now()).toLocaleString();
+        plan.innerHTML = `<h4 class="column-title">Selected Plan</h4>
+            <p class="plan-name">${req.plan_name || 'N/A'}</p>
+            <p class="detail-text">Date Requested: ${created}</p>`;
+
+        const pay = document.createElement('div');
+        pay.className = 'request-payment';
+        pay.innerHTML = `<h4 class="column-title">Payment Verification</h4>
+            <button class="btn-check-receipt" data-receipt-url="${req.receipt_url || ''}" data-request-name="${req.user?.name || 'User'}">Check</button>`;
+
+        const actions = document.createElement('div');
+        actions.className = 'request-actions';
+
+        const approveForm = document.createElement('form');
+        approveForm.method = 'POST';
+        approveForm.action = '#';
+        approveForm.innerHTML = `<button type="submit" class="btn-approve">Approve</button>`;
+
+        const rejectForm = document.createElement('form');
+        rejectForm.method = 'POST';
+        rejectForm.action = '#';
+        rejectForm.innerHTML = `<button type="submit" class="btn-reject">Reject</button>`;
+
+        actions.appendChild(approveForm);
+        actions.appendChild(rejectForm);
+
+        card.appendChild(info);
+        card.appendChild(plan);
+        card.appendChild(pay);
+        card.appendChild(actions);
+
+        container.appendChild(card);
+
+        // Attach receipt viewer logic to dynamic button
+        const checkBtn = card.querySelector('.btn-check-receipt');
+        checkBtn.addEventListener('click', () => {
+            if (useMock) {
+                showAlert(`Mock: Open receipt for ${req.user?.name || 'user'}`);
+            } else {
+                createReceiptPreview(req.receipt_url, req.user?.name || 'this request');
+                openModal(receiptModal);
+            }
+        });
+
+        if (useMock) {
+            approveForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                card.style.opacity = '0.6';
+                card.style.transition = 'opacity 0.25s';
+                card.querySelector('.request-plan .plan-name').innerText += ' (Activated)';
+                const btn = approveForm.querySelector('button');
+                btn.innerText = 'Approved';
+                btn.disabled = true;
+                setTimeout(() => card.remove(), 800);
+            });
+
+            rejectForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const btn = rejectForm.querySelector('button');
+                btn.innerText = 'Rejected';
+                btn.disabled = true;
+                card.style.opacity = '0.6';
+                setTimeout(() => card.remove(), 600);
+            });
+        }
+    }
+
+    const requestsList = document.getElementById('requestsList');
+    if (requestsList) {
+        try {
+            const raw = JSON.parse(requestsList.getAttribute('data-requests') || '[]');
+            const pending = (raw && Array.isArray(raw)) ? raw.filter(r => (r.status || '').toString().toLowerCase() === 'pending') : [];
+
+            const existing = requestsList.querySelectorAll('.request-card');
+            if (existing.length === 0 && pending.length > 0) {
+                pending.forEach(r => createRequestCard(r, requestsList, false));
+            }
+        } catch (e) {
+            console.warn('Failed to parse membership requests data', e);
+        }
+    }
+
+
+    // === 4. GLOBAL MODAL EVENT BINDINGS ===
     document.querySelectorAll('.btn-check-receipt').forEach((btn) => {
         btn.addEventListener('click', () => {
             const receiptUrl = btn.dataset.receiptUrl;
@@ -189,11 +205,14 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+
+    // === 5. ATTENDANCE RECORDS & CHECK-IN LOGIC ===
     document.querySelectorAll('.btn-view-records').forEach((btn) => {
         btn.addEventListener('click', async () => {
             const membershipId = btn.dataset.membershipId;
             const body = document.getElementById('recordsModalBody');
             if (!body) return;
+
             if (!membershipId) {
                 body.innerHTML = '<div class="records-empty-state"><p>No membership found for this user.</p></div>';
                 openModal(recordsModal);
@@ -206,8 +225,14 @@ document.addEventListener('DOMContentLoaded', function() {
             try {
                 const response = await fetch(`/admin/api/member/${membershipId}/attendance`);
                 const data = await response.json();
+
                 if (!response.ok || data.status !== 'success') {
                     body.innerHTML = `<div class="records-empty-state"><p>${data.message || 'Unable to get attendance history.'}</p></div>`;
+                    return;
+                }
+
+                if (!data.attendance || data.attendance.length === 0) {
+                    body.innerHTML = `<div class="records-empty-state"><p>No attendance records recorded for <strong>${data.member_name || 'this member'}</strong>.</p></div>`;
                     return;
                 }
 
@@ -225,10 +250,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     <tbody>
                         ${data.attendance.map(log => `
                             <tr>
-                                <td>${log.date}</td>
-                                <td>${log.check_in}</td>
-                                <td>${log.check_out}</td>
-                                <td>${log.hours}</td>
+                                <td>${log.date || 'N/A'}</td>
+                                <td>${log.check_in || 'N/A'}</td>
+                                <td>${log.check_out || 'N/A'}</td>
+                                <td>${log.hours || '0'}</td>
                             </tr>
                         `).join('')}
                     </tbody>
@@ -244,41 +269,66 @@ document.addEventListener('DOMContentLoaded', function() {
 
     document.querySelectorAll('.btn-check-in').forEach((btn) => {
         btn.addEventListener('click', async () => {
-            const membershipId = btn.dataset.membershipId;
+            const membershipId = btn.dataset.membershipId || btn.dataset.userId;
             const isCheckedIn = btn.dataset.isCheckedIn === 'true';
-            if (!membershipId) return;
 
-            const action = isCheckedIn ? 'end session' : 'check in';
+            if (!membershipId) {
+                showAlert('User or Membership ID missing.', 'error');
+                return;
+            }
+
             const confirmMessage = isCheckedIn ? 'End the active session for this member?' : 'Check in this member now?';
-            if (!window.confirm(confirmMessage)) return;
+            const confirmed = await confirmActionFallback(isCheckedIn ? 'End Session' : 'Check In', confirmMessage);
+            if (!confirmed) return;
 
-            const endpoint = isCheckedIn ? `/admin/api/member/${membershipId}/check-out` : `/admin/api/member/${membershipId}/check-in`;
-            const options = { method: 'POST' };
+            const endpoint = isCheckedIn 
+                ? `/admin/api/member/${membershipId}/check-out` 
+                : `/admin/api/member/${membershipId}/check-in`;
+
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
             try {
-                const response = await fetch(endpoint, options);
-                const result = await response.json();
+                const response = await fetch(endpoint, { 
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    }
+                });
+                const result = await response.json().catch(() => ({}));
+
                 if (!response.ok || result.status !== 'success') {
-                    showAlert(result.message || 'Membership action failed.');
+                    showAlert(result.message || 'Membership action failed.', 'error');
                     return;
                 }
-                showAlert(result.message, 'success');
+                showAlert(result.message || 'Action completed successfully.', 'success');
                 window.location.reload();
             } catch (err) {
-                showAlert(err.message || 'Membership action failed.');
+                showAlert(err.message || 'Membership action failed.', 'error');
             }
         });
     });
 
 
-    // === 3. ADMIN MEMBER ACTIONS (Renew / Deactivate) ===
+    // === 6. ADMIN MEMBER ACTIONS (Renew / Deactivate / Reactivate / Delete / Pause) ===
     async function postJson(url, payload) {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+        const headers = { 
+            'Content-Type': 'application/json' 
+        };
+        if (csrfToken) {
+            headers['X-CSRFToken'] = csrfToken;
+        }
+
         const resp = await fetch(url, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: headers,
             body: JSON.stringify(payload)
         });
+
         const data = await resp.json().catch(() => ({}));
+
         if (!resp.ok) {
             const msg = data && data.message ? data.message : `Request failed (HTTP ${resp.status})`;
             throw new Error(msg);
@@ -286,7 +336,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return data;
     }
 
-    document.querySelectorAll('.btn-renew').forEach((btn) => {
+        document.querySelectorAll('.btn-renew').forEach((btn) => {
         btn.addEventListener('click', async () => {
             const userId = btn.getAttribute('data-user-id');
             if (!userId) return;
@@ -296,14 +346,23 @@ document.addEventListener('DOMContentLoaded', function() {
             btn.innerText = 'Renewing...';
 
             try {
-                const url = '/admin/renew_member';
-                console.log('Renew POST:', url, { user_id: Number(userId) });
-                await postJson(url, { user_id: Number(userId) });
-                showAlert('Membership renewed successfully.');
-                window.location.reload();
+                await postJson('/admin/renew_member', { user_id: Number(userId) });
+                showAlert('Membership renewed successfully.', 'success');
+
+                // 1. I-save sa localStorage para sa tab navigation script
+                localStorage.setItem("activeMemberTab", "list");
+
+                // 2. Tadtaron ang tab parameter para exact gid sa HTML ('list')
+                const currentUrl = new URL(window.location.href);
+                currentUrl.searchParams.set('tab', 'list');
+
+                // 3. Mag-hulat sang 500ms para mabasa sang user ang success toast/alert
+                setTimeout(() => {
+                    window.location.href = currentUrl.toString();
+                }, 500);
+
             } catch (err) {
-                showAlert(err && err.message ? err.message : 'Renew failed.');
-            } finally {
+                showAlert(err && err.message ? err.message : 'Renew failed.', 'error');
                 btn.disabled = false;
                 btn.innerText = prevText;
             }
@@ -315,7 +374,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const userId = btn.getAttribute('data-user-id');
             if (!userId) return;
 
-            const confirmed = await confirmAction('Deactivate member?', 'Deactivate this member account?', 'Deactivate', 'Cancel');
+            const confirmed = await confirmActionFallback('Deactivate member?', 'Deactivate this member account?', 'Deactivate', 'Cancel');
             if (!confirmed) return;
 
             const prevText = btn.innerText;
@@ -324,10 +383,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
             try {
                 await postJson('/admin/deactivate_member', { user_id: Number(userId) });
-                showAlert('Account deactivated successfully.');
-                window.location.reload();
+                showAlert('Account deactivated successfully.', 'success');
+                const currentUrl = new URL(window.location.href);
+                currentUrl.searchParams.set('tab', 'member_list');
+                window.location.href = currentUrl.toString();
             } catch (err) {
-                showAlert(err && err.message ? err.message : 'Deactivation failed.');
+                showAlert(err && err.message ? err.message : 'Deactivation failed.', 'error');
             } finally {
                 btn.disabled = false;
                 btn.innerText = prevText;
@@ -346,10 +407,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
             try {
                 await postJson('/admin/reactivate_member', { user_id: Number(userId) });
-                showAlert('Account reactivated successfully.');
-                window.location.reload();
+                showAlert('Account reactivated successfully.', 'success');
+                const currentUrl = new URL(window.location.href);
+                currentUrl.searchParams.set('tab', 'member_list');
+                window.location.href = currentUrl.toString();
             } catch (err) {
-                showAlert(err && err.message ? err.message : 'Reactivation failed.');
+                showAlert(err && err.message ? err.message : 'Reactivation failed.', 'error');
             } finally {
                 btn.disabled = false;
                 btn.innerText = prevText;
@@ -362,7 +425,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const userId = btn.getAttribute('data-user-id');
             if (!userId) return;
 
-            const confirmed = await confirmAction('Delete account?', 'This will permanently delete all data for this account. Are you sure?', 'Delete', 'Cancel');
+            const confirmed = await confirmActionFallback('Delete account?', 'This will permanently delete all data for this account. Are you sure?', 'Delete', 'Cancel');
             if (!confirmed) return;
 
             const prevText = btn.innerText;
@@ -371,10 +434,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
             try {
                 await postJson(`/admin/delete_member/${Number(userId)}`, {});
-                showAlert('Account permanently deleted.');
+                showAlert('Account permanently deleted.', 'success');
                 window.location.reload();
             } catch (err) {
-                showAlert(err && err.message ? err.message : 'Delete failed.');
+                showAlert(err && err.message ? err.message : 'Delete failed.', 'error');
             } finally {
                 btn.disabled = false;
                 btn.innerText = prevText;
@@ -382,8 +445,103 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+    // === PAUSE / RESUME SESSION LOGIC (ADMIN SIDE) ===
+async function handlePauseClick(btnElement) {
+    if (btnElement.disabled) return;
 
-    // === 4. MEMBER LIST SEARCH FILTER ===
+    const membershipId = btnElement.getAttribute('data-membership-id');
+    const isCurrentlyPaused = btnElement.getAttribute('data-is-paused') === 'true';
+    const memberName = btnElement.getAttribute('data-member-name') || 'Member';
+
+    const actionText = isCurrentlyPaused ? "RESUME" : "PAUSE";
+    const message = `Are you sure you want to ${actionText} the session for ${memberName}?`;
+
+    const confirmed = await confirmActionFallback(`${actionText} Session`, message);
+    if (!confirmed) return;
+
+    btnElement.disabled = true;
+
+    try {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+        const res = await fetch(`/admin/api/member/${membershipId}/toggle-pause`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            }
+        });
+
+        const data = await res.json();
+
+        if (res.ok && data.status === 'success') {
+            const newIsPaused = data.is_paused !== undefined ? data.is_paused : !isCurrentlyPaused;
+            
+            // 1. Instantly Update Button Attributes
+            btnElement.setAttribute('data-is-paused', newIsPaused ? 'true' : 'false');
+            btnElement.innerHTML = newIsPaused ? '▶ Resume Session' : '⏸ Pause Session';
+            btnElement.style.backgroundColor = newIsPaused ? '#f59e0b' : '#6b7280';
+
+            const card = btnElement.closest('.member-list-card, .card, [class*="member"]');
+            if (card) {
+                const statusElement = card.querySelector('[class*="status"], .status-text, .badge');
+                if (statusElement) {
+                    if (newIsPaused) {
+                        statusElement.textContent = 'Status: Paused';
+                        statusElement.className = 'badge bg-warning text-dark';
+                    } else {
+                        statusElement.textContent = 'Status: Checked In';
+                        statusElement.className = 'badge bg-success';
+                    }
+                }
+            }
+
+            showAlert(data.message || `Session ${newIsPaused ? 'paused' : 'resumed'} successfully.`, 'success');
+            
+            
+            // 3. Smooth Refresh to sync back state from Python backend
+            setTimeout(() => {
+                const currentUrl = new URL(window.location.href);
+                currentUrl.searchParams.set('tab', 'member_list');
+                window.location.href = currentUrl.toString();
+            }, 600);
+        } else {
+            showAlert(data.message || 'Failed to update session.', 'error');
+            btnElement.disabled = false;
+        }
+    } catch (err) {
+        console.error('Pause toggle error:', err);
+        btnElement.disabled = false;
+        showAlert('Server error occurred while updating session status.', 'error');
+    }
+}
+
+document.addEventListener('click', function(e) {
+    const pauseBtn = e.target.closest('.btn-pause-session, .btn-pause');
+    if (pauseBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        handlePauseClick(pauseBtn);
+    }
+});
+
+window.handlePauseClick = handlePauseClick;
+
+// === PAUSE / RESUME INITIAL STATE AUTO-CHECKER ===
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.btn-pause-session, .btn-pause').forEach(pauseBtn => {
+        const isPaused = pauseBtn.getAttribute('data-is-paused') === 'true';
+
+        if (isPaused) {
+            pauseBtn.innerHTML = '▶ Resume Session';
+            pauseBtn.style.backgroundColor = '#f59e0b';
+        } else {
+            pauseBtn.innerHTML = '⏸ Pause Session';
+            pauseBtn.style.backgroundColor = '#6b7280';
+        }
+    });
+});
+
+    // === 7. SEARCH & FILTER LOGIC ===
     const searchInput = document.getElementById('memberListSearch');
     const memberCards = document.querySelectorAll('#list .member-list-card');
     const deactivatedSearchInput = document.getElementById('deactivatedListSearch');
@@ -397,7 +555,7 @@ document.addEventListener('DOMContentLoaded', function() {
             memberCards.forEach(card => {
                 const cardText = card.getAttribute('data-searchable') || '';
                 if (cardText.toLowerCase().includes(searchTerm)) {
-                    card.style.display = 'grid'; // Maintain grid layout
+                    card.style.display = 'grid';
                 } else {
                     card.style.display = 'none';
                 }
@@ -432,7 +590,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // === 4. DATE DISPLAY ===
+
+    // === 8. DATE DISPLAY ===
     const dateDisplay = id => {
         const element = document.getElementById(id);
         if (element) {

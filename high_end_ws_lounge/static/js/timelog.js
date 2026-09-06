@@ -1,5 +1,8 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // 1. Digital Clock (Existing Function Kept)
+    // Global pause state flag
+    let isSessionPaused = false;
+
+    // 1. Digital Clock
     function updateClock() {
         const now = new Date();
         const options = { 
@@ -13,38 +16,92 @@ document.addEventListener('DOMContentLoaded', () => {
     setInterval(updateClock, 1000);
     updateClock();
 
-    // 2. Automatic Session Timer (New Logic for Automatic Tracking)
+    // 2. Real-Time Status & Pause State Sync Engine
+    function syncTimelogStatus() {
+        fetch('/api/membership/status')
+            .then(r => r.ok ? r.json() : null)
+            .then(data => {
+                if (!data || data.status !== 'success') return;
+
+                isSessionPaused = Boolean(data.is_paused);
+
+                // Update Status Badge (Active vs Paused vs Not Checked In)
+                const statusBadge = document.getElementById('sessionStatusBadge');
+                const timerDisplay = document.getElementById('sessionTimer');
+
+                if (statusBadge) {
+                    if (isSessionPaused) {
+                        statusBadge.textContent = 'PAUSED';
+                        statusBadge.className = 'badge bg-warning text-dark';
+                    } else if (data.is_checked_in) {
+                        statusBadge.textContent = 'ACTIVE';
+                        statusBadge.className = 'badge bg-success';
+                    } else {
+                        statusBadge.textContent = 'NOT CHECKED IN';
+                        statusBadge.className = 'badge bg-secondary';
+                    }
+                }
+
+                if (timerDisplay) {
+                    if (isSessionPaused) {
+                        timerDisplay.style.color = '#f59e0b'; // Amber / Yellow
+                    } else {
+                        timerDisplay.style.color = ''; // Reset to default theme color
+                    }
+                }
+            })
+            .catch(err => console.error("Timelog sync error:", err));
+    }
+
+    // Auto-check pause status every 2 seconds
+    syncTimelogStatus();
+    setInterval(syncTimelogStatus, 2000);
+
+    // 3. Automatic Session Timer Engine (With Pause-Freeze Support)
     function initSessionTimer() {
         const timerDisplay = document.getElementById('sessionTimer');
         if (!timerDisplay) return;
 
-        // Get the end time from the data attribute (provided by Jinja)
-        const endTimeStr = timerDisplay.getAttribute('data-endtime');
+        let endTimeStr = timerDisplay.getAttribute('data-endtime');
         if (!endTimeStr) return;
 
-        const endTime = new Date(endTimeStr).getTime();
+        // Fix Safari/iOS Date Parsing compatibility issue
+        endTimeStr = endTimeStr.replace(' ', 'T');
+        let endTime = new Date(endTimeStr).getTime();
+
+        if (isNaN(endTime)) {
+            timerDisplay.textContent = "INVALID TIME";
+            return;
+        }
 
         const countdownInterval = setInterval(() => {
-            const now = new Date().getTime();
+            // KON NAKA-PAUSED: I-freeze ang countdown kag indi na pag-i-advance ang offset
+            if (isSessionPaused) {
+                // Adjust dynamic end-time moving forward by 1 sec to freeze remaining time visually
+                endTime += 1000; 
+                return;
+            }
+
+            const now = Date.now();
             const distance = endTime - now;
 
-            // Time calculations for hours, minutes and seconds
-            const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-            const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
-            const seconds = Math.floor((distance % (1000 * 60)) / 1000);
-
-            // Display the result in the element
-            if (distance < 0) {
+            // Time calculations
+            if (distance <= 0) {
                 clearInterval(countdownInterval);
                 timerDisplay.textContent = "SESSION ENDED";
                 timerDisplay.style.color = "#EB3223";
-                // Optional: Refresh page to update status automatically when session ends
+                
+                // Refresh page to sync backend session status
                 setTimeout(() => { location.reload(); }, 2000);
             } else {
+                const totalHours = Math.floor(distance / (1000 * 60 * 60));
+                const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
                 // Formatting with leading zeros
-                const hDisplay = hours < 10 ? "0" + hours : hours;
-                const mDisplay = minutes < 10 ? "0" + minutes : minutes;
-                const sDisplay = seconds < 10 ? "0" + seconds : seconds;
+                const hDisplay = String(totalHours).padStart(2, '0');
+                const mDisplay = String(minutes).padStart(2, '0');
+                const sDisplay = String(seconds).padStart(2, '0');
                 
                 timerDisplay.textContent = `${hDisplay}:${mDisplay}:${sDisplay}`;
             }
@@ -52,44 +109,44 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     initSessionTimer();
 
-    // 3. Status Tracker (Kept and adjusted for background sync)
+    // 4. Legacy/Fallback Status Tracker
     function updateStatus() {
         fetch('/get_time_inside')
-            .then(r => r.json())
+            .then(r => r.ok ? r.json() : null)
             .then(data => {
+                if (!data) return;
                 const statusText = document.getElementById('statusText');
                 if (!statusText) return;
 
                 if (data.status === 'inside') {
-                    // Logic for when system detects user is within reservation period
-                    statusText.textContent = 'Session in Progress';
-                    statusText.className = 'status-inside';
+                    statusText.textContent = isSessionPaused ? 'Session Paused' : 'Session in Progress';
+                    statusText.className = isSessionPaused ? 'status-paused' : 'status-inside';
                 } else {
                     statusText.textContent = 'Awaiting Reservation';
                     statusText.className = 'status-muted';
                 }
             })
-            .catch(err => console.log("Status check error:", err));
+            .catch(err => console.error("Status check error:", err));
     }
-    // Only run status check if no active timer is displayed to save resources
+
     if (!document.getElementById('sessionTimer')) {
         setInterval(updateStatus, 5000);
         updateStatus();
     }
 
-    // 4. Modal Logic (Kept for generic notifications/errors)
+    // 5. Safe Modal Controller
     const modal = document.getElementById('confirmModal');
     const btnCloseModal = document.getElementById('btnCloseModal');
     
-    if (btnCloseModal) {
+    if (btnCloseModal && modal) {
         btnCloseModal.addEventListener('click', () => {
             modal.style.display = 'none';
         });
     }
 
-    window.onclick = (event) => {
-        if (modal && event.target == modal) {
+    window.addEventListener('click', (event) => {
+        if (modal && event.target === modal) {
             modal.style.display = 'none';
         }
-    };
+    });
 });

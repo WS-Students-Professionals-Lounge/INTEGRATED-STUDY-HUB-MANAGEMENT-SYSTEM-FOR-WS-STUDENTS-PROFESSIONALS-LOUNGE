@@ -3,65 +3,76 @@ Fixed database.py - clean imports for membership features
 """
 
 import os
+import sqlite3
 from datetime import datetime, timedelta
 
-from dotenv import load_dotenv
 from flask import Flask
-from flask_login import LoginManager, UserMixin
-from flask_mail import Mail
+from flask_mail import Mail, Message
+from itsdangerous import URLSafeTimedSerializer
+from dotenv import load_dotenv
+from flask_wtf import FlaskForm
 from flask_socketio import SocketIO
 from flask_sqlalchemy import SQLAlchemy
-from flask_wtf import FlaskForm
+from flask_login import LoginManager, UserMixin
 from sqlalchemy import and_, create_engine, func, inspect, or_, text
 from werkzeug.security import check_password_hash, generate_password_hash
 from wtforms import (
-    BooleanField,
-    DateField,
-    DateTimeField,
-    DecimalField,
-    HiddenField,
-    IntegerField,
-    PasswordField,
-    SelectField,
-    StringField,
-    SubmitField,
-    TextAreaField,
+    DateTimeLocalField,
     TimeField,
+    HiddenField,
+    StringField,
+    PasswordField,
+    SubmitField,
+    SelectField,
+    IntegerField,
+    BooleanField,
+    TextAreaField,
 )
+from wtforms.fields import DateTimeField, DecimalField
 from wtforms.validators import (
     DataRequired,
+    ValidationError,
     Email,
     EqualTo,
     Length,
-    NumberRange,
+    Regexp,
     Optional,
+    NumberRange,
+    DataRequired,
 )
 
 load_dotenv()
 
-# ---------------------------------------------------------------------------
 # Config
-# ---------------------------------------------------------------------------
+
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
 
 def resolve_database_uri():
     env_uri = os.environ.get("SQLALCHEMY_DATABASE_URI")
-    if not env_uri:
-        return f"sqlite:///{os.path.join(BASE_DIR, 'app.db')}"
+    preferred_local_uri = f"sqlite:///{os.path.join(BASE_DIR, 'app.db')}"
 
-    try:
-        engine = create_engine(env_uri)
-        conn = engine.connect()
-        conn.close()
+    if not env_uri:
+        return preferred_local_uri
+
+    if env_uri.startswith("sqlite"):
         return env_uri
-    except Exception as exc:
-        print(
-            "Warning: configured SQLALCHEMY_DATABASE_URI is not reachable; "
-            "falling back to local SQLite."
-        )
-        print(f"Database error: {exc}")
-        return f"sqlite:///{os.path.join(BASE_DIR, 'app.db')}"
+
+    if env_uri.startswith("mysql") or env_uri.startswith("postgres"):
+        try:
+            engine = create_engine(env_uri)
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            return env_uri
+        except Exception as exc:
+            print(
+                "Warning: configured SQLALCHEMY_DATABASE_URI is not reachable; "
+                "falling back to local SQLite."
+            )
+            print(f"Database error: {exc}")
+            return preferred_local_uri
+
+    return env_uri
 
 
 class Config:
@@ -74,6 +85,7 @@ class Config:
     MAIL_USE_TLS = os.environ.get("MAIL_USE_TLS", "true").lower() == "true"
     MAIL_USERNAME = os.environ.get("MAIL_USERNAME")
     MAIL_PASSWORD = os.environ.get("MAIL_PASSWORD")
+    MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER')
 
     STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY")
     STRIPE_PUBLIC_KEY = os.environ.get("STRIPE_PUBLIC_KEY")
@@ -81,18 +93,16 @@ class Config:
     POSTS_PER_PAGE = 25
 
 
-# ---------------------------------------------------------------------------
 # Extensions
-# ---------------------------------------------------------------------------
+
 db = SQLAlchemy()
 login_manager = LoginManager()
 socketio = SocketIO(cors_allowed_origins="*")
 mail = Mail()
 
 
-# ---------------------------------------------------------------------------
 # ID Generator Helper Functions
-# ---------------------------------------------------------------------------
+
 def generate_membership_id():
     """Generate WS-WLK-XXXX sequential ID for members."""
     max_seq = db.session.query(func.max(func.cast(func.replace(User.membership_id, 'WS-WLK-', ''), db.Integer)))\
@@ -136,9 +146,62 @@ def get_common_area_count():
     ).count()
 
 
-# ---------------------------------------------------------------------------
+def get_user_by_email(email):
+    """Resolve a user by email from the active database or the local SQLite fallback."""
+    normalized_email = (email or "").strip().lower()
+    if not normalized_email:
+        return None
+
+    user = User.query.filter(func.lower(User.email) == normalized_email).first()
+    if user:
+        return user
+
+    sqlite_db_path = os.path.join(BASE_DIR, "app.db")
+    if not os.path.exists(sqlite_db_path):
+        return None
+
+    try:
+        active_db_name = getattr(db.engine.url, "database", None)
+    except Exception:
+        active_db_name = None
+
+    if active_db_name and os.path.abspath(sqlite_db_path) == os.path.abspath(active_db_name):
+        return None
+
+    try:
+        conn = sqlite3.connect(sqlite_db_path)
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT name, email, phone, password, role, is_active FROM users WHERE lower(email)=?",
+            (normalized_email,),
+        )
+        row = cur.fetchone()
+        conn.close()
+    except Exception:
+        return None
+
+    if not row:
+        return None
+
+    fallback_user = User.query.filter(func.lower(User.email) == normalized_email).first()
+    if fallback_user:
+        return fallback_user
+
+    imported_user = User(
+        name=row[0] or "Imported User",
+        email=row[1],
+        phone=row[2],
+        password=row[3],
+        role=row[4] or "member",
+        is_active=(row[5] if row[5] is not None else True),
+    )
+    db.session.add(imported_user)
+    db.session.commit()
+    return imported_user
+
+
 # Models
-# ---------------------------------------------------------------------------
+
 class User(UserMixin, db.Model):
     __tablename__ = "users"
 
@@ -163,13 +226,31 @@ class User(UserMixin, db.Model):
         foreign_keys='SoloPlan.user_id',
     )
     time_logs = db.relationship("TimeLog", backref="user", lazy="dynamic")
-    membership = db.relationship("Membership", back_populates="user", uselist=False)
+    membership = db.relationship("Membership", back_populates="user", uselist=False, cascade="all, delete-orphan")
 
     def set_password(self, password):
         self.password = generate_password_hash(password)
 
     def check_password(self, password):
-        return check_password_hash(self.password, password)
+        if not self.password:
+            return False
+
+        if not isinstance(self.password, str):
+            return False
+
+        if password is None:
+            return False
+
+        if self.password.startswith(("scrypt:", "pbkdf2:", "bcrypt:", "argon2")):
+            return check_password_hash(self.password, password)
+
+        if self.password == password:
+            return True
+
+        if self.password == password.strip():
+            return True
+
+        return False
 
     @property
     def total_mins(self):
@@ -212,17 +293,34 @@ class Room(db.Model):
     category = db.Column(db.String(50), default="standard")
     status = db.Column(db.String(20), default="available")
 
-    reservations = db.relationship("Reservation", backref="room", lazy="dynamic")
+    reservations = db.relationship(
+        "Reservation", 
+        backref="room", 
+        lazy="dynamic", 
+        cascade="all, delete-orphan"
+    )
 
     def is_currently_occupied(self):
-        now = datetime.utcnow()
+        now = datetime.utcnow() + timedelta(hours=8)
+        
         active_res = Reservation.query.filter(
             Reservation.room_id == self.id,
-            Reservation.status.in_(["Confirmed", "Pending", "Walk-in"]),
+            Reservation.status.in_(["Confirmed", "Walk-in", "Checked-in"]),
             Reservation.start_time <= now,
-            or_(Reservation.end_time >= now, Reservation.is_open_time == True),
+            or_(
+                Reservation.end_time >= now, 
+                Reservation.is_open_time == True
+            )
         ).first()
+        
         return active_res is not None
+
+    @property
+    def is_available_now(self):
+        # Dynamic check: Kon manual "Maintenance" / "Unavailable" ang DB status OR occupied subong, False.
+        if self.status and self.status.lower() in ["maintenance", "out_of_service", "unavailable"]:
+            return False
+        return not self.is_currently_occupied()
 
     def __repr__(self):
         return f"<Room {self.name}>"
@@ -232,7 +330,7 @@ class Reservation(db.Model):
     __tablename__ = "reservations"
 
     id = db.Column(db.Integer, primary_key=True)
-    customer_id = db.Column(db.Integer, unique=True, nullable=True)
+    customer_id = db.Column(db.Integer, nullable=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     room_id = db.Column(db.Integer, db.ForeignKey("rooms.id"), nullable=False)
     customer_name = db.Column(db.String(64))
@@ -243,10 +341,14 @@ class Reservation(db.Model):
     start_time = db.Column(db.DateTime, nullable=False)
     end_time = db.Column(db.DateTime, nullable=True)
 
+    is_paused = db.Column(db.Boolean, default=False)
+    paused_at = db.Column(db.DateTime, nullable=True)
+    accumulated_paused_seconds = db.Column(db.Integer, default=0)
+
     is_open_time = db.Column(db.Boolean, default=False)
     status = db.Column(db.String(20), default="Pending")
     total_amount = db.Column(db.Float, default=0.0)
-    # Payment verification fields (online reservations)
+    
     amount_paid = db.Column(db.Float, default=0.0)
     payment_method = db.Column(db.String(50))
     payment_type = db.Column(db.String(20), default="Downpayment")
@@ -258,7 +360,8 @@ class Reservation(db.Model):
     extra_fee = db.Column(db.Float, default=0.0)
     addon_subtotal = db.Column(db.Float, default=0.0)
     discount_rate = db.Column(db.Float, default=0.0)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    created_at = db.Column(db.DateTime, default=lambda: datetime.utcnow() + timedelta(hours=8))
 
     reservation_addons = db.relationship(
         "ReservationAddOn",
@@ -278,28 +381,39 @@ class Reservation(db.Model):
 
     @staticmethod
     def check_conflict(room_id, start_dt, end_dt, exclude_id=None):
+        # Current PH Time (+8 Hours)
+        now = datetime.utcnow() + timedelta(hours=8)
+
         query = Reservation.query.filter(
             Reservation.room_id == room_id,
-            Reservation.status.in_(["Confirmed", "Pending", "Walk-in"]),
+            Reservation.status.in_(["Confirmed", "Pending", "Walk-in", "Checked-in"]),
         )
 
         if exclude_id:
             query = query.filter(Reservation.id != exclude_id)
 
         if end_dt is None:
-            query = query.filter(or_(Reservation.end_time > start_dt, Reservation.is_open_time == True))
+            # Open time check
+            query = query.filter(
+                or_(
+                    Reservation.end_time > start_dt, 
+                    Reservation.is_open_time == True
+                )
+            )
         else:
-            query = query.filter(or_(
-                and_(
-                    Reservation.is_open_time == False,
-                    Reservation.start_time < end_dt,
-                    Reservation.end_time > start_dt,
-                ),
-                and_(
-                    Reservation.is_open_time == True,
-                    Reservation.start_time < end_dt,
-                ),
-            ))
+            query = query.filter(
+                or_(
+                    and_(
+                        Reservation.is_open_time == False,
+                        Reservation.start_time < end_dt,
+                        Reservation.end_time > start_dt
+                    ),
+                    and_(
+                        Reservation.is_open_time == True,
+                        Reservation.start_time < end_dt
+                    )
+                )
+            )
 
         return query.first()
 
@@ -316,8 +430,13 @@ class PaymentInfo(db.Model):
     account_number = db.Column(db.String(64))
     qr_image = db.Column(db.String(255))
     instructions = db.Column(db.String(255))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    created_at = db.Column(db.DateTime, default=lambda: datetime.utcnow() + timedelta(hours=8))
+    updated_at = db.Column(
+        db.DateTime, 
+        default=lambda: datetime.utcnow() + timedelta(hours=8), 
+        onupdate=lambda: datetime.utcnow() + timedelta(hours=8)
+    )
 
     def __repr__(self):
         return f"<PaymentInfo {self.method}>"
@@ -342,7 +461,9 @@ class WalkinReservation(db.Model):
     addon_subtotal = db.Column(db.Float, default=0.0)
     added_by = db.Column(db.String(64))
     extra_notes = db.Column(db.String(255))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # FIX: Philippine Standard Time (+8 hours)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.utcnow() + timedelta(hours=8))
 
     walkin_addons = db.relationship(
         "WalkinAddOn",
@@ -360,15 +481,19 @@ class SoloPlan(db.Model):
     __tablename__ = "solo_plans"
 
     id = db.Column(db.Integer, primary_key=True)
-    customer_id = db.Column(db.Integer, unique=True, nullable=True)
+    customer_id = db.Column(db.Integer, nullable=True) 
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     approved_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     plan_name = db.Column(db.String(64), nullable=False)
     status = db.Column(db.String(20), default="Pending")
     payment_method = db.Column(db.String(50))
     receipt_image = db.Column(db.String(255))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.utcnow() + timedelta(hours=8))
     expiry_date = db.Column(db.DateTime)
+
+    is_paused = db.Column(db.Boolean, default=False)
+    paused_at = db.Column(db.DateTime, nullable=True)
+    accumulated_paused_seconds = db.Column(db.Integer, default=0)
 
     approved_by_user = db.relationship(
         "User",
@@ -378,9 +503,16 @@ class SoloPlan(db.Model):
 
     @property
     def is_active(self):
+        if self.status and self.status.lower() in ["checked_out", "checked-out", "completed", "expired"]:
+            return False
+
+        if self.is_paused:
+            return True
+        
+        now_ph = datetime.utcnow() + timedelta(hours=8)
         if self.expiry_date:
-            return datetime.now() < self.expiry_date
-        return self.status.lower() == "approved"
+            return now_ph < self.expiry_date
+        return self.status.lower() in ["approved", "active"]
 
     def set_expiry_date(self, start_time=None):
         durations = {
@@ -392,10 +524,17 @@ class SoloPlan(db.Model):
             "MONTHLY PASS (DAY/NIGHT)": timedelta(days=30),
             "MONTHLY PASS (24HRS)": timedelta(days=30),
             "WORKSTATION (24HRS)": timedelta(days=30),
-            "Active Plan": timedelta(days=30),
+            "ACTIVE PLAN": timedelta(days=30),
         }
-        start = start_time if start_time is not None else self.created_at
-        self.expiry_date = start + durations.get(self.plan_name, timedelta(days=30))
+        
+        now_ph = datetime.utcnow() + timedelta(hours=8)
+        start = start_time if start_time is not None else now_ph
+        
+        # Case-insensitive lookup para indi mag-fallback sa 30 days kon iba ang capitalizations
+        clean_plan_name = (self.plan_name or "").strip().upper()
+        duration = durations.get(clean_plan_name, timedelta(days=30))
+        
+        self.expiry_date = start + duration
 
     def __repr__(self):
         return f"<SoloPlan {self.plan_name}>"
@@ -413,16 +552,31 @@ class SoloPlan(db.Model):
             'is_active': self.is_active
         }
 
+    def check_out(self):
+        self.status = "checked_out"
 
 class TimeLog(db.Model):
     __tablename__ = "time_logs"
 
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     plan = db.Column(db.String(64))
-    time_in = db.Column(db.DateTime, default=datetime.utcnow)
-    time_out = db.Column(db.DateTime)
-    total_time = db.Column(db.Integer)  # minutes
+    
+    time_in = db.Column(db.DateTime, default=lambda: datetime.utcnow() + timedelta(hours=8))
+    time_out = db.Column(db.DateTime, nullable=True)
+    total_time = db.Column(db.Integer, default=0)
+
+    is_paused = db.Column(db.Boolean, default=False)
+    paused_at = db.Column(db.DateTime, nullable=True)
+    accumulated_paused_seconds = db.Column(db.Integer, default=0)
+
+    def calculate_total_time(self):
+        """Helper method para mag-compute sang total minutes upon check-out."""
+        if self.time_in and self.time_out:
+            delta = self.time_out - self.time_in
+            self.total_time = int(delta.total_seconds() // 60)
+            return self.total_time
+        return 0
 
     def __repr__(self):
         return f"<TimeLog {self.id} - User {self.user_id}>"
@@ -436,16 +590,17 @@ class DailyReport(db.Model):
     total_check_ins = db.Column(db.Integer, default=0)
     total_logins = db.Column(db.Integer, default=0)
     total_timelogged = db.Column(db.Float, default=0)
-    generated_at = db.Column(db.DateTime, default=datetime.utcnow)
-
+    generated_at = db.Column(db.DateTime, default=lambda: datetime.utcnow() + timedelta(hours=8))
 
 class UserActivityLog(db.Model):
     __tablename__ = "user_activity_logs"
 
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id"))
+    # Foreign Key cascade o nullable handler
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     activity_type = db.Column(db.String(50))
-    activity_time = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    activity_time = db.Column(db.DateTime, default=lambda: datetime.utcnow() + timedelta(hours=8))
     ip_address = db.Column(db.String(45))
 
 
@@ -453,52 +608,101 @@ class Membership(db.Model):
     __tablename__ = "memberships"
 
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, unique=True)
+    
+    # ondelete="CASCADE" para indi mag-crash sa MySQL kon mag-deactivate/delete sang User
+    user_id = db.Column(
+        db.Integer, 
+        db.ForeignKey("users.id", ondelete="CASCADE"), 
+        nullable=False, 
+        unique=True
+    )
+    
     status = db.Column(db.String(20), default="pending")  # pending, active, expired
-    start_date = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    start_date = db.Column(db.DateTime, default=lambda: datetime.utcnow() + timedelta(hours=8))
     expiry_date = db.Column(db.DateTime, nullable=False)
     total_hours = db.Column(db.Float, default=0.0)  # Total hours credited
     hours_left = db.Column(db.Float, default=0.0)  # Remaining hours
     plan_name = db.Column(db.String(100))  # Solo plan name
     is_checked_in = db.Column(db.Boolean, default=False)  # Current session status
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    is_checked_out = db.Column(db.Boolean, default=False)
+    is_paused = db.Column(db.Boolean, default=False)
+    paused_at = db.Column(db.DateTime, nullable=True)
+    accumulated_paused_seconds = db.Column(db.Integer, default=0)
+    
+    created_at = db.Column(db.DateTime, default=lambda: datetime.utcnow() + timedelta(hours=8))
+    updated_at = db.Column(
+        db.DateTime, 
+        default=lambda: datetime.utcnow() + timedelta(hours=8), 
+        onupdate=lambda: datetime.utcnow() + timedelta(hours=8)
+    )
 
     user = db.relationship("User", back_populates="membership", uselist=False)
-    attendance_logs = db.relationship("AttendanceLog", backref="membership", lazy="dynamic", cascade="all, delete-orphan")
+    attendance_logs = db.relationship(
+        "AttendanceLog", 
+        backref="membership", 
+        lazy="dynamic", 
+        cascade="all, delete-orphan"
+    )
 
     @property
     def is_active(self):
-        """Check if membership is active based on expiry_date"""
-        return self.status == "active" and datetime.utcnow() < self.expiry_date
+        """Check if membership is active based on expiry_date (PH Timezone Alignment)"""
+
+        # Kon None o blangko ang expiry_date, e-check lang kon "active" ang status
+        if not self.expiry_date:
+            return self.status == "active"
+        
+        now_ph = datetime.utcnow() + timedelta(hours=8)
+        return self.status == "active" and now_ph < self.expiry_date
 
     @property
     def accumulated_hours(self):
         """Calculate total hours used from all completed attendance logs"""
         logs = self.attendance_logs.filter(AttendanceLog.check_out_time.isnot(None)).all()
-        total = sum(log.hours_deducted for log in logs)
+        total = sum(log.hours_deducted for log in logs if log.hours_deducted)
         return round(total, 2)
 
     def __repr__(self):
         return f"<Membership {self.user_id} - {self.status}>"
 
-
 class AttendanceLog(db.Model):
     __tablename__ = "attendance_logs"
 
     id = db.Column(db.Integer, primary_key=True)
-    membership_id = db.Column(db.Integer, db.ForeignKey("memberships.id"), nullable=False)
+    
+    # ondelete="CASCADE" para sa safe deletions/cleanup
+    membership_id = db.Column(
+        db.Integer, 
+        db.ForeignKey("memberships.id", ondelete="CASCADE"), 
+        nullable=False
+    )
+    
     check_in_time = db.Column(db.DateTime, nullable=False)
     check_out_time = db.Column(db.DateTime)
-    hours_deducted = db.Column(db.Float, default=0.0)  # Calculated on check-out
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    hours_deducted = db.Column(db.Float, default=0.0)
+
+    is_paused = db.Column(db.Boolean, default=False)
+    paused_at = db.Column(db.DateTime, nullable=True)
+    accumulated_paused_seconds = db.Column(db.Integer, default=0)
+    
+    created_at = db.Column(db.DateTime, default=lambda: datetime.utcnow() + timedelta(hours=8))
 
     @property
     def session_duration_hours(self):
         """Calculate duration in hours between check-in and check-out"""
-        if self.check_out_time:
-            delta = self.check_out_time - self.check_in_time
-            return delta.total_seconds() / 3600  # Convert seconds to hours
+        if self.check_in_time:
+            end = self.check_out_time or (datetime.utcnow() + timedelta(hours=8))
+            total_seconds = (end - self.check_in_time).total_seconds()
+            
+            # Deduct paused duration
+            paused_sec = self.accumulated_paused_seconds or 0
+            if self.is_paused and self.paused_at:
+                now_ph = datetime.utcnow() + timedelta(hours=8)
+                paused_sec += (now_ph - self.paused_at).total_seconds()
+                
+            active_seconds = max(0, total_seconds - paused_sec)
+            return round(active_seconds / 3600, 2)
         return 0.0
 
     def __repr__(self):
@@ -520,23 +724,26 @@ class AddOn(db.Model):
     min_quantity = db.Column(db.Integer, default=1)
     max_quantity = db.Column(db.Integer, default=100)
     is_active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    created_at = db.Column(
+        db.DateTime, 
+        default=lambda: datetime.utcnow() + timedelta(hours=8)
+    )
+    updated_at = db.Column(
+        db.DateTime, 
+        default=lambda: datetime.utcnow() + timedelta(hours=8), 
+        onupdate=lambda: datetime.utcnow() + timedelta(hours=8)
+    )
 
-    # Relationships
     reservation_addons = db.relationship(
         "ReservationAddOn",
         backref="addon",
         lazy="dynamic",
-        cascade="all, delete-orphan",
-        passive_deletes=True,
     )
     walkin_addons = db.relationship(
         "WalkinAddOn",
         backref="addon",
         lazy="dynamic",
-        cascade="all, delete-orphan",
-        passive_deletes=True,
     )
 
     def __repr__(self):
@@ -562,12 +769,28 @@ class ReservationAddOn(db.Model):
     __tablename__ = "reservation_addons"
 
     id = db.Column(db.Integer, primary_key=True)
-    reservation_id = db.Column(db.Integer, db.ForeignKey("reservations.id", ondelete="CASCADE"), nullable=False)
-    addon_id = db.Column(db.Integer, db.ForeignKey("addons.id"), nullable=False)
+    
+    reservation_id = db.Column(
+        db.Integer, 
+        db.ForeignKey("reservations.id", ondelete="CASCADE"), 
+        nullable=False
+    )
+    
+    # RESTRICT para indi ma-erase ang financial history o resibo
+    addon_id = db.Column(
+        db.Integer, 
+        db.ForeignKey("addons.id", ondelete="RESTRICT"), 
+        nullable=False
+    )
+    
     quantity = db.Column(db.Integer, default=1, nullable=False)
     unit_price = db.Column(db.Float, nullable=False)  # Price at time of booking
     subtotal = db.Column(db.Float, default=0.0)  # quantity * unit_price
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    created_at = db.Column(
+        db.DateTime, 
+        default=lambda: datetime.utcnow() + timedelta(hours=8)
+    )
 
     def __repr__(self):
         return f"<ReservationAddOn {self.addon_id} qty={self.quantity}>"
@@ -587,7 +810,6 @@ class ReservationAddOn(db.Model):
             'subtotal': float(self.subtotal),
         }
 
-
 class WalkinAddOn(db.Model):
     """
     Tracks selected add-ons for a specific walk-in reservation.
@@ -596,12 +818,27 @@ class WalkinAddOn(db.Model):
     __tablename__ = "walkin_addons"
 
     id = db.Column(db.Integer, primary_key=True)
-    walkin_reservation_id = db.Column(db.Integer, db.ForeignKey("walkin_reservations.id", ondelete="CASCADE"), nullable=False)
-    addon_id = db.Column(db.Integer, db.ForeignKey("addons.id"), nullable=False)
+    
+    walkin_reservation_id = db.Column(
+        db.Integer, 
+        db.ForeignKey("walkin_reservations.id", ondelete="CASCADE"), 
+        nullable=False
+    )
+    
+    addon_id = db.Column(
+        db.Integer, 
+        db.ForeignKey("addons.id", ondelete="RESTRICT"), 
+        nullable=False
+    )
+    
     quantity = db.Column(db.Integer, default=1, nullable=False)
-    unit_price = db.Column(db.Float, nullable=False)  # Price at time of booking
-    subtotal = db.Column(db.Float, default=0.0)  # quantity * unit_price
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    unit_price = db.Column(db.Float, nullable=False)
+    subtotal = db.Column(db.Float, default=0.0)
+    
+    created_at = db.Column(
+        db.DateTime, 
+        default=lambda: datetime.utcnow() + timedelta(hours=8)
+    )
 
     def __repr__(self):
         return f"<WalkinAddOn {self.addon_id} qty={self.quantity}>"
@@ -622,9 +859,8 @@ class WalkinAddOn(db.Model):
         }
 
 
-# ---------------------------------------------------------------------------
 # Forms
-# ---------------------------------------------------------------------------
+
 class LoginForm(FlaskForm):
     email = StringField("Email", validators=[DataRequired(), Email()])
     password = PasswordField("Password", validators=[DataRequired()])
@@ -636,9 +872,50 @@ class RegistrationForm(FlaskForm):
     name = StringField("Name", validators=[DataRequired(), Length(min=2, max=64)])
     email = StringField("Email", validators=[DataRequired(), Email()])
     phone = StringField("Phone", validators=[Length(max=20)])
-    password = PasswordField("Password", validators=[DataRequired()])
-    password2 = PasswordField("Repeat Password", validators=[DataRequired(), EqualTo("password")])
+    
+    # Length (min=8) & Regexp for Alphanumeric Password
+    password = PasswordField(
+        "Password", 
+        validators=[
+            DataRequired(),
+            Length(min=8, message="Password must be at least 8 characters long."),
+            Regexp(
+                r'^(?=.*[A-Za-z])(?=.*\d).+$',
+                message="Password must contain at least one letter and one number."
+            )
+        ]
+    )
+    password2 = PasswordField("Repeat Password", validators=[DataRequired(), EqualTo("password", message="Passwords must match")])
     submit = SubmitField("Register")
+
+
+class ProfileForm(FlaskForm):
+    name = StringField("Full Name", validators=[DataRequired(), Length(max=64)])
+    email = StringField("Email Address", validators=[DataRequired(), Email()])
+    phone = StringField("Contact Number", validators=[Length(max=20)])
+    profile_submit = SubmitField("Save Profile")
+
+
+class ChangePasswordForm(FlaskForm):
+    current_password = PasswordField("Current Password", validators=[DataRequired()])
+    
+    # Regexp for Alphanumeric Password
+    new_password = PasswordField(
+        "New Password", 
+        validators=[
+            DataRequired(), 
+            Length(min=8, message="Password must be at least 8 characters long."),
+            Regexp(
+                r'^(?=.*[A-Za-z])(?=.*\d).+$',
+                message="Password must contain at least one letter and one number."
+            )
+        ]
+    )
+    confirm_password = PasswordField(
+        "Confirm New Password",
+        validators=[DataRequired(), EqualTo("new_password", message="Passwords must match")],
+    )
+    password_submit = SubmitField("Change Password")
 
 
 class ReservationForm(FlaskForm):
@@ -647,10 +924,13 @@ class ReservationForm(FlaskForm):
     contact_number = StringField("Contact", validators=[DataRequired()])
     pax_count = IntegerField("Pax Count", default=1, validators=[NumberRange(min=1)])
     start_time = DateTimeField("Start Time", format="%Y-%m-%dT%H:%M", validators=[DataRequired()])
-    end_time = DateTimeField("End Time", format="%Y-%m-%dT%H:%M", validators=[DataRequired()])
+    
+    end_time = DateTimeField("End Time", format="%Y-%m-%dT%H:%M", validators=[Optional()])
+    
     # Support open-time toggle on client reservation form (template expects `is_open_time`)
     is_open_time = BooleanField("Open Time")
     extra_notes = TextAreaField("Notes")
+    
     # Payment fields expected by client-side booking flow
     payment_method = SelectField("Payment Method", choices=[("GCash", "GCash"), ("Maya", "Maya")], validators=[Optional()])
     payment_type = SelectField("Payment Type", choices=[("Downpayment", "Downpayment"), ("Full Payment", "Full Payment")], default="Downpayment", validators=[Optional()])

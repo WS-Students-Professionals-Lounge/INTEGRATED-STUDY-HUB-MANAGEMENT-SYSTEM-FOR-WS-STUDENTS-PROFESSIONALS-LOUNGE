@@ -140,6 +140,45 @@ function showToast(message, icon = 'info', timer = 5000) {
     // let the initializeBaseJs observer pick it up and dismiss after timer
 }
 
+function fetchSidebarNotifications() {
+    fetch('/api/admin/notifications-count')
+        .then(response => {
+            if (!response.ok) return null;
+            return response.json();
+        })
+        .then(data => {
+            if (!data) return;
+
+            // Helper function para sa pag-update sang badge display
+            const updateBadge = (elementId, count) => {
+                const badge = document.getElementById(elementId);
+                if (badge) {
+                    if (count > 0) {
+                        badge.innerText = count;
+                        badge.classList.remove('d-none');
+                    } else {
+                        badge.classList.add('d-none');
+                    }
+                }
+            };
+
+            // Update individual counts
+            updateBadge('total-notif-badge', data.total_notifications);
+            updateBadge('res-notif-badge', data.pending_reservations);
+            updateBadge('mem-notif-badge', data.pending_memberships);
+        })
+        .catch(error => console.error("Error updating notification badges:", error));
+}
+
+// I-run sa pag-load sang page kag mag-repeat kada 10 ka segundo
+document.addEventListener('DOMContentLoaded', function() {
+    // Check lang kon ara sa admin/staff view (kun may badge element)
+    if (document.getElementById('total-notif-badge')) {
+        // Polling interval (10000ms = 10s)
+        setInterval(fetchSidebarNotifications, 10000);
+    }
+});
+
 /**
  * confirmAction - Promise-based confirmation helper.
  * Uses SweetAlert2 when available; otherwise shows a simple DOM fallback modal.
@@ -231,4 +270,5 @@ function confirmAction(titleOrText, textOrOptions, confirmText = 'Yes', cancelTe
         btnConfirm.addEventListener('click', () => { overlay.remove(); resolve(true); });
     });
 }
+
 
