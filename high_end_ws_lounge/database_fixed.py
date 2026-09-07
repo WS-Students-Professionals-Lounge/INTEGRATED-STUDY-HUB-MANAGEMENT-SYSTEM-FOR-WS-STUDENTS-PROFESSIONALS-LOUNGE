@@ -49,16 +49,24 @@ BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
 
 def resolve_database_uri():
-    env_uri = os.environ.get("SQLALCHEMY_DATABASE_URI")
+    # 1. Kuhaon ang URI halin sa Environment Variable sang Render
+    env_uri = os.environ.get("SQLALCHEMY_DATABASE_URI") or os.environ.get("DATABASE_URL")
     preferred_local_uri = f"sqlite:///{os.path.join(BASE_DIR, 'app.db')}"
 
+    # Kon wala sing environment variable (halimbawa sa local development), gamiton ang SQLite
     if not env_uri:
         return preferred_local_uri
 
+    # Kon SQLite ang gigamit
     if env_uri.startswith("sqlite"):
         return env_uri
 
-    if env_uri.startswith("mysql") or env_uri.startswith("postgres"):
+    # Fix para sa Render PostgreSQL prefix compatibility (postgres:// -> postgresql://)
+    if env_uri.startswith("postgres://"):
+        env_uri = env_uri.replace("postgres://", "postgresql://", 1)
+
+    # Siguraduhon nga ibalik ang postgresql URI para sa Render production
+    if env_uri.startswith("postgresql") or env_uri.startswith("mysql"):
         try:
             engine = create_engine(env_uri)
             with engine.connect() as conn:
@@ -70,7 +78,8 @@ def resolve_database_uri():
                 "falling back to local SQLite."
             )
             print(f"Database error: {exc}")
-            return preferred_local_uri
+            # Kon luyag mo iduso nga mag-Postgres gid sa Render nga indi mag-fallback sa SQLite:
+            return env_uri
 
     return env_uri
 
