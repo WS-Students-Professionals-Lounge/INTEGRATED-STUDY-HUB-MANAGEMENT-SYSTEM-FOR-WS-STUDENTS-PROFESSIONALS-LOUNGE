@@ -89,6 +89,7 @@ def create_app(config_class=Config):
             db.session.commit()
 
     def ensure_payment_columns():
+        db.create_all()
         with app.app_context():
             inspector = inspect(db.engine)
             if not inspector.has_table("reservations"):
@@ -113,7 +114,7 @@ def create_app(config_class=Config):
                 db.session.execute(text("ALTER TABLE reservations ADD COLUMN paused_at DATETIME"))
             if "accumulated_paused_seconds" not in columns:
                 db.session.execute(text("ALTER TABLE reservations ADD COLUMN accumulated_paused_seconds INTEGER DEFAULT 0"))
-                
+
             if inspector.has_table("walkin_reservations"):
                 walkin_columns = {column["name"] for column in inspector.get_columns("walkin_reservations")}
                 if "addon_subtotal" not in walkin_columns:
