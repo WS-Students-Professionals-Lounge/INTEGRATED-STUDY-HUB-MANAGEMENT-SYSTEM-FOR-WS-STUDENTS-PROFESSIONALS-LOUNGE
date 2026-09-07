@@ -56,139 +56,141 @@ def create_app(config_class=Config):
     with app.app_context():
         db.create_all()
 
-    def ensure_default_rooms():
-        with app.app_context():
-            default_rooms = [
-                {"name": "Common Area", "base_rate": 35.0, "category": "solo"},
-                {"name": "Small Meeting Room 1", "base_rate": 50.0, "category": "meeting"},
-                {"name": "Small Meeting Room 2", "base_rate": 50.0, "category": "meeting"},
-                {"name": "Lecture Room", "base_rate": 150.0, "category": "lecture"},
-                {"name": "Conference Room", "base_rate": 250.0, "category": "conference"},
-                {"name": "Comfy Room", "base_rate": 150.0, "category": "comfy"},
-                {"name": "Event Room 1", "base_rate": 300.0, "category": "event"},
-                {"name": "Event Room 2", "base_rate": 300.0, "category": "event"},
-            ]
-            for room_data in default_rooms:
-                if not Room.query.filter_by(name=room_data["name"]).first():
-                    db.session.add(
-                        Room(
-                            name=room_data["name"],
-                            base_rate=room_data["base_rate"],
-                            category=room_data["category"],
-                        )
-                    )
-            db.session.commit()
-
-    def cleanup_test_rooms():
-        with app.app_context():
-            test_rooms = Room.query.filter(Room.name.ilike('test room%')).all()
-            for room in test_rooms:
-                has_reservation = Reservation.query.filter_by(room_id=room.id).first()
-                if not has_reservation:
-                    db.session.delete(room)
-            db.session.commit()
-
-    def ensure_payment_columns():
-        db.create_all()
-        with app.app_context():
-            inspector = inspect(db.engine)
-            if not inspector.has_table("reservations"):
-                return
-            columns = {column["name"] for column in inspector.get_columns("reservations")}
-            if "payment_method" not in columns:
-                db.session.execute(text("ALTER TABLE reservations ADD COLUMN payment_method VARCHAR(50)"))
-            if "payment_type" not in columns:
-                db.session.execute(text("ALTER TABLE reservations ADD COLUMN payment_type VARCHAR(20) DEFAULT 'Downpayment'"))
-            if "amount_paid" not in columns:
-                db.session.execute(text("ALTER TABLE reservations ADD COLUMN amount_paid FLOAT DEFAULT 0.0"))
-            if "receipt_image" not in columns:
-                db.session.execute(text("ALTER TABLE reservations ADD COLUMN receipt_image VARCHAR(255)"))
-            if "approved_by_id" not in columns:
-                db.session.execute(text("ALTER TABLE reservations ADD COLUMN approved_by_id INTEGER"))
-            if "addon_subtotal" not in columns:
-                db.session.execute(text("ALTER TABLE reservations ADD COLUMN addon_subtotal FLOAT DEFAULT 0.0"))
-
-            if "is_paused" not in columns:
-                db.session.execute(text("ALTER TABLE reservations ADD COLUMN is_paused BOOLEAN DEFAULT 0"))
-            if "paused_at" not in columns:
-                db.session.execute(text("ALTER TABLE reservations ADD COLUMN paused_at DATETIME"))
-            if "accumulated_paused_seconds" not in columns:
-                db.session.execute(text("ALTER TABLE reservations ADD COLUMN accumulated_paused_seconds INTEGER DEFAULT 0"))
-
-            if inspector.has_table("walkin_reservations"):
-                walkin_columns = {column["name"] for column in inspector.get_columns("walkin_reservations")}
-                if "addon_subtotal" not in walkin_columns:
-                    db.session.execute(text("ALTER TABLE walkin_reservations ADD COLUMN addon_subtotal FLOAT DEFAULT 0.0"))
-
-            if inspector.has_table("solo_plans"):
-                solo_columns = {column["name"] for column in inspector.get_columns("solo_plans")}
-                if "approved_by_id" not in solo_columns:
-                    db.session.execute(text("ALTER TABLE solo_plans ADD COLUMN approved_by_id INTEGER"))
-                if "payment_method" not in solo_columns:
-                    db.session.execute(text("ALTER TABLE solo_plans ADD COLUMN payment_method VARCHAR(50)"))
-                if "receipt_image" not in solo_columns:
-                    db.session.execute(text("ALTER TABLE solo_plans ADD COLUMN receipt_image VARCHAR(255)"))
-
-            if inspector.has_table("users"):
-                user_columns = {column["name"] for column in inspector.get_columns("users")}
-                if "is_active" not in user_columns:
-                    db.session.execute(text("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT 1"))
-            db.session.commit()
-
-    def ensure_membership_tables():
-        """Ensure memberships and attendance_logs tables have all required columns"""
-        with app.app_context():
-            inspector = inspect(db.engine)
-            
-            # Ensure memberships table columns
-            if inspector.has_table("memberships"):
-                membership_columns = {column["name"] for column in inspector.get_columns("memberships")}
-                if "is_checked_in" not in membership_columns:
-                    db.session.execute(text("ALTER TABLE memberships ADD COLUMN is_checked_in BOOLEAN DEFAULT 0"))
-                if "updated_at" not in membership_columns:
-                    db.session.execute(text("ALTER TABLE memberships ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP"))
-            
-            db.session.commit()
-
-    def ensure_default_admin():
-        with app.app_context():
-            if not User.query.filter_by(email="wslounge@lounge.com").first():
-                admin = User(
-                    name="wslounge",
-                    email="wslounge@lounge.com",
-                    role="admin",
-                    phone="09171111111",
-                )
-                admin.set_password("ws12345")
-                db.session.add(admin)
-                db.session.commit()
-
-    ensure_payment_columns()
-    ensure_membership_tables()
-    ensure_default_rooms()
-    cleanup_test_rooms()
-    ensure_default_admin()
-
-    @login_manager.user_loader
-    def load_user(user_id):
-        return User.query.get(int(user_id))
-
-    from admin import admin_bp
-    from client_fixed import api_bp, auth_bp, main_bp
-    from membership_routes import membership_bp
-
-    app.register_blueprint(auth_bp, url_prefix="/auth")
-    app.register_blueprint(main_bp)
-    app.register_blueprint(admin_bp)
-    app.register_blueprint(api_bp, url_prefix="/api")
-    app.register_blueprint(membership_bp)
-
     return app
 
 
+# Create application instance
 app = create_app()
 
 
+def ensure_default_rooms():
+    with app.app_context():
+        default_rooms = [
+            {"name": "Common Area", "base_rate": 35.0, "category": "solo"},
+            {"name": "Small Meeting Room 1", "base_rate": 50.0, "category": "meeting"},
+            {"name": "Small Meeting Room 2", "base_rate": 50.0, "category": "meeting"},
+            {"name": "Lecture Room", "base_rate": 150.0, "category": "lecture"},
+            {"name": "Conference Room", "base_rate": 250.0, "category": "conference"},
+            {"name": "Comfy Room", "base_rate": 150.0, "category": "comfy"},
+            {"name": "Event Room 1", "base_rate": 300.0, "category": "event"},
+            {"name": "Event Room 2", "base_rate": 300.0, "category": "event"},
+        ]
+        for room_data in default_rooms:
+            if not Room.query.filter_by(name=room_data["name"]).first():
+                db.session.add(
+                    Room(
+                        name=room_data["name"],
+                        base_rate=room_data["base_rate"],
+                        category=room_data["category"],
+                    )
+                )
+        db.session.commit()
+
+
+def cleanup_test_rooms():
+    with app.app_context():
+        test_rooms = Room.query.filter(Room.name.ilike('test room%')).all()
+        for room in test_rooms:
+            has_reservation = Reservation.query.filter_by(room_id=room.id).first()
+            if not has_reservation:
+                db.session.delete(room)
+        db.session.commit()
+
+
+def ensure_payment_columns():
+    with app.app_context():
+        inspector = inspect(db.engine)
+        if not inspector.has_table("reservations"):
+            return
+        columns = {column["name"] for column in inspector.get_columns("reservations")}
+        if "payment_method" not in columns:
+            db.session.execute(text("ALTER TABLE reservations ADD COLUMN payment_method VARCHAR(50)"))
+        if "payment_type" not in columns:
+            db.session.execute(text("ALTER TABLE reservations ADD COLUMN payment_type VARCHAR(20) DEFAULT 'Downpayment'"))
+        if "amount_paid" not in columns:
+            db.session.execute(text("ALTER TABLE reservations ADD COLUMN amount_paid FLOAT DEFAULT 0.0"))
+        if "receipt_image" not in columns:
+            db.session.execute(text("ALTER TABLE reservations ADD COLUMN receipt_image VARCHAR(255)"))
+        if "approved_by_id" not in columns:
+            db.session.execute(text("ALTER TABLE reservations ADD COLUMN approved_by_id INTEGER"))
+        if "addon_subtotal" not in columns:
+            db.session.execute(text("ALTER TABLE reservations ADD COLUMN addon_subtotal FLOAT DEFAULT 0.0"))
+
+        if "is_paused" not in columns:
+            db.session.execute(text("ALTER TABLE reservations ADD COLUMN is_paused BOOLEAN DEFAULT 0"))
+        if "paused_at" not in columns:
+            db.session.execute(text("ALTER TABLE reservations ADD COLUMN paused_at DATETIME"))
+        if "accumulated_paused_seconds" not in columns:
+            db.session.execute(text("ALTER TABLE reservations ADD COLUMN accumulated_paused_seconds INTEGER DEFAULT 0"))
+
+        if inspector.has_table("walkin_reservations"):
+            walkin_columns = {column["name"] for column in inspector.get_columns("walkin_reservations")}
+            if "addon_subtotal" not in walkin_columns:
+                db.session.execute(text("ALTER TABLE walkin_reservations ADD COLUMN addon_subtotal FLOAT DEFAULT 0.0"))
+
+        if inspector.has_table("solo_plans"):
+            solo_columns = {column["name"] for column in inspector.get_columns("solo_plans")}
+            if "approved_by_id" not in solo_columns:
+                db.session.execute(text("ALTER TABLE solo_plans ADD COLUMN approved_by_id INTEGER"))
+            if "payment_method" not in solo_columns:
+                db.session.execute(text("ALTER TABLE solo_plans ADD COLUMN payment_method VARCHAR(50)"))
+            if "receipt_image" not in solo_columns:
+                db.session.execute(text("ALTER TABLE solo_plans ADD COLUMN receipt_image VARCHAR(255)"))
+
+        if inspector.has_table("users"):
+            user_columns = {column["name"] for column in inspector.get_columns("users")}
+            if "is_active" not in user_columns:
+                db.session.execute(text("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT 1"))
+        db.session.commit()
+
+
+def ensure_membership_tables():
+    """Ensure memberships and attendance_logs tables have all required columns"""
+    with app.app_context():
+        inspector = inspect(db.engine)
+        
+        # Ensure memberships table columns
+        if inspector.has_table("memberships"):
+            membership_columns = {column["name"] for column in inspector.get_columns("memberships")}
+            if "is_checked_in" not in membership_columns:
+                db.session.execute(text("ALTER TABLE memberships ADD COLUMN is_checked_in BOOLEAN DEFAULT 0"))
+            if "updated_at" not in membership_columns:
+                db.session.execute(text("ALTER TABLE memberships ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP"))
+        
+        db.session.commit()
+
+def ensure_default_admin():
+    with app.app_context():
+        if not User.query.filter_by(email="wslounge@lounge.com").first():
+            admin = User(
+                name="wslounge",
+                email="wslounge@lounge.com",
+                role="admin",
+                phone="09171111111",
+            )
+            admin.set_password("ws12345")
+            db.session.add(admin)
+            db.session.commit()
+
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+
+# Blueprint Registration
+from admin import admin_bp
+from client_fixed import api_bp, auth_bp, main_bp
+from membership_routes import membership_bp
+
+app.register_blueprint(auth_bp, url_prefix="/auth")
+app.register_blueprint(main_bp)
+app.register_blueprint(admin_bp)
+app.register_blueprint(api_bp, url_prefix="/api")
+app.register_blueprint(membership_bp)
+
+
+# CLI Commands
 @app.cli.command()
 def init_db():
     """Create database tables."""
@@ -284,11 +286,7 @@ def seed_db():
 
 @app.cli.command()
 def migrate_payment_columns():
-    """Add missing payment-related columns (safe, idempotent).
-
-    Use this CLI command when you prefer an explicit migration step
-    instead of relying on the runtime ensure function.
-    """
+    """Add missing payment-related columns (safe, idempotent)."""
     with app.app_context():
         inspector = inspect(db.engine)
         if not inspector.has_table("reservations"):
@@ -313,40 +311,54 @@ def migrate_payment_columns():
         else:
             print("Migration finished; database updated.")
 
-    # Backfill expiry for approved plans
-    plan_durations = {
-        "INDIVIDUAL RATE": timedelta(hours=1),
-        "INDIVIDUAL RATE (4HRS)": timedelta(hours=4),
-        "DAY/NIGHT PASS": timedelta(days=1),
-        "WEEKLY PASS (DAY/NIGHT)": timedelta(days=7),
-        "WEEKLY PASS (24HRS)": timedelta(days=7),
-        "MONTHLY PASS (DAY/NIGHT)": timedelta(days=30),
-        "MONTHLY PASS (24HRS)": timedelta(days=30),
-        "WORKSTATION (24HRS)": timedelta(days=30),
-        "Active Plan": timedelta(days=30),
-    }
-    approved_plans = SoloPlan.query.filter_by(status="approved").all()
-    for plan in approved_plans:
-        if plan.expiry_date is None:
-            duration = plan_durations.get(plan.plan_name, timedelta(days=30))
-            plan.expiry_date = plan.created_at + duration
-            db.session.add(plan)
-    db.session.commit()
-    print(f"Backfilled expiry for {len(approved_plans)} approved plans")
-
-    # Solo plans seed if none
-    if SoloPlan.query.count() == 0:
-        solo1 = SoloPlan(
-            user_id=member1.id, plan_name="Active Plan", status="approved"
-        )
-        solo1.expiry_date = solo1.created_at + timedelta(days=30)
-        db.session.add(solo1)
+        # Backfill expiry for approved plans
+        plan_durations = {
+            "INDIVIDUAL RATE": timedelta(hours=1),
+            "INDIVIDUAL RATE (4HRS)": timedelta(hours=4),
+            "DAY/NIGHT PASS": timedelta(days=1),
+            "WEEKLY PASS (DAY/NIGHT)": timedelta(days=7),
+            "WEEKLY PASS (24HRS)": timedelta(days=7),
+            "MONTHLY PASS (DAY/NIGHT)": timedelta(days=30),
+            "MONTHLY PASS (24HRS)": timedelta(days=30),
+            "WORKSTATION (24HRS)": timedelta(days=30),
+            "Active Plan": timedelta(days=30),
+        }
+        approved_plans = SoloPlan.query.filter_by(status="approved").all()
+        for plan in approved_plans:
+            if plan.expiry_date is None:
+                duration = plan_durations.get(plan.plan_name, timedelta(days=30))
+                plan.expiry_date = plan.created_at + duration
+                db.session.add(plan)
         db.session.commit()
+        print(f"Backfilled expiry for {len(approved_plans)} approved plans")
 
-    print(
-        "Enhanced database seeded: Conference Room, cedrick, Active Plan with expiry, reservations!"
-    )
+        # Member for seeding
+        member1 = User.query.filter_by(role="member").first()
 
+        # Solo plans seed if none
+        if SoloPlan.query.count() == 0 and member1:
+            solo1 = SoloPlan(
+                user_id=member1.id, plan_name="Active Plan", status="approved"
+            )
+            solo1.expiry_date = solo1.created_at + timedelta(days=30)
+            db.session.add(solo1)
+            db.session.commit()
+
+        print(
+            "Enhanced database seeded: Conference Room, cedrick, Active Plan with expiry, reservations!"
+        )
+
+
+# Global Execution Scope
+with app.app_context():
+    try:
+        ensure_payment_columns()
+        ensure_membership_tables()
+        ensure_default_rooms()
+        cleanup_test_rooms()
+        ensure_default_admin()
+    except Exception as e:
+        print(f"Migration script warning: {e}")
 
 if __name__ == "__main__":
     socketio.run(app, debug=True)
