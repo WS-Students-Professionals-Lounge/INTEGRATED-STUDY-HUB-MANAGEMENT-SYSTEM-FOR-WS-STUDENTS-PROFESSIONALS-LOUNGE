@@ -63,8 +63,9 @@ document.addEventListener('DOMContentLoaded', function() {
         return isNaN(parsed.getTime()) ? null : parsed;
     }
 
-    // Map para i-store ang offset sang tagsa ka timer para exact 0s ang sugod sang bag-o nga sessions
-    const sessionInitialOffsets = {};
+    if (typeof sessionInitialOffsets === 'undefined') {
+        var sessionInitialOffsets = {};
+    }
 
     function updateTimers() {
         const timers = document.querySelectorAll('.timer-text');
@@ -80,6 +81,15 @@ document.addEventListener('DOMContentLoaded', function() {
             const endStr = timer.getAttribute('data-endtime');
             const remainingElem = card ? card.querySelector('.remaining-text') : null;
 
+            // Kuhaon kon Open Time bala
+            const isOpenTime = (card && card.getAttribute('data-isopentime') === 'true') || timer.getAttribute('data-isopentime') === 'true';
+
+            // [BAG-O]: Kuhaon ang accumulated paused seconds gikan sa database attribute
+            const accumPausedSecs = parseInt(
+                timer.getAttribute('data-accumulated-paused-seconds') || 
+                (card ? card.getAttribute('data-accumulated-paused-seconds') : '0'), 10
+            ) || 0;
+
             if (!startStr) {
                 timer.textContent = "(00:00:00)";
                 if (remainingElem) remainingElem.textContent = "(00:00:00)";
@@ -93,34 +103,30 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             const endTime = parseIsoDate(endStr);
-            
-            // Unique key para sa tagsa ka room/reservation timer
             const timerKey = startStr + (endStr || '');
 
-            // KON BAG-O LANG Nagsugod (less than 2 mins gap halin sa creation),
-            // I-calibrate ang initial offset para mag-start gid sa exact 0 seconds
+            // Standard Initial Calibration (Para lang sa bag-o gid nag-start nga session)
             if (!(timerKey in sessionInitialOffsets)) {
-                const rawElapsed = Math.floor((now - startTime) / 1000);
-                // Kon bag-o lang gin-create ang session (within 3 minutes gap) pero may offset ang server clock:
-                if (rawElapsed > 0 && rawElapsed < 180 && !isPaused) {
-                    sessionInitialOffsets[timerKey] = rawElapsed;
-                } else {
-                    sessionInitialOffsets[timerKey] = 0;
-                }
+                sessionInitialOffsets[timerKey] = 0;
             }
 
             const clockOffset = sessionInitialOffsets[timerKey] || 0;
 
+            // ==========================================
             // KON NAKA-PAUSE
+            // ==========================================
             if (isPaused) {
-                const pausedAtStr = timer.getAttribute('data-pausedat');
+                const pausedAtStr = timer.getAttribute('data-pausedat') || (card ? card.getAttribute('data-pausedat') : null);
                 let freezeEndTime = now;
                 
                 if (pausedAtStr) {
                     freezeEndTime = parseIsoDate(pausedAtStr) || now;
                 }
 
-                const pausedElapsed = Math.max(0, Math.floor((freezeEndTime - startTime) / 1000) - clockOffset);
+                const pausedElapsed = isOpenTime 
+                    ? Math.max(0, Math.floor((freezeEndTime - startTime) / 1000) - clockOffset - accumPausedSecs)
+                    : Math.max(0, Math.floor((freezeEndTime - startTime) / 1000) - clockOffset);
+
                 timer.textContent = `${formatTime(pausedElapsed)} ⏸ (PAUSED)`;
 
                 if (remainingElem && endTime) {
@@ -130,11 +136,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
-            // KON RUNNING (ACTIVE)
-            const elapsed = Math.max(0, Math.floor((now - startTime) / 1000) - clockOffset);
-            timer.textContent = formatTime(elapsed);
+            // ==========================================
+            // KON RUNNING / RESUMED (Active State)
+            // ==========================================
+            const rawElapsed = Math.floor((now - startTime) / 1000) - clockOffset;
+            
+            if (isOpenTime) {
+                // [BAG-O FOR OPEN TIME]: 
+                // I-subtract ang accumulated_paused_seconds nga halin sa database
+                const actualOpenElapsed = Math.max(0, rawElapsed - accumPausedSecs);
+                timer.textContent = formatTime(actualOpenElapsed);
+            } else {
+                // KON FIXED TIME: Standard running duration
+                timer.textContent = formatTime(Math.max(0, rawElapsed));
+            }
 
-            // Compute active remaining time
+            // Active remaining time (Para sa Fixed Time)
             if (remainingElem && endTime) {
                 const remaining = Math.max(0, Math.floor((endTime - now) / 1000) + clockOffset);
                 remainingElem.textContent = formatTime(remaining);
@@ -179,6 +196,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // Loop Initialization
     updateTimers();
     setInterval(updateTimers, 1000);
 

@@ -251,14 +251,14 @@ def seed_db():
         payment_settings = [
             PaymentInfo(
                 method="GCash",
-                account_name="High End WS Lounge",
-                account_number="09171234567",
+                account_name="WS Students & Professionals Lounge",
+                account_number="09997672051",
                 instructions="Send 50% downpayment and upload the receipt.",
             ),
             PaymentInfo(
                 method="Maya",
-                account_name="High End WS Lounge",
-                account_number="09179876543",
+                account_name="WS Students & Professionals Lounge",
+                account_number="09997672051",
                 instructions="Please upload the receipt after payment.",
             ),
         ]

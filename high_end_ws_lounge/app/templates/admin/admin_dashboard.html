@@ -117,7 +117,8 @@
                         data-room="{{ res.room.name|lower }}"
                         data-isopentime="{{ 'true' if res.is_open_time else 'false' }}"
                         data-endtime="{{ res.end_time.isoformat() if res.end_time else '' }}"
-                        data-is-paused="{{ 'true' if res.is_paused else 'false' }}">                        
+                        data-is-paused="{{ 'true' if res.is_paused else 'false' }}"
+                        data-accumulated-paused-seconds="{{ res.accumulated_paused_seconds or 0 }}">                       
                         
                         <div class="end-time-indicator">TIME ENDED - PLEASE CHECKOUT</div>
 
@@ -257,7 +258,8 @@
                         data-room="{{ room.name.strip().lower() }}"
                         data-endtime="{{ active_res.end_time.isoformat() if (active_res and active_res.end_time) else '' }}"
                         data-isopentime="{{ 'true' if (active_res and active_res.is_open_time) else 'false' }}"
-                        data-is-paused="{{ 'true' if (active_res and active_res.is_paused) else 'false' }}">
+                        data-is-paused="{{ 'true' if (active_res and active_res.is_paused) else 'false' }}"
+                        data-accumulated-paused-seconds="{{ active_res.accumulated_paused_seconds if active_res else 0 }}">
                         
                         <div class="end-time-indicator">TIME ENDED - {{ room.name }}</div>
 
@@ -286,7 +288,8 @@
                                     <span class="info-label">End</span>
                                     <span class="info-value">{{ active_res.end_time.strftime('%I:%M %p') if active_res.end_time else '---' }}</span>
                                 </div>
-                            
+                                {% endif %}
+                                
                                 <div class="info-row">
                                     <span class="info-label">Live Timer</span>
                                     <span class="timer-text" 
@@ -294,7 +297,8 @@
                                         data-pausedat="{{ active_res.paused_at.isoformat() if active_res.paused_at else '' }}"
                                         data-endtime="{{ active_res.end_time.isoformat() if active_res.end_time and not active_res.is_open_time else '' }}"
                                         data-isopentime="{{ 'true' if active_res.is_open_time else 'false' }}"
-                                        data-is-paused="{{ 'true' if active_res.is_paused else 'false' }}">
+                                        data-is-paused="{{ 'true' if active_res.is_paused else 'false' }}"
+                                        data-accumulated-paused-seconds="{{ active_res.accumulated_paused_seconds or 0 }}">
                                         (00:00:00)
                                     </span>
                                 </div>
@@ -306,7 +310,6 @@
                                         (00:00:00)
                                     </span>
                                 </div>
-                                {% endif %}
                                 {% endif %}
                             {% else %}
                             <div class="info-row">

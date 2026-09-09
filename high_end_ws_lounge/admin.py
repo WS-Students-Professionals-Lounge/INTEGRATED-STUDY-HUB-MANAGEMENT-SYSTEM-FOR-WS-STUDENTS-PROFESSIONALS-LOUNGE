@@ -26,7 +26,6 @@ from flask import Blueprint, current_app, flash, jsonify, redirect, render_templ
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
 
-
 def calculate_open_time_minutes_fee(minutes):
     """
     Helper function para sa Open Time minute-tier pricing:
@@ -123,6 +122,15 @@ def get_custom_tier_rate(room_name, pax_count, default_rate):
 
     # Para sa tanan nga iban nga rooms (Common Area, Small Meeting Rooms, etc.)
     return float(default_rate or 0.0)
+
+def get_business_date(dt):
+    """
+    Kon ang oras mas sayo sa 7:00 AM,
+    ipaisip kini nga parte pa sang kahapon nga Business Date.
+    """
+    if dt.hour < 7:
+        return (dt - timedelta(days=1)).date()
+    return dt.date()
 
 def require_super_admin():
     if current_user.role != "admin":
@@ -296,8 +304,9 @@ def ensure_address_column():
 
 def refresh_daily_report(report_date):
     report = get_or_create_daily_report(report_date)
-    start = datetime.combine(report_date, datetime.min.time())
-    end = datetime.combine(report_date, datetime.max.time())
+
+    start = datetime.combine(report_date, datetime.min.time()) + timedelta(hours=7)
+    end = start + timedelta(days=1)
 
     report.total_check_ins = Reservation.query.filter(
         Reservation.end_time >= start,
@@ -652,11 +661,9 @@ def toggle_pause_reservation(reservation_id):
             current_accumulated = reservation.accumulated_paused_seconds or 0
             reservation.accumulated_paused_seconds = current_accumulated + int(paused_seconds)
 
-            # TANAN NGA TYPE (Open Time man o Fixed Time):
-            # Dapat i-move forward ang start_time sang eksakto nga segundos sang pagka-pause.
-            # Amo ini ang nagapapunggan sang Live Timer sa paglumpat!
-            if reservation.start_time:
-                reservation.start_time = reservation.start_time + timedelta(seconds=paused_seconds)
+            # UPDATED CODE
+            if not reservation.is_open_time and reservation.end_time:
+                reservation.end_time = reservation.end_time + timedelta(seconds=paused_seconds)
             
             # Kon Fixed Time, i-move man ang end_time para extended ang session exact sa pause time
             if not reservation.is_open_time and reservation.end_time:
@@ -668,6 +675,36 @@ def toggle_pause_reservation(reservation_id):
 
     db.session.commit()
     return redirect(url_for("admin.dashboard"))
+
+
+@admin_bp.route('/resume_reservation/<int:id>', methods=['POST'])
+@login_required
+def resume_reservation(id):
+    res = Reservation.query.get_or_404(id)
+    
+    if res.is_paused and res.paused_at:
+        now = datetime.now()
+        paused_duration = int((now - res.paused_at).total_seconds())
+        
+        # 1. KON OPEN TIME ONLY:
+        # I-save ang paused duration sa accumulated_paused_seconds
+        # para indi mag-jump ang Live Timer pag-resume.
+        if res.is_open_time:
+            res.accumulated_paused_seconds = (res.accumulated_paused_seconds or 0) + paused_duration
+
+        # 2. KON FIXED TIME ONLY:
+        # I-extend ang end_time sang nagligad nga pause duration 
+        # para matagaan ang customer sang eksakto nga oras.
+        else:
+            if res.end_time:
+                res.end_time = res.end_time + timedelta(seconds=paused_duration)
+
+        # I-reset ang pause status
+        res.is_paused = False
+        res.paused_at = None
+        db.session.commit()
+        
+    return redirect(url_for('dashboard'))
 
 # (Global Notification Context Processor)
 
@@ -864,7 +901,7 @@ def walkin_checkin_modal():
                 start_time = now
 
         if is_open_time:
-            end_time = start_time + timedelta(hours=8)
+            end_time = start_time  # UPDATED CODE
         else:
             if form.end_time.data:
                 if isinstance(form.end_time.data, str):
@@ -893,8 +930,9 @@ def walkin_checkin_modal():
                 )
                 return redirect(url_for("admin.dashboard"))
         else:
-            if get_common_area_count() >= 50:
-                flash("Common Area has reached maximum capacity of 50 people.")
+            #UPDATED CODE
+            if get_common_area_count() >= 70:
+                flash("Common Area has reached maximum capacity of 70 people.")
                 return redirect(url_for("admin.dashboard"))
 
         # Generate customer_id based on room type
@@ -1096,7 +1134,7 @@ def process_payment(reservation_id):
         except Exception:
             pass
 
-    report_date = res.end_time.date()
+    report_date = get_business_date(res.end_time)
 
     res.status = "Checked-Out"
     res.paid = True
@@ -1448,9 +1486,9 @@ def solo_applications():
 @admin_bp.route("/approve_membership/<int:req_id>", methods=["POST"])
 @login_required
 def approve_membership(req_id):
-    redirect_response = require_super_admin()
-    if redirect_response:
-        return redirect_response
+    if current_user.role not in ["admin", "staff"]:
+        flash("You do not have permission to approve memberships.", "danger")
+        return redirect(url_for("admin.members", tab="list"))
 
     plan = SoloPlan.query.get_or_404(req_id)
     plan.approved_by_id = current_user.id
@@ -1474,9 +1512,9 @@ def approve_membership(req_id):
 @admin_bp.route("/reject_membership/<int:req_id>", methods=["POST"])
 @login_required
 def reject_membership(req_id):
-    redirect_response = require_super_admin()
-    if redirect_response:
-        return redirect_response
+    if current_user.role not in ["admin", "staff"]: 
+        flash("You do not have permission to reject memberships.", "danger")
+        return redirect(url_for("admin.members", tab="requests"))
 
     plan = SoloPlan.query.get_or_404(req_id)
     plan.status = "rejected"
@@ -1662,9 +1700,9 @@ def reactivate_member():
 @admin_bp.route("/approve_solo_plan/<int:plan_id>", methods=["POST"])
 @login_required
 def approve_solo_plan(plan_id):
-    redirect_response = require_super_admin()
-    if redirect_response:
-        return redirect_response
+    if current_user.role not in ["admin", "staff"]:
+        flash("You do not have permission to approve memberships.", "danger")
+        return redirect(url_for("admin.solo_applications"))
 
     plan = SoloPlan.query.get_or_404(plan_id)
     plan.status = "approved"
@@ -1689,9 +1727,9 @@ def approve_solo_plan(plan_id):
 @admin_bp.route("/reject_solo_plan/<int:plan_id>", methods=["POST"])
 @login_required
 def reject_solo_plan(plan_id):
-    redirect_response = require_super_admin()
-    if redirect_response:
-        return redirect_response
+    if current_user.role not in ["admin", "staff"]:
+        flash("You do not have permission to reject memberships.", "danger")
+        return redirect(url_for("admin.solo_applications"))
 
     plan = SoloPlan.query.get_or_404(plan_id)
     plan.status = "rejected"
@@ -1823,8 +1861,13 @@ def reports():
 
     start_date = datetime.utcnow().date()
     end_date = datetime.utcnow().date()
+    room_id = ""
+
+    # Get all rooms for dropdown options
+    rooms = Room.query.all()
 
     if request.method == "POST":
+        room_id = request.form.get("room_id", "")
         start_date_str = request.form.get("start_date")
         end_date_str = request.form.get("end_date")
         try:
@@ -1866,22 +1909,30 @@ def reports():
             }
         )
 
-    customer_sessions = (
-        Reservation.query.filter(
-            func.date(Reservation.end_time) >= start_date,
-            func.date(Reservation.end_time) <= end_date,
-            Reservation.status.in_(["Checked-Out", "Cancelled"]),
-        )
-        .order_by(Reservation.end_time.desc())
-        .all()
+    sessions_query = Reservation.query.filter(
+        func.date(Reservation.end_time) >= start_date,
+        func.date(Reservation.end_time) <= end_date,
+        Reservation.status.in_(["Checked-Out", "Cancelled"]),
+    )
+
+    if room_id:
+        sessions_query = sessions_query.filter(Reservation.room_id == room_id)
+
+    customer_sessions = sessions_query.order_by(Reservation.end_time.desc()).all()
+
+    grand_total = sum(
+        (session.total_amount or 0) for session in customer_sessions
     )
 
     return render_template(
         "admin/reports.html",
         daily_reports=reports_with_member,
         customer_sessions=customer_sessions,
+        grand_total=grand_total,
         start_date=start_date,
         end_date=end_date,
+        rooms=rooms,
+        selected_room_id=room_id,
     )
 
 
@@ -1905,6 +1956,7 @@ def generate_completed_sessions_pdf():
 
     start_date = request.args.get("start_date", "")
     end_date = request.args.get("end_date", "")
+    room_id = request.args.get("room_id", "")
 
     parsed_start_date = None
     parsed_end_date = None
@@ -1929,6 +1981,8 @@ def generate_completed_sessions_pdf():
         query = query.filter(func.date(Reservation.end_time) >= parsed_start_date)
     if parsed_end_date:
         query = query.filter(func.date(Reservation.end_time) <= parsed_end_date)
+    if room_id:
+        query = query.filter(Reservation.room_id == room_id)
 
     sessions = query.order_by(Reservation.end_time.desc()).all()
 
@@ -1963,6 +2017,12 @@ def generate_completed_sessions_pdf():
     ph_tz = timezone(timedelta(hours=8))
     now_ph = datetime.now(ph_tz)
 
+    room_filter_text = "All Rooms"
+    if room_id:
+        selected_room = Room.query.get(room_id)
+        if selected_room:
+            room_filter_text = selected_room.name
+
     elements = [
         Paragraph("Completed Sessions Report", title_style),
         Paragraph(
@@ -1970,7 +2030,7 @@ def generate_completed_sessions_pdf():
             subtitle_style,
         ),
         Paragraph(
-            f"Date range: {parsed_start_date or 'Beginning'} to {parsed_end_date or 'Today'}",
+            f"Date range: {parsed_start_date or 'Beginning'} to {parsed_end_date or 'Today'} | Room: {room_filter_text}",
             subtitle_style,
         ),
         Spacer(1, 8),
@@ -1990,7 +2050,12 @@ def generate_completed_sessions_pdf():
             "Total Bill",
         ]]
 
+        grand_total = 0.0
+
         for session in sessions:
+            amount = session.total_amount if session.total_amount is not None else 0.0
+            grand_total += amount
+
             table_data.append([
                 session.customer_name or "N/A",
                 session.contact_number or "N/A",
@@ -1999,28 +2064,47 @@ def generate_completed_sessions_pdf():
                 (session.approved_by.name if session.approved_by else (session.user.name if session.user else session.added_by or "Unknown")),
                 session.start_time.strftime("%b %d, %Y %I:%M %p") if session.start_time else "N/A",
                 session.end_time.strftime("%b %d, %Y %I:%M %p") if session.end_time else "N/A",
-                f"PHP{session.total_amount:,.2f}" if session.total_amount is not None else "PHP0.00",
+                f"PHP{amount:,.2f}",
             ])
 
+        table_data.append([
+            "GRAND TOTAL",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            f"PHP{grand_total:,.2f}",
+        ])
+
         table = Table(table_data, repeatRows=1)
-        table.setStyle(
-            TableStyle([
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1f4e79")),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, 0), 9),
-                ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
-                ("TOPPADDING", (0, 0), (-1, 0), 8),
-                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-                ("ALIGN", (0, 1), (-1, -1), "LEFT"),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
-                ("FONTSIZE", (0, 1), (-1, -1), 8),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.whitesmoke, colors.white]),
-                ("LEFTPADDING", (0, 0), (-1, -1), 4),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-            ])
-        )
+
+        t_style = [
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1f4e79")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, 0), 9),
+            ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
+            ("TOPPADDING", (0, 0), (-1, 0), 8),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+            ("ALIGN", (0, 1), (-1, -1), "LEFT"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+            ("FONTSIZE", (0, 1), (-1, -1), 8),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.whitesmoke, colors.white]),
+            ("LEFTPADDING", (0, 0), (-1, -1), 4),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+
+            ("SPAN", (0, -1), (6, -1)),                          
+            ("ALIGN", (0, -1), (0, -1), "RIGHT"),
+            ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+            ("FONTSIZE", (0, -1), (-1, -1), 9),
+            ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#eaefb5")),
+            ("TEXTCOLOR", (-1, -1), (-1, -1), colors.HexColor("#1f4e79")),
+        ]
+
+        table.setStyle(TableStyle(t_style))
         elements.append(table)
 
     doc.build(elements)
