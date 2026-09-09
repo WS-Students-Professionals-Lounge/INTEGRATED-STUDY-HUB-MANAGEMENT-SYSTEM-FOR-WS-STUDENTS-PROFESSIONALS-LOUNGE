@@ -168,7 +168,7 @@ def ensure_default_admin():
                 role="admin",
                 phone="09171111111",
             )
-            admin.set_password("wsl2026")
+            admin.set_password("ws12345")
             db.session.add(admin)
             db.session.commit()
 
@@ -226,7 +226,7 @@ def seed_db():
             role="admin",
             phone="09171111111",
         )
-        admin.set_password("wsl2026")
+        admin.set_password("ws12345")
         db.session.add(admin)
         db.session.commit()
 
