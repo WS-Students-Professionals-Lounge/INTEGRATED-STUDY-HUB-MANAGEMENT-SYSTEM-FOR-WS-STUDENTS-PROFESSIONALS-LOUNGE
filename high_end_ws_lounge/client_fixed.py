@@ -118,7 +118,7 @@ def forgot_password():
 
             msg = Message(
                 subject="WS Lounge - Password Reset Request",
-                sender=("WS Students & Professionals Lounge", "wslounge@lounge.com"),
+                sender=("WS Students & Professionals Lounge", current_app.config.get("MAIL_USERNAME", "wsstudentsprofessionalslounge@gmail.com")),
                 recipients=[user.email]
             )
             msg.body = f"""Hello {user.name or 'Member'},
@@ -130,11 +130,17 @@ Please click the link below to reset your password (valid for 30 minutes):
 
 If you did not request a password reset, please ignore this email.
 """
+            # I-print sa Render Logs para sa local/staging testing fallback
+            print(f"\n==========================================")
+            print(f"[FORGOT PASSWORD RESET LINK]: {reset_url}")
+            print(f"==========================================\n")
+
             try:
                 mail.send(msg)
                 flash("A password reset link has been sent to your email. Please check your inbox or spam folder.", "success")
             except Exception as e:
-                flash(f"Failed to send email: {str(e)}", "danger")
+                print(f"[SMTP SEND ERROR]: {str(e)}")
+                flash("Email service limit reached or blocked by network. Please check server logs for the link or contact admin.", "warning")
         else:
             flash("If that email address is registered, a password reset link has been sent to your inbox.", "info")
 
