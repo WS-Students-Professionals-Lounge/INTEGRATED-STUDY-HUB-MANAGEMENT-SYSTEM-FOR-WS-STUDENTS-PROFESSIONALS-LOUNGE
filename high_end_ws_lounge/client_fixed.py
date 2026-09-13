@@ -121,7 +121,7 @@ def forgot_password():
 
                 resend.Emails.send({
                     "from": "WS Lounge <onboarding@resend.dev>",
-                    "to": ["juga.reyes.ui@phinmaed.com"],
+                    "to": [user.email],
                     "subject": "WS Lounge - Password Reset Request",
                     "html": f"""
                     <p>Hello {user.name or 'Member'},</p>
