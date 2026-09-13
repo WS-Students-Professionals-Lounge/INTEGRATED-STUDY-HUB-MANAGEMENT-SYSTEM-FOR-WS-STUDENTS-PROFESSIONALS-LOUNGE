@@ -812,7 +812,7 @@ def manage_staff():
         elif User.query.filter(func.lower(User.email) == email).first():
             message = "A staff account with that email already exists."
         else:
-            new_user = User(name=name, email=email, phone=phone, role=role, is_active=True)
+            new_user = User(name=name, email=email, phone=phone, role=role, is_active=True, created_via_manage_staff=True,)
             new_user.set_password(password)
             db.session.add(new_user)
             try:
@@ -824,8 +824,14 @@ def manage_staff():
                 message = "Failed to create staff account. Check server logs for details."
                 flash(message, "danger")
 
-    staff_users = User.query.filter(User.role.in_(["admin", "staff"]))
-    staff_users = staff_users.order_by(User.role.desc(), User.name).all()
+    staff_users = User.query.filter(
+        User.role == "staff"
+    ).all()
+
+    managed_admin_users = User.query.filter(
+        User.role == "admin",
+        User.created_via_manage_staff == True,
+    ).all()
     return render_template(
         "admin/manage_staff.html",
         staff_users=staff_users,
