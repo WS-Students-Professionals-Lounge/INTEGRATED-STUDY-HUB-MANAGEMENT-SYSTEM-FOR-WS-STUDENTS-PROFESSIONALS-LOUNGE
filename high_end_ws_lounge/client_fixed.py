@@ -7,6 +7,7 @@ import os
 from datetime import datetime, timedelta
 import pytz
 import stripe
+import resend
 
 from database_fixed import (
     db,
@@ -106,8 +107,6 @@ def login():
 
 @auth_bp.route("/forgot_password", methods=["GET", "POST"])
 def forgot_password():
-    from database_fixed import mail
-
     if request.method == "POST":
         email = request.form.get("email", "").strip().lower()
         user = get_user_by_email(email)
@@ -117,27 +116,44 @@ def forgot_password():
             token = serializer.dumps(user.email, salt="reset-password-salt")
             reset_url = url_for("auth.reset_password", token=token, _external=True)
 
-            msg = Message(
-                subject="WS Lounge - Password Reset Request",
-                sender=("WS Students & Professionals Lounge", "wsstudentsprofessionalslounge@gmail.com"),
-                recipients=[user.email]
-            )
-            msg.body = f"""Hello {user.name or 'Member'},
-
-A password reset was requested for your WS Lounge account.
-
-Please click the link below to reset your password (valid for 30 minutes):
-{reset_url}
-
-If you did not request a password reset, please ignore this email.
-"""
             try:
-                mail.send(msg)
-                flash("A password reset link has been sent to your email. Please check your inbox or spam folder.", "success")
+                resend.api_key = os.environ.get("RESEND_API_KEY")
+
+                resend.Emails.send({
+                    "from": "WS Lounge <onboarding@resend.dev>",
+                    "to": [user.email],
+                    "subject": "WS Lounge - Password Reset Request",
+                    "html": f"""
+                    <p>Hello {user.name or 'Member'},</p>
+
+                    <p>A password reset was requested for your WS Lounge account.</p>
+
+                    <p>Please click the link below to reset your password. This link is valid for 30 minutes:</p>
+
+                    <p>
+                        <a href="{reset_url}">Reset My Password</a>
+                    </p>
+
+                    <p>If you did not request a password reset, please ignore this email.</p>
+
+                    <p>WS Students & Professionals Lounge</p>
+                    """
+                })
+
+                flash(
+                    "A password reset link has been sent to your email. Please check your inbox or spam folder.",
+                    "success"
+                )
+
             except Exception as e:
-                flash(f"Failed to send email: {str(e)}", "danger")
+                print(f"Resend email error: {e}")
+                flash("Failed to send password reset email. Please try again later.", "danger")
+
         else:
-            flash("If that email address is registered, a password reset link has been sent to your inbox.", "info")
+            flash(
+                "If that email address is registered, a password reset link has been sent to your inbox.",
+                "info"
+            )
 
         return redirect(url_for("auth.forgot_password"))
 
