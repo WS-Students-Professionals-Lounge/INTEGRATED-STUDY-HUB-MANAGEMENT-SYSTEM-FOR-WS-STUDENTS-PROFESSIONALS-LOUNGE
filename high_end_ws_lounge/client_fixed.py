@@ -6,6 +6,7 @@ Contains all client-facing blueprints: auth, main, and api.
 import os
 from datetime import datetime, timedelta
 import pytz
+import stripe
 
 from database_fixed import (
     db,
@@ -105,7 +106,7 @@ def login():
 
 @auth_bp.route("/forgot_password", methods=["GET", "POST"])
 def forgot_password():
-    from run import mail
+    from database_fixed import mail
 
     if request.method == "POST":
         email = request.form.get("email", "").strip().lower()
@@ -1407,7 +1408,6 @@ def submit_solo_payment():
 @api_bp.route("/create-checkout-session", methods=["POST"])
 @login_required
 def create_checkout_session():
-    import stripe
     from database_fixed import Config
     stripe.api_key = Config.STRIPE_SECRET_KEY
     

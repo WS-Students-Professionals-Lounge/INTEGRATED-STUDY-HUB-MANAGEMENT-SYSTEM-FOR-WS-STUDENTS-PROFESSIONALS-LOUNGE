@@ -21,12 +21,10 @@ from database_fixed import (
     socketio,
 )
 from flask import Flask
-from flask_mail import Mail
 from itsdangerous import URLSafeTimedSerializer
 from sqlalchemy import inspect, text
 from time_utils import format_checkin_time, format_checkout_time, format_date, decimal_hours_to_readable
 
-mail = Mail()
 serializer = None
 
 def create_app(config_class=Config):
