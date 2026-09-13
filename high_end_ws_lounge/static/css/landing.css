@@ -45,6 +45,7 @@ body {
     width: 42px;
     height: 42px;
     object-fit: contain;
+    object-position: center;
     border-radius: 8px;
 }
 

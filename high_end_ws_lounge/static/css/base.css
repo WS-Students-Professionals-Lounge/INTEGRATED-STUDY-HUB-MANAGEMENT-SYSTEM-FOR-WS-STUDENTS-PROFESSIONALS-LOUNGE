@@ -73,7 +73,6 @@ textarea,
     /* Dindakuan naton ang bilog */
     width: 110px;
     height: 110px;
-    /* Ginkwa ang white background, ginbutang background: transparent */
     background: transparent;
     border-radius: 50%;
     display: flex;
@@ -81,15 +80,16 @@ textarea,
     justify-content: center;
     margin-bottom: 15px;
     overflow: hidden;
-    /* Gintandog ang padding para magsanto ang daku nga logo */
     padding: 5px;
 }
 
 .sidebar-logo {
-    /* Ang image ma-follow sa bag-o nga kadakuon sang container */
     width: 100%;
     height: 100%;
+    max-width: 110px;
+    max-height: 110px;
     object-fit: contain;
+    object-position: center;
 }
 
 .fallback-icon {

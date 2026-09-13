@@ -120,7 +120,7 @@ def forgot_password():
                 resend.api_key = os.environ.get("RESEND_API_KEY")
 
                 resend.Emails.send({
-                    "from": "WS Lounge <wsstudentsprofessionalslounge@gmail.com>",
+                    "from": "WS Lounge <juga.reyes.ui@phinmaed.com>",
                     "to": [user.email],
                     "subject": "WS Lounge - Password Reset Request",
                     "html": f"""
