@@ -170,27 +170,31 @@ def _solo_plan_credit_hours(plan_name):
     return hour_mapping.get(plan_key, 24.0)
 
 
-def _ensure_approved_solo_plan_membership(member):
+def _ensure_approved_solo_plan_membership(member, approved_plan=None):
     ph_tz = pytz.timezone("Asia/Manila")
     now_naive = datetime.now(ph_tz).replace(tzinfo=None)
 
-    # LATEST nga approved SoloPlan sang user nga active pa
-    latest_approved_plan = (
-        SoloPlan.query.filter(
-            SoloPlan.user_id == member.id,
-            SoloPlan.status.ilike("approved"),
-            SoloPlan.expiry_date > now_naive  # Dapat WALA PA NAG-EXPIRE
+    if approved_plan:
+        latest_approved_plan = approved_plan
+    else:
+        latest_approved_plan = (
+            SoloPlan.query.filter(
+                SoloPlan.user_id == member.id,
+                SoloPlan.status.ilike("approved"),
+                or_(
+                    SoloPlan.expiry_date.is_(None),
+                    SoloPlan.expiry_date > now_naive
+                )
+            )
+            .order_by(SoloPlan.created_at.desc())
+            .first()
         )
-        .order_by(SoloPlan.created_at.desc())
-        .first()
-    )
 
     if not latest_approved_plan:
         return False
 
     membership = Membership.query.filter_by(user_id=member.id).first()
 
-    # if no membership record, i-create sang bag-o
     if not membership:
         membership = Membership(
             user_id=member.id,
@@ -200,14 +204,15 @@ def _ensure_approved_solo_plan_membership(member):
             expiry_date=latest_approved_plan.expiry_date,
         )
         db.session.add(membership)
-        return True
     else:
-        #Kon may daan na nga membership (bisan expired pa), I-UPDATE sa BAG-O NGA PLAN DATES!
         membership.plan_name = latest_approved_plan.plan_name
-        membership.status = "active"  # Maga-aktibo liwat ang Check-In button!
+        membership.status = "active"
         membership.start_date = latest_approved_plan.created_at or now_naive
         membership.expiry_date = latest_approved_plan.expiry_date
-        return True
+        membership.is_checked_in = False
+        membership.is_checked_out = False
+
+    return True
 
 
 def _expire_membership_if_needed(membership):
@@ -1525,8 +1530,27 @@ def approve_membership(req_id):
     if not plan.customer_id:
         plan.customer_id = generate_customer_id("other")
 
+    print("=== APPROVAL DEBUG ===")
+    print("PLAN ID:", plan.id)
+    print("USER ID:", plan.user.id)
+    print("PLAN NAME:", plan.plan_name)
+    print("PLAN STATUS:", plan.status)
+    print("PLAN EXPIRY:", plan.expiry_date)
+
+    result = _ensure_approved_solo_plan_membership(plan.user, plan)
+
+    print("MEMBERSHIP HELPER RESULT:", result)
+
+    membership_check = Membership.query.filter_by(user_id=plan.user.id).first()
+
+    print("MEMBERSHIP AFTER HELPER:", membership_check)
+    if membership_check:
+        print("MEMBERSHIP ID:", membership_check.id)
+        print("MEMBERSHIP STATUS:", membership_check.status)
+        print("MEMBERSHIP PLAN:", membership_check.plan_name)
+
     # Ensure approved solo plan users receive a matching active membership record.
-    _ensure_approved_solo_plan_membership(plan.user)
+    _ensure_approved_solo_plan_membership(plan.user, plan)
 
     db.session.commit()
     flash(f"Membership approved for {plan.user.name}")
@@ -1734,7 +1758,7 @@ def approve_solo_plan(plan_id):
     plan.set_expiry_date()  # Set expiry date on SoloPlan
 
     # Siguraduhon nga nakakabit ang membership record
-    _ensure_approved_solo_plan_membership(plan.user)
+    _ensure_approved_solo_plan_membership(plan.user, plan)
 
     # Reset checkout & checkin flags
     membership = Membership.query.filter_by(user_id=plan.user.id).first()
