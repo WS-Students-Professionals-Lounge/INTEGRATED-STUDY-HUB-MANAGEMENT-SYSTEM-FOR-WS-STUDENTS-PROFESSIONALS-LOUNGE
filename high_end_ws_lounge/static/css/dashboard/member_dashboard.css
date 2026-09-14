@@ -640,3 +640,37 @@ body {
 .notification-close-btn:hover {
     color: #dc3545;
 }
+
+.notification-toggle-btn {
+    border: none;
+    background: transparent;
+    color: #6b7280;
+    font-size: 13px;
+    cursor: pointer;
+    padding: 4px 6px;
+}
+
+.notification-toggle-btn:hover {
+    color: #153d70;
+}
+
+.dashboard-notification-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.notification-close-btn {
+    border: none;
+    background: transparent;
+    color: #9ca3af;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+}
+
+.notification-close-btn:hover {
+    color: #dc3545;
+}

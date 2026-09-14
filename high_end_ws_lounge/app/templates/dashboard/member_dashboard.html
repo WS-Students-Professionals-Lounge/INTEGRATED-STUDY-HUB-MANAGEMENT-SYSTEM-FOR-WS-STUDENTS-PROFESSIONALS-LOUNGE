@@ -16,50 +16,74 @@
 
     {% if membership_notifications %}
     <div class="dashboard-notifications">
-        <div class="dashboard-notifications-header">
-            <div class="dashboard-notification-icon">
-                <i class="fas fa-bell"></i>
-            </div>
 
-            <div>
-                <h3>Notifications</h3>
-                <p>Recent membership updates</p>
-            </div>
-        </div>
+        <div class="dashboard-notifications-header"
+            onclick="toggleMembershipNotifications()">
 
-        {% for notification in membership_notifications %}
-        <div class="dashboard-notification-item">
-            <div class="dashboard-notification-check">
-                <i class="fas fa-check"></i>
-            </div>
-
-            <div class="dashboard-notification-content">
-                <div class="dashboard-notification-top">
-                    <strong>Membership Approved</strong>
-
-                    <button
-                        type="button"
-                        class="notification-close-btn"
-                        onclick="closeMembershipNotification(this)">
-                        &times;
-                    </button>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div class="dashboard-notification-icon">
+                    <i class="fas fa-bell"></i>
                 </div>
 
-                <p>
-                    Your <strong>{{ notification.plan_name }}</strong> plan has been approved.
-                    Your session will start once the staff checks you in.
-                </p>
+                <div>
+                    <h3>Notifications</h3>
+                    <p>Recent membership updates</p>
+                </div>
+            </div>
 
-                {% if notification.approved_at %}
-            <small>
-                {{ notification.approved_at.strftime('%b %d, %Y %I:%M %p') }}
-            </small>
-            {% endif %}
+            <button
+                type="button"
+                class="notification-toggle-btn"
+                onclick="event.stopPropagation(); toggleMembershipNotifications();"
+                aria-label="Toggle notifications">
+                <i class="fas fa-chevron-up" id="notification-toggle-icon"></i>
+            </button>
+
         </div>
+
+        <div id="membership-notification-list">
+
+            {% for notification in membership_notifications %}
+            <div class="dashboard-notification-item">
+
+                <div class="dashboard-notification-check">
+                    <i class="fas fa-check"></i>
+                </div>
+
+                <div class="dashboard-notification-content">
+
+                    <div class="dashboard-notification-top">
+                        <strong>Membership Approved</strong>
+
+                        <button
+                            type="button"
+                            class="notification-close-btn"
+                            onclick="closeMembershipNotification(this)"
+                            aria-label="Close notification">
+                            &times;
+                        </button>
+                    </div>
+
+                    <p>
+                        Your <strong>{{ notification.plan_name }}</strong> plan has been approved.
+                        Your session will start once the staff checks you in.
+                    </p>
+
+                    {% if notification.approved_at %}
+                    <small>
+                        {{ notification.approved_at.strftime('%b %d, %Y %I:%M %p') }}
+                    </small>
+                    {% endif %}
+
+                </div>
+
+            </div>
+            {% endfor %}
+
+        </div>
+
     </div>
-    {% endfor %}
-</div>
-{% endif %}
+    {% endif %}
 
     <!-- Stats Grid -->
     <div class="member-stats-grid">
@@ -409,6 +433,25 @@
 
     if (notification) {
         notification.style.display = 'none';
+    }
+}
+
+function toggleMembershipNotifications() {
+    const list = document.getElementById('membership-notification-list');
+    const icon = document.getElementById('notification-toggle-icon');
+
+    if (!list || !icon) return;
+
+    if (list.style.display === 'none') {
+        list.style.display = '';
+
+        icon.classList.remove('fa-chevron-down');
+        icon.classList.add('fa-chevron-up');
+    } else {
+        list.style.display = 'none';
+
+        icon.classList.remove('fa-chevron-up');
+        icon.classList.add('fa-chevron-down');
     }
 }
 </script>
