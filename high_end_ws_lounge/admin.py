@@ -1550,7 +1550,7 @@ def reject_membership(req_id):
     db.session.commit()
     flash(f"Membership rejected for {plan.user.name}")
     return redirect(url_for("admin.members", tab="requests"))
-    
+
 
 @admin_bp.route("/renew_member", methods=["POST"])
 @admin_bp.route("/admin/renew_member", methods=["POST"])
@@ -1561,87 +1561,114 @@ def renew_member():
         user_id = data.get("user_id")
 
         if not user_id:
-            return jsonify({"status": "error", "message": "Missing user ID."}), 400
+            return jsonify({
+                "status": "error",
+                "message": "Missing user ID."
+            }), 400
 
         user = User.query.get(int(user_id))
         if not user:
-            return jsonify({"status": "error", "message": "Member not found."}), 404
+            return jsonify({
+                "status": "error",
+                "message": "Member not found."
+            }), 404
 
         membership = Membership.query.filter_by(user_id=user.id).first()
 
-        # Dili magsugot kon kasamtangan nga naka Check-In
-        if membership and membership.is_checked_in:
+        if not membership:
             return jsonify({
-                "status": "error", 
+                "status": "error",
+                "message": "No membership record found."
+            }), 404
+
+        if membership.is_checked_in:
+            return jsonify({
+                "status": "error",
                 "message": "Cannot renew while customer is checked in. Please check out first."
             }), 400
 
         latest_plan = (
-            SoloPlan.query.filter_by(user_id=user.id)
+            SoloPlan.query
+            .filter_by(user_id=user.id)
             .order_by(SoloPlan.id.desc())
             .first()
         )
 
         now_ph = datetime.utcnow() + timedelta(hours=8)
 
-        # Kuhaon ang duration sa plan
-        fresh_hours = 1.0
+        plan_hours_map = {
+            "INDIVIDUAL RATE": 1.0,
+            "INDIVIDUAL RATE (4HRS)": 4.0,
+            "DAY/NIGHT PASS": 24.0,
+            "WEEKLY PASS (DAY/NIGHT)": 168.0,
+            "WEEKLY PASS (24HRS)": 168.0,
+            "MONTHLY PASS (DAY/NIGHT)": 720.0,
+            "MONTHLY PASS (24HRS)": 720.0,
+            "WORKSTATION (24HRS)": 720.0,
+            "ACTIVE PLAN": 720.0
+        }
+
+        plan_name = membership.plan_name or "INDIVIDUAL RATE"
+        fresh_hours = plan_hours_map.get(plan_name.strip().upper(), 1.0)
+
         if latest_plan:
+            plan_name = latest_plan.plan_name or plan_name
+
             extracted = (
-                getattr(latest_plan, 'hours', None) or 
-                getattr(latest_plan, 'duration_hours', None) or 
-                getattr(latest_plan, 'hours_left', None) or 
-                getattr(latest_plan, 'duration', None)
+                getattr(latest_plan, "hours", None)
+                or getattr(latest_plan, "duration_hours", None)
+                or getattr(latest_plan, "hours_left", None)
+                or getattr(latest_plan, "duration", None)
             )
-            if extracted:
+
+            if extracted is not None:
                 try:
                     fresh_hours = float(extracted)
                 except (ValueError, TypeError):
-                    fresh_hours = 1.0
+                    fresh_hours = plan_hours_map.get(
+                        plan_name.strip().upper(),
+                        1.0
+                    )
+            else:
+                fresh_hours = plan_hours_map.get(
+                    plan_name.strip().upper(),
+                    1.0
+                )
 
-        # =========================================================
-        # CRITICAL FIX FOR DASHBOARD: ZERO OUT ALL PAUSE COUNTERS
-        # =========================================================
-        if membership:
-            membership.is_checked_in = False
-            membership.is_checked_out = True
-            membership.is_paused = False
-            membership.status = "active"
-            membership.start_date = None
-            membership.expiry_date = None
-            membership.hours_left = fresh_hours
-            membership.total_hours = fresh_hours
-            membership.updated_at = now_ph
-            
-            # WIPE PAUSE DATA IN MEMBERSHIP
-            if hasattr(membership, 'total_paused_duration'):
-                membership.total_paused_duration = 0
-            if hasattr(membership, 'accumulated_paused_seconds'):
-                membership.accumulated_paused_seconds = 0
-            if hasattr(membership, 'paused_at'):
-                membership.paused_at = None
+        # Renew = prepare for a fresh session.
+        # Dates must remain valid because expiry_date is NOT NULL.
+        membership.plan_name = plan_name
+        membership.status = "active"
+        membership.is_checked_in = False
+        membership.is_checked_out = False
+        membership.is_paused = False
+        membership.paused_at = None
+        membership.accumulated_paused_seconds = 0
+        membership.total_hours = fresh_hours
+        membership.hours_left = fresh_hours
+        membership.start_date = now_ph
+        membership.expiry_date = now_ph + timedelta(hours=fresh_hours)
+        membership.updated_at = now_ph
 
         if latest_plan:
             latest_plan.status = "approved"
             latest_plan.is_paused = False
-            latest_plan.start_date = None
-            latest_plan.expiry_date = None
+            latest_plan.paused_at = None
+            latest_plan.accumulated_paused_seconds = 0
+            latest_plan.start_date = now_ph
+            latest_plan.expiry_date = now_ph + timedelta(hours=fresh_hours)
             latest_plan.updated_at = now_ph
-            
-            # WIPE PAUSE DATA IN SOLOPLAN
-            if hasattr(latest_plan, 'total_paused_duration'):
-                latest_plan.total_paused_duration = 0
-            if hasattr(latest_plan, 'accumulated_paused_seconds'):
-                latest_plan.accumulated_paused_seconds = 0
-            if hasattr(latest_plan, 'paused_at'):
-                latest_plan.paused_at = None
 
-        # Clear active attendance logs
         if membership:
-            AttendanceLog.query.filter_by(membership_id=membership.id, check_out_time=None).update({"check_out_time": now_ph})
+            AttendanceLog.query.filter_by(
+                membership_id=membership.id,
+                check_out_time=None
+            ).update({
+                "check_out_time": now_ph
+            })
 
         db.session.commit()
-        db.session.expire_all() # Clear ORM cache completely
+        db.session.expire_all()
 
         return jsonify({
             "status": "success",
@@ -1651,7 +1678,11 @@ def renew_member():
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"status": "error", "message": str(e)}), 500
+        current_app.logger.exception("Renew membership failed")
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
     
 
 @admin_bp.route("/deactivate_member", methods=["POST"])
