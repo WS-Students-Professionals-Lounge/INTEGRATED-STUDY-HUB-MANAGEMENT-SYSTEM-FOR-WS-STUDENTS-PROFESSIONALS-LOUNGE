@@ -399,9 +399,9 @@ def dashboard():
         ).all()
 
 
-    active_membership = Membership.query.filter(
-        Membership.user_id == current_user.id,
-        Membership.status.ilike("active")
+    active_membership = Membership.query.filter_by(
+        user_id=current_user.id, 
+        status.ilike=("active")
     ).first()
 
     user_logs = []
