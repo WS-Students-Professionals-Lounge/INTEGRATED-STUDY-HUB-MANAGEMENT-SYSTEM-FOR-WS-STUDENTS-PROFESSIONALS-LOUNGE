@@ -507,6 +507,7 @@ class SoloPlan(db.Model):
     payment_method = db.Column(db.String(50))
     receipt_image = db.Column(db.String(255))
     created_at = db.Column(db.DateTime, default=lambda: datetime.utcnow() + timedelta(hours=8))
+    approved_at = db.Column(db.DateTime, nullable=True)
     expiry_date = db.Column(db.DateTime)
 
     is_paused = db.Column(db.Boolean, default=False)

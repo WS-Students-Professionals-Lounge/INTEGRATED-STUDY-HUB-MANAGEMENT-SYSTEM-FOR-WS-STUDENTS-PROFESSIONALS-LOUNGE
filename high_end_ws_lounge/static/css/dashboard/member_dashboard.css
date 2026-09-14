@@ -619,3 +619,24 @@ body {
     font-size: 11px;
     color: #9ca3af;
 }
+
+.dashboard-notification-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.notification-close-btn {
+    border: none;
+    background: transparent;
+    color: #9ca3af;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+}
+
+.notification-close-btn:hover {
+    color: #dc3545;
+}

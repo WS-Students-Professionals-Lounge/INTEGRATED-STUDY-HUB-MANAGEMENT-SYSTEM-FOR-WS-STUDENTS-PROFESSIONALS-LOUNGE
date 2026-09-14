@@ -34,23 +34,32 @@
             </div>
 
             <div class="dashboard-notification-content">
-                <strong>Membership Approved</strong>
+                <div class="dashboard-notification-top">
+                    <strong>Membership Approved</strong>
+
+                    <button
+                        type="button"
+                        class="notification-close-btn"
+                        onclick="closeMembershipNotification(this)">
+                        &times;
+                    </button>
+                </div>
 
                 <p>
                     Your <strong>{{ notification.plan_name }}</strong> plan has been approved.
                     Your session will start once the staff checks you in.
                 </p>
 
-                {% if notification.created_at %}
-                <small>
-                    {{ notification.created_at.strftime('%b %d, %Y %I:%M %p') }}
-                </small>
-                {% endif %}
-            </div>
+                {% if notification.approved_at %}
+            <small>
+                {{ notification.approved_at.strftime('%b %d, %Y %I:%M %p') }}
+            </small>
+            {% endif %}
         </div>
-        {% endfor %}
     </div>
-    {% endif %}
+    {% endfor %}
+</div>
+{% endif %}
 
     <!-- Stats Grid -->
     <div class="member-stats-grid">
@@ -393,6 +402,16 @@
         </a>
     </div>
 </div>
+
+<script>
+    function closeMembershipNotification(button) {
+    const notification = button.closest('.dashboard-notification-item');
+
+    if (notification) {
+        notification.style.display = 'none';
+    }
+}
+</script>
 
 {# Issue #9: Notification/Reminders Toast Container #}
 <div id="notificationContainer" class="notification-container" aria-live="assertive"></div>
