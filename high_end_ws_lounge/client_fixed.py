@@ -274,6 +274,23 @@ def get_admin_stats():
     
     return total_members, active_timelogs, res_today, revenue_today
 
+@auth_bp.app_context_processor
+def inject_member_notifications():
+    if current_user.is_authenticated and current_user.role == "member":
+        unread_membership_notification_count = SoloPlan.query.filter(
+            SoloPlan.user_id == current_user.id,
+            SoloPlan.status.ilike("approved"),
+            SoloPlan.member_notification_seen == False
+        ).count()
+
+        return dict(
+            unread_membership_notification_count=unread_membership_notification_count
+        )
+
+    return dict(
+        unread_membership_notification_count=0
+    )
+
 
 def _expire_membership_if_needed(membership):
     if not membership or membership.status != 'active' or not membership.expiry_date:
