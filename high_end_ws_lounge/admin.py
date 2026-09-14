@@ -760,26 +760,6 @@ def get_admin_notifications_count():
         'total_notifications': p_res + p_plans + p_new_members
     })
 
-@admin_bp.route('/api/admin/notifications/member-list/read', methods=['POST'])
-@login_required
-def mark_member_list_notifications_read():
-    if current_user.role not in ['admin', 'staff']:
-        return jsonify({'error': 'Unauthorized'}), 403
-
-    Membership.query.filter_by(
-        status="active",
-        member_list_notification_seen=False
-    ).update(
-        {'member_list_notification_seen': True},
-        synchronize_session=False
-    )
-
-    db.session.commit()
-
-    return jsonify({
-        'status': 'success'
-    })
-
 
 @admin_bp.route('/payment_settings', methods=['GET', 'POST'])
 @login_required
@@ -1564,6 +1544,11 @@ def approve_membership(req_id):
 
     _ensure_approved_solo_plan_membership(plan.user, plan)
 
+    membership = Membership.query.filter_by(user_id=plan.user.id).first()
+
+    if membership:
+        membership.member_list_notification_seen = False
+
     db.session.commit()
 
     flash(f"Membership approved for {plan.user.name}", "success")
@@ -1811,6 +1796,8 @@ def approve_solo_plan(plan_id):
         membership.is_checked_in = False
         membership.is_checked_out = False
         membership.status = "active"
+        membership = Membership.query.filter_by(user_id=plan.user.id).first()
+        membership.member_list_notification_seen = False
 
     db.session.commit()
     flash(f"Plan approved for {plan.user.name}", "success")
@@ -2442,7 +2429,9 @@ def membership_check_in(user_or_membership_id):
         membership.is_checked_out = False
         membership.is_paused = False
         membership.status = "active"
+        membership.member_list_notification_seen = True
         membership.updated_at = now_ph
+
 
         # FORCE RESET PAUSE ON CHECK IN
         if hasattr(membership, 'total_paused_duration'):
