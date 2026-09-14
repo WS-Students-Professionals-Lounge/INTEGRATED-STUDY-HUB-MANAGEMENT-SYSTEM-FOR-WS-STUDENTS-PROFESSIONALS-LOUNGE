@@ -1523,35 +1523,18 @@ def approve_membership(req_id):
     plan.approved_by_id = current_user.id
     plan.status = "approved"
 
-    ph_tz = pytz.timezone('Asia/Manila')
+    ph_tz = pytz.timezone("Asia/Manila")
     now_ph = datetime.now(ph_tz)
     plan.set_expiry_date(now_ph)
 
     if not plan.customer_id:
         plan.customer_id = generate_customer_id("other")
 
-    print("=== APPROVAL DEBUG ===")
-    print("PLAN ID:", plan.id)
-    print("USER ID:", plan.user.id)
-    print("PLAN NAME:", plan.plan_name)
-    print("PLAN STATUS:", plan.status)
-    print("PLAN EXPIRY:", plan.expiry_date)
-
-    result = _ensure_approved_solo_plan_membership(plan.user, plan)
-
-    print("MEMBERSHIP HELPER RESULT:", result)
-
-    membership_check = Membership.query.filter_by(user_id=plan.user.id).first()
-
-    print("MEMBERSHIP AFTER HELPER:", membership_check)
-
-    if membership_check:
-        print("MEMBERSHIP ID:", membership_check.id)
-        print("MEMBERSHIP STATUS:", membership_check.status)
-        print("MEMBERSHIP PLAN:", membership_check.plan_name)
+    _ensure_approved_solo_plan_membership(plan.user, plan)
 
     db.session.commit()
-    flash(f"Membership approved for {plan.user.name}")
+
+    flash(f"Membership approved for {plan.user.name}", "success")
     return redirect(url_for("admin.members", tab="list"))
 
 
@@ -1567,6 +1550,7 @@ def reject_membership(req_id):
     db.session.commit()
     flash(f"Membership rejected for {plan.user.name}")
     return redirect(url_for("admin.members", tab="requests"))
+    
 
 @admin_bp.route("/renew_member", methods=["POST"])
 @admin_bp.route("/admin/renew_member", methods=["POST"])

@@ -93,7 +93,7 @@
             <div class="members-card-list">
                 {% set ns = namespace(count=0) %}
                 {% for member in members %}
-                    {% if (member.membership and member.membership.is_active) or (approved_solo_user_ids and member.id in approved_solo_user_ids) %}
+                    {% if member.membership and member.membership.status == 'active' %}
                         {% set ns.count = ns.count + 1 %}
                         <div class="member-list-card" data-searchable="{{ member.name }} {{ member.email }} WS-WLK-{{ member.id }}">
                             <div class="member-status-icon">
