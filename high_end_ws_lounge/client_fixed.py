@@ -388,6 +388,33 @@ def dashboard():
         .all()
     )
 
+        # Membership approval notifications
+    membership_notifications = (
+        SoloPlan.query.filter(
+            SoloPlan.user_id == current_user.id,
+            SoloPlan.status.ilike("approved")
+        )
+        .order_by(SoloPlan.created_at.desc())
+        .limit(10)
+        .all()
+    )
+
+    unread_membership_notifications = [
+        plan for plan in membership_notifications
+        if not plan.member_notification_seen
+    ]
+
+    unread_membership_notification_count = len(
+        unread_membership_notifications
+    )
+
+    # Mark approval notifications as seen after loading them
+    for plan in unread_membership_notifications:
+        plan.member_notification_seen = True
+
+    if unread_membership_notifications:
+        db.session.commit()
+
     # CALCULATE TOTAL SOLO HOURS (Safe Join & Status Check)
     try:
         all_user_solo_plans = SoloPlan.query.join(Membership).filter(
@@ -468,7 +495,9 @@ def dashboard():
         membership=membership,
         attendance_logs=attendance_logs,
         now_ph=now_ph,
-        is_session_paused=is_session_paused
+        is_session_paused=is_session_paused,
+        membership_notifications=membership_notifications,
+        unread_membership_notification_count=unread_membership_notification_count
     )
 
 

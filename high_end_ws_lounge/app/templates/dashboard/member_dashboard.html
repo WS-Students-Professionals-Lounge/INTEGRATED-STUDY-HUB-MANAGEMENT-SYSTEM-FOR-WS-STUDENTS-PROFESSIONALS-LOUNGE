@@ -14,6 +14,44 @@
         <div id="dashboardClock" class="dashboard-clock" role="timer" aria-label="Current Time">00:00:00</div>
     </div>
 
+    {% if membership_notifications %}
+    <div class="dashboard-notifications">
+        <div class="dashboard-notifications-header">
+            <div class="dashboard-notification-icon">
+                <i class="fas fa-bell"></i>
+            </div>
+
+            <div>
+                <h3>Notifications</h3>
+                <p>Recent membership updates</p>
+            </div>
+        </div>
+
+        {% for notification in membership_notifications %}
+        <div class="dashboard-notification-item">
+            <div class="dashboard-notification-check">
+                <i class="fas fa-check"></i>
+            </div>
+
+            <div class="dashboard-notification-content">
+                <strong>Membership Approved</strong>
+
+                <p>
+                    Your <strong>{{ notification.plan_name }}</strong> plan has been approved.
+                    Your session will start once the staff checks you in.
+                </p>
+
+                {% if notification.created_at %}
+                <small>
+                    {{ notification.created_at.strftime('%b %d, %Y %I:%M %p') }}
+                </small>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
     <!-- Stats Grid -->
     <div class="member-stats-grid">
         <div class="stat-card">

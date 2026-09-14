@@ -538,3 +538,84 @@ body {
     font-size: 0.9rem;
     margin: 10px 0 0 0;
 }
+
+.dashboard-notifications {
+    margin: 0 0 24px;
+    padding: 18px 20px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-left: 4px solid #153d70;
+    border-radius: 12px;
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.06);
+}
+
+.dashboard-notifications-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.dashboard-notification-icon,
+.dashboard-notification-check {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border-radius: 50%;
+}
+
+.dashboard-notification-icon {
+    width: 36px;
+    height: 36px;
+    background: #eaf1fb;
+    color: #153d70;
+}
+
+.dashboard-notifications-header h3 {
+    margin: 0;
+    font-size: 17px;
+    color: #1f2937;
+}
+
+.dashboard-notifications-header p {
+    margin: 2px 0 0;
+    font-size: 13px;
+    color: #6b7280;
+}
+
+.dashboard-notification-item {
+    display: flex;
+    gap: 12px;
+    padding: 14px 0;
+    border-top: 1px solid #eef0f3;
+}
+
+.dashboard-notification-check {
+    width: 34px;
+    height: 34px;
+    background: #e8f5ee;
+    color: #198754;
+}
+
+.dashboard-notification-content {
+    flex: 1;
+}
+
+.dashboard-notification-content strong {
+    color: #1f2937;
+}
+
+.dashboard-notification-content p {
+    margin: 6px 0 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #4b5563;
+}
+
+.dashboard-notification-content small {
+    display: block;
+    margin-top: 6px;
+    font-size: 11px;
+    color: #9ca3af;
+}

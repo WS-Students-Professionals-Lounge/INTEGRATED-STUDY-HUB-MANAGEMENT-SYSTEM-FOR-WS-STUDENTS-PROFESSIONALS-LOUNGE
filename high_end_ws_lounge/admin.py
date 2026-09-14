@@ -1532,6 +1532,7 @@ def approve_membership(req_id):
     plan = SoloPlan.query.get_or_404(req_id)
     plan.approved_by_id = current_user.id
     plan.status = "approved"
+    plan.member_notification_seen = False
 
     ph_tz = pytz.timezone("Asia/Manila")
     now_ph = datetime.now(ph_tz)
@@ -1786,6 +1787,7 @@ def approve_solo_plan(plan_id):
 
     plan = SoloPlan.query.get_or_404(plan_id)
     plan.status = "approved"
+    plan.member_notification_seen = False
     plan.approved_by_id = current_user.id
     plan.set_expiry_date()  # Set expiry date on SoloPlan
 
@@ -1860,6 +1862,7 @@ def confirm_reservation(res_id):
 
     res = Reservation.query.get_or_404(res_id)
     res.status = "Confirmed"
+    res.confirmation_notification_seen = False
     res.approved_by_id = current_user.id
     if res.room and res.room.name.strip().lower() != "common area":
         now = datetime.now()

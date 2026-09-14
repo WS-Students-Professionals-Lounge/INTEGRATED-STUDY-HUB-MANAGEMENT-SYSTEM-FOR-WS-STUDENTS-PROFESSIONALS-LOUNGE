@@ -368,6 +368,11 @@ class Reservation(db.Model):
     receipt_image = db.Column(db.String(255))
     approved_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     paid = db.Column(db.Boolean, default=False)
+    confirmation_notification_seen = db.Column(
+    db.Boolean,
+    default=False,
+    nullable=False
+    )
     added_by = db.Column(db.String(64))
     extra_notes = db.Column(db.String(255))
     extra_fee = db.Column(db.Float, default=0.0)
@@ -512,6 +517,12 @@ class SoloPlan(db.Model):
         "User",
         foreign_keys=[approved_by_id],
         backref="approved_solo_plans",
+    )
+
+    member_notification_seen = db.Column(
+    db.Boolean,
+    default=False,
+    nullable=False
     )
 
     @property
