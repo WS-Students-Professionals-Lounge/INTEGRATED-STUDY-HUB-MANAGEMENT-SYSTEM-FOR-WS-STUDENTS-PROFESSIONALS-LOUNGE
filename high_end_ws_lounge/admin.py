@@ -209,8 +209,6 @@ def _ensure_approved_solo_plan_membership(member, approved_plan=None):
         membership.status = "active"
         membership.start_date = latest_approved_plan.created_at or now_naive
         membership.expiry_date = latest_approved_plan.expiry_date
-        membership.is_checked_in = False
-        membership.is_checked_out = False
 
     return True
 
