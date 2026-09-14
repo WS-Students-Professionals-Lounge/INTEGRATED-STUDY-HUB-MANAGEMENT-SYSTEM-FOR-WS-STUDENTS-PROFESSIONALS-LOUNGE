@@ -23,23 +23,117 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
     // === 1. TAB SWITCHING LOGIC ===
+    document.addEventListener('DOMContentLoaded', function () {
     const tabButtons = document.querySelectorAll('.tab-btn');
     const tabPanels = document.querySelectorAll('.tab-panel');
 
     tabButtons.forEach(button => {
-        button.addEventListener('click', () => {
+        button.addEventListener('click', async () => {
             const targetTab = button.getAttribute('data-tab');
 
             tabButtons.forEach(btn => btn.classList.remove('active'));
             tabPanels.forEach(panel => panel.classList.remove('active'));
 
             button.classList.add('active');
+
             const targetPanel = document.getElementById(targetTab);
             if (targetPanel) {
                 targetPanel.classList.add('active');
             }
+
+            if (targetTab === 'list') {
+                try {
+                    const csrfToken =
+                        document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+                    const response = await fetch(
+                        '/admin/api/admin/notifications/member-list/read',
+                        {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                ...(csrfToken ? { 'X-CSRFToken': csrfToken } : {})
+                            }
+                        }
+                    );
+
+                    const result = await response.json().catch(() => ({}));
+
+                    if (response.ok && result.status === 'success') {
+                        const memberListBadge = document.getElementById('member-list-tab-badge');
+
+                        if (memberListBadge) {
+                            memberListBadge.textContent = '0';
+                            memberListBadge.classList.add('d-none');
+                        }
+
+                        updateMembersSidebarBadge();
+                    }
+                } catch (error) {
+                    console.error('Failed to mark member notifications as read:', error);
+                }
+            }
         });
     });
+});
+
+
+async function updateMembersSidebarBadge() {
+    try {
+        const response = await fetch('/admin/api/admin/notifications-count');
+
+        if (!response.ok) {
+            return;
+        }
+
+        const data = await response.json();
+
+        const sidebarBadge = document.getElementById('mem-notif-badge');
+
+        if (sidebarBadge) {
+            const total = (data.pending_memberships || 0) + (data.new_members_count || 0);
+
+            if (total > 0) {
+                sidebarBadge.textContent = total;
+                sidebarBadge.classList.remove('d-none');
+            } else {
+                sidebarBadge.textContent = '0';
+                sidebarBadge.classList.add('d-none');
+            }
+        }
+
+        const memberListBadge = document.getElementById('member-list-tab-badge');
+
+        if (memberListBadge) {
+            const newMembers = data.new_members_count || 0;
+
+            if (newMembers > 0) {
+                memberListBadge.textContent = newMembers;
+                memberListBadge.classList.remove('d-none');
+            } else {
+                memberListBadge.textContent = '0';
+                memberListBadge.classList.add('d-none');
+            }
+        }
+
+        const membershipRequestBadge =
+            document.getElementById('membership-request-tab-badge');
+
+        if (membershipRequestBadge) {
+            const pendingRequests = data.pending_memberships || 0;
+
+            if (pendingRequests > 0) {
+                membershipRequestBadge.textContent = pendingRequests;
+                membershipRequestBadge.classList.remove('d-none');
+            } else {
+                membershipRequestBadge.textContent = '0';
+                membershipRequestBadge.classList.add('d-none');
+            }
+        }
+    } catch (error) {
+        console.error('Failed to update notification badges:', error);
+    }
+}
 
 
     // === 2. MODAL HELPER FUNCTIONS ===

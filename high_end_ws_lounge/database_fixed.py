@@ -631,7 +631,12 @@ class Membership(db.Model):
     )
     
     status = db.Column(db.String(20), default="pending")  # pending, active, expired
-    
+    member_list_notification_seen = db.Column(
+        db.Boolean,
+        default=False,
+        nullable=False
+    )
+
     start_date = db.Column(db.DateTime, default=lambda: datetime.utcnow() + timedelta(hours=8))
     expiry_date = db.Column(db.DateTime, nullable=False)
     total_hours = db.Column(db.Float, default=0.0)  # Total hours credited

@@ -202,6 +202,8 @@ def _ensure_approved_solo_plan_membership(member, approved_plan=None):
             status="active",
             start_date=latest_approved_plan.created_at or now_naive,
             expiry_date=latest_approved_plan.expiry_date,
+            member_list_notification_seen=False
+
         )
         db.session.add(membership)
     else:
@@ -209,6 +211,7 @@ def _ensure_approved_solo_plan_membership(member, approved_plan=None):
         membership.status = "active"
         membership.start_date = latest_approved_plan.created_at or now_naive
         membership.expiry_date = latest_approved_plan.expiry_date
+        membership.member_list_notification_seen = False
 
     return True
 
@@ -714,20 +717,24 @@ def resume_reservation(id):
 @admin_bp.app_context_processor
 def inject_sidebar_notifications():
     if current_user.is_authenticated and getattr(current_user, 'role', '') in ['admin', 'staff']:
-        # Fetch counts halin sa DB
         p_res = Reservation.query.filter_by(status="Pending").count()
         p_plans = SoloPlan.query.filter_by(status="pending").count()
-        total = p_res + p_plans
-        
+
+        p_new_members = Membership.query.filter_by(
+            status="active",
+            member_list_notification_seen=False
+        ).count()
+
         return dict(
             pending_reservations_count=p_res,
             pending_solo_plans_count=p_plans,
-            total_notifications_count=total
+            new_members_count=p_new_members
         )
+
     return dict(
         pending_reservations_count=0,
         pending_solo_plans_count=0,
-        total_notifications_count=0
+        new_members_count=0
     )
 
 # API Endpoint para sa JS Polling
@@ -739,11 +746,38 @@ def get_admin_notifications_count():
 
     p_res = Reservation.query.filter_by(status="Pending").count()
     p_plans = SoloPlan.query.filter_by(status="pending").count()
+    p_new_members = Membership.query.filter_by(
+        status="active",
+        member_list_notification_seen=False
+    ).count()
 
     return jsonify({
         'pending_reservations': p_res,
         'pending_memberships': p_plans,
-        'total_notifications': p_res + p_plans
+        'new_members_count': p_new_members,
+        'members_notifications': p_plans + p_new_members,
+        'dashboard_notifications': p_res,
+        'total_notifications': p_res + p_plans + p_new_members
+    })
+
+@admin_bp.route('/api/admin/notifications/member-list/read', methods=['POST'])
+@login_required
+def mark_member_list_notifications_read():
+    if current_user.role not in ['admin', 'staff']:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    Membership.query.filter_by(
+        status="active",
+        member_list_notification_seen=False
+    ).update(
+        {'member_list_notification_seen': True},
+        synchronize_session=False
+    )
+
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success'
     })
 
 
