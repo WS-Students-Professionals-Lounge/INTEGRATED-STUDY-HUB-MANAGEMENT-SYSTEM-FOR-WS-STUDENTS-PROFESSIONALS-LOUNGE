@@ -1544,13 +1544,11 @@ def approve_membership(req_id):
     membership_check = Membership.query.filter_by(user_id=plan.user.id).first()
 
     print("MEMBERSHIP AFTER HELPER:", membership_check)
+
     if membership_check:
         print("MEMBERSHIP ID:", membership_check.id)
         print("MEMBERSHIP STATUS:", membership_check.status)
         print("MEMBERSHIP PLAN:", membership_check.plan_name)
-
-    # Ensure approved solo plan users receive a matching active membership record.
-    _ensure_approved_solo_plan_membership(plan.user, plan)
 
     db.session.commit()
     flash(f"Membership approved for {plan.user.name}")
