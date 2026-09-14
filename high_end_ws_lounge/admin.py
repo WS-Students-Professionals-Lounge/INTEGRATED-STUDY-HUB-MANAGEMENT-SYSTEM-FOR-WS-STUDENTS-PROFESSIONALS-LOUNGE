@@ -2224,6 +2224,16 @@ def members():
     active_tab = request.args.get("tab", "requests")
     search = request.args.get("search", "")
 
+    if active_tab == "list":
+        Membership.query.filter_by(
+            status="active",
+            member_list_notification_seen=False
+        ).update(
+            {"member_list_notification_seen": True},
+            synchronize_session=False
+        )
+        db.session.commit()
+
     approved_solo_users = db.session.query(SoloPlan.user_id).filter(
         SoloPlan.status.ilike('approved'),
         or_(SoloPlan.expiry_date.is_(None), SoloPlan.expiry_date > now_naive)
