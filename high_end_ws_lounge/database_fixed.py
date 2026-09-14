@@ -228,6 +228,7 @@ class User(UserMixin, db.Model):
     is_active = db.Column(db.Boolean, default=True)
     expiry_date = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_via_manage_staff = db.Column(db.Boolean, nullable=False, default=False)
 
     reservations = db.relationship("Reservation", backref="user", lazy="dynamic", foreign_keys='Reservation.user_id')
     approved_reservations = db.relationship("Reservation", foreign_keys='Reservation.approved_by_id', backref='approved_by')

@@ -796,6 +796,16 @@ def manage_staff():
     if redirect_response:
         return redirect_response
 
+    try:
+        inspector = inspect(db.engine)
+        if inspector.has_table("users"):
+            columns = {column["name"] for column in inspector.get_columns("users")}
+            if "created_via_manage_staff" not in columns:
+                db.session.execute(text("ALTER TABLE users ADD COLUMN created_via_manage_staff BOOLEAN NOT NULL DEFAULT 0"))
+                db.session.commit()
+    except Exception:
+        pass
+
     message = None
     if request.method == "POST":
         name = request.form.get("name", "").strip()
@@ -812,7 +822,14 @@ def manage_staff():
         elif User.query.filter(func.lower(User.email) == email).first():
             message = "A staff account with that email already exists."
         else:
-            new_user = User(name=name, email=email, phone=phone, role=role, is_active=True, created_via_manage_staff=True,)
+            new_user = User(
+                name=name,
+                email=email,
+                phone=phone,
+                role=role,
+                is_active=True,
+                created_via_manage_staff=True,
+            )
             new_user.set_password(password)
             db.session.add(new_user)
             try:
@@ -824,14 +841,15 @@ def manage_staff():
                 message = "Failed to create staff account. Check server logs for details."
                 flash(message, "danger")
 
-    staff_users = User.query.filter(
-        User.role == "staff"
-    ).all()
-
+    staff_users = User.query.filter(User.role == "staff").all()
     managed_admin_users = User.query.filter(
         User.role == "admin",
-        User.created_via_manage_staff == True,
+        User.created_via_manage_staff.is_(True),
     ).all()
+
+    staff_users.extend(managed_admin_users)
+    staff_users = sorted(staff_users, key=lambda user: (user.role, user.name))
+
     return render_template(
         "admin/manage_staff.html",
         staff_users=staff_users,
