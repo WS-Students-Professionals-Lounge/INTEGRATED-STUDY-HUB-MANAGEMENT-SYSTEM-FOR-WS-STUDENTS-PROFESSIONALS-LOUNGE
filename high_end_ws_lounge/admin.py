@@ -202,7 +202,6 @@ def _ensure_approved_solo_plan_membership(member, approved_plan=None):
             status="active",
             start_date=latest_approved_plan.created_at or now_naive,
             expiry_date=latest_approved_plan.expiry_date,
-            member_list_notification_seen=False
 
         )
         db.session.add(membership)
@@ -211,7 +210,6 @@ def _ensure_approved_solo_plan_membership(member, approved_plan=None):
         membership.status = "active"
         membership.start_date = latest_approved_plan.created_at or now_naive
         membership.expiry_date = latest_approved_plan.expiry_date
-        membership.member_list_notification_seen = False
 
     return True
 
@@ -1547,6 +1545,10 @@ def approve_membership(req_id):
     membership = Membership.query.filter_by(user_id=plan.user.id).first()
 
     if membership:
+        membership.is_checked_in = False
+        membership.is_checked_out = False
+        membership.is_paused = False
+        membership.status = "active"
         membership.member_list_notification_seen = False
 
     db.session.commit()
@@ -1795,8 +1797,8 @@ def approve_solo_plan(plan_id):
     if membership:
         membership.is_checked_in = False
         membership.is_checked_out = False
+        membership.is_paused = False
         membership.status = "active"
-        membership = Membership.query.filter_by(user_id=plan.user.id).first()
         membership.member_list_notification_seen = False
 
     db.session.commit()
@@ -2429,8 +2431,8 @@ def membership_check_in(user_or_membership_id):
         membership.is_checked_out = False
         membership.is_paused = False
         membership.status = "active"
-        membership.member_list_notification_seen = True
         membership.updated_at = now_ph
+        membership.member_list_notification_seen = True
 
 
         # FORCE RESET PAUSE ON CHECK IN
