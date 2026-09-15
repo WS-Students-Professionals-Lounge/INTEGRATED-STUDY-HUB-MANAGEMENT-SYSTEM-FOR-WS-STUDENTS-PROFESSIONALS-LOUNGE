@@ -97,12 +97,24 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             const startTime = parseIsoDate(startStr);
+            const endTime = parseIsoDate(endStr);
+
             if (!startTime) {
-                timer.textContent = "(00:00:00)";
+                timer.textContent = '(00:00:00)';
                 return;
             }
 
-            const endTime = parseIsoDate(endStr);
+            // Stop Live Timer when session has ended
+            if (!isOpenTime && endTime && now >= endTime) {
+                timer.textContent = '(EXPIRED)';
+
+                if (remainingElem) {
+                    remainingElem.textContent = '(EXPIRED)';
+                    remainingElem.style.color = '#b91c1c';
+                }
+
+                return;
+            }
             const timerKey = startStr + (endStr || '');
 
             // Standard Initial Calibration (Para lang sa bag-o gid nag-start nga session)
