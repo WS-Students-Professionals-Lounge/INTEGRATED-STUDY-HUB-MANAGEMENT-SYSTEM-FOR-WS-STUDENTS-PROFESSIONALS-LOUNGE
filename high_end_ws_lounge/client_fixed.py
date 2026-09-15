@@ -313,7 +313,7 @@ def inject_member_notifications():
         unread_reservation_notification_count=0
     )
 
-@main_bp.route("/api/notifications/membership/read", methods=["POST"])
+@auth_bp.route("/api/notifications/membership/read", methods=["POST"])
 @login_required
 def mark_membership_notifications_read():
     if current_user.role != "member":
