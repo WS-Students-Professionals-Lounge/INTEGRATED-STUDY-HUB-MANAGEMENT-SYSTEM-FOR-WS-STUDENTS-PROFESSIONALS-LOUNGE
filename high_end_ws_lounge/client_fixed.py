@@ -313,7 +313,7 @@ def inject_member_notifications():
         unread_reservation_notification_count=0
     )
 
-@auth_bp.route("/api/notifications/membership/read", methods=["POST"])
+@main_bp.route("/api/notifications/membership/read", methods=["POST"])
 @login_required
 def mark_membership_notifications_read():
     if current_user.role != "member":
@@ -488,42 +488,36 @@ def dashboard():
         .all()
     )
 
-        # Membership approval notifications
+    # Membership approval and renewal notifications
     membership_notifications = (
-    SoloPlan.query.filter(
-        SoloPlan.user_id == current_user.id,
-        SoloPlan.status.ilike("approved"),
-        or_(
-            SoloPlan.member_notification_seen == False,
-            SoloPlan.renewal_notification_seen == False
+        SoloPlan.query.filter(
+            SoloPlan.user_id == current_user.id,
+            SoloPlan.status.ilike("approved"),
+            or_(
+                SoloPlan.member_notification_seen == False,
+                SoloPlan.renewal_notification_seen == False
+            )
         )
-    )
-    .order_by(
-        func.coalesce(
-            SoloPlan.renewed_at,
-            SoloPlan.approved_at,
-            SoloPlan.created_at
-        ).desc()
-    )
-    .limit(10)
-    .all()
-    )
-
-    unread_membership_notifications = [
-        plan for plan in membership_notifications
-        if not plan.member_notification_seen
-    ]
-
-    unread_membership_notification_count = len(
-        unread_membership_notifications
+        .order_by(
+            func.coalesce(
+                SoloPlan.renewed_at,
+                SoloPlan.approved_at,
+                SoloPlan.created_at
+            ).desc()
+        )
+        .limit(10)
+        .all()
     )
 
-    # Mark approval notifications as seen after loading them
-    for plan in unread_membership_notifications:
-        plan.member_notification_seen = True
+    unread_membership_notification_count = 0
 
-    if unread_membership_notifications:
-        db.session.commit()
+    for plan in membership_notifications:
+        if not plan.member_notification_seen:
+            unread_membership_notification_count += 1
+
+        if plan.renewed_at and not plan.renewal_notification_seen:
+            unread_membership_notification_count += 1
+            
 
     # CALCULATE TOTAL SOLO HOURS (Safe Join & Status Check)
     try:
