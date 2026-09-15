@@ -912,6 +912,14 @@ def rooms():
             "success",
         )
         return redirect(url_for("main.rooms"))
+    
+    unread_confirmed_reservations = Reservation.query.filter(
+        Reservation.user_id == current_user.id,
+        Reservation.status.ilike("confirmed"),
+        Reservation.confirmation_notification_seen == False
+    ).order_by(
+        Reservation.start_time.desc()
+    ).limit(5).all()
 
     return render_template(
         "rooms.html",
@@ -920,7 +928,9 @@ def rooms():
         form=form,
         payment_info=payment_info,
         occupied_room_ids=occupied_room_ids,
-        room_pax_count=room_pax_count
+        room_pax_count=room_pax_count,
+        unread_confirmed_reservations=unread_confirmed_reservations
+
     )
 
 

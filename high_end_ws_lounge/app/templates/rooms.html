@@ -9,6 +9,70 @@
     <h2 class="page-title">Rooms & Reservations</h2>
     <p class="page-subtitle">Book your preferred space with ease</p>
 
+    <!-- Reservation Confirmation Popup -->
+    {% if unread_confirmed_reservations %}
+    <div id="reservation-confirmation-popup"
+         style="
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            width: 360px;
+            max-width: calc(100vw - 40px);
+         ">
+
+        {% for reservation in unread_confirmed_reservations %}
+        <div class="reservation-notification-item"
+             style="
+                background: #ffffff;
+                border-left: 4px solid #198754;
+                border-radius: 10px;
+                box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+                padding: 14px 16px;
+                margin-bottom: 10px;
+             ">
+
+            <div style="
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                gap: 10px;
+            ">
+                <strong style="color: #198754;">
+                    Reservation Confirmed
+                </strong>
+
+                <button
+                    type="button"
+                    onclick="this.closest('.reservation-notification-item').remove()"
+                    style="
+                        border: none;
+                        background: transparent;
+                        color: #999;
+                        font-size: 18px;
+                        cursor: pointer;
+                        padding: 0;
+                    ">
+                    &times;
+                </button>
+            </div>
+
+            <p style="margin: 6px 0 0; color: #444;">
+                Your reservation has been confirmed by the staff.
+            </p>
+
+            {% if reservation.room %}
+            <small style="color: #777;">
+                {{ reservation.room.name }}
+            </small>
+            {% endif %}
+
+        </div>
+        {% endfor %}
+
+    </div>
+    {% endif %}
+
    <!-- Form Errors Block -->
     {% if form and form.errors %}
         <div class="modern-alert alert-danger">
@@ -354,6 +418,39 @@
         </div>
     </div>
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+    const badge = document.getElementById('member-reservation-notif-badge');
+
+    if (!badge || badge.classList.contains('d-none')) {
+        return;
+    }
+
+    fetch('/api/notifications/reservations/read', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            ...(document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+                ? {
+                    'X-CSRFToken':
+                        document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                }
+                : {})
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            badge.textContent = '0';
+            badge.classList.add('d-none');
+        }
+    })
+    .catch(error => {
+        console.error('Failed to mark reservation notifications as read:', error);
+    });
+});
+</script>
 {% endblock %}
 
 <script type="application/json" id="paymentInfoData">{{ payment_info | tojson | safe }}</script>
