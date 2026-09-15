@@ -516,4 +516,78 @@ html[data-theme="dark"] .content-container {
     color: #e2e8f0;
 }
 
+/* =========================================
+   ADMIN DASHBOARD - DARK MODE
+   ========================================= */
+
+html[data-theme="dark"] .dashboard-wrapper,
+html[data-theme="dark"] .dashboard-container {
+    background: #0f172a;
+    color: #e2e8f0;
+}
+
+html[data-theme="dark"] .dashboard-card {
+    background: #1e293b;
+    color: #e2e8f0;
+    border-color: #334155;
+}
+
+html[data-theme="dark"] .dashboard-card h1,
+html[data-theme="dark"] .dashboard-card h2,
+html[data-theme="dark"] .dashboard-card h3,
+html[data-theme="dark"] .dashboard-card h4,
+html[data-theme="dark"] .dashboard-card h5 {
+    color: #f8fafc;
+}
+
+html[data-theme="dark"] .info-label,
+html[data-theme="dark"] .stat-label {
+    color: #94a3b8;
+}
+
+html[data-theme="dark"] .info-value,
+html[data-theme="dark"] .stat-value {
+    color: #f8fafc;
+}
+
+html[data-theme="dark"] .search-input,
+html[data-theme="dark"] input,
+html[data-theme="dark"] select,
+html[data-theme="dark"] textarea {
+    background: #1e293b;
+    color: #e2e8f0;
+    border-color: #475569;
+}
+
+html[data-theme="dark"] .search-input::placeholder,
+html[data-theme="dark"] input::placeholder,
+html[data-theme="dark"] textarea::placeholder {
+    color: #94a3b8;
+}
+
+html[data-theme="dark"] .waiting-list,
+html[data-theme="dark"] .waiting-list-card {
+    background: #1e293b;
+    color: #e2e8f0;
+    border-color: #334155;
+}
+
+html[data-theme="dark"] .room-card {
+    background: #1e293b;
+    color: #e2e8f0;
+    border-color: #334155;
+}
+
+html[data-theme="dark"] .room-card-header,
+html[data-theme="dark"] .room-card-body {
+    color: #e2e8f0;
+}
+
+html[data-theme="dark"] .occupants-card,
+html[data-theme="dark"] .common-area-occupants-card {
+    background: #1e293b;
+    color: #e2e8f0;
+    border-color: #334155;
+}
+
 }
