@@ -489,8 +489,13 @@ document.addEventListener('DOMContentLoaded', function () {
                 : {})
         }
     })
-    .then(response => response.json())
+    .then(response => {
+        console.log('Membership notification read status:', response.status);
+        return response.json();
+    })
     .then(data => {
+        console.log('Membership notification read response:', data);
+
         if (data.status === 'success') {
             badge.textContent = '0';
             badge.classList.add('d-none');

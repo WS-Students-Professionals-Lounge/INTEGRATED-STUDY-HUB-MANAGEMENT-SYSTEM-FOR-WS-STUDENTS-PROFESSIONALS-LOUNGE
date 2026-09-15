@@ -323,7 +323,7 @@ def mark_membership_notifications_read():
         }), 403
 
     # Mark approval notifications as read
-    SoloPlan.query.filter(
+    approval_updated = SoloPlan.query.filter(
         SoloPlan.user_id == current_user.id,
         SoloPlan.status.ilike("approved"),
         SoloPlan.member_notification_seen == False
@@ -332,14 +332,22 @@ def mark_membership_notifications_read():
         synchronize_session=False
     )
 
-    # Mark renewal notifications as read
-    SoloPlan.query.filter(
+    renewal_updated = SoloPlan.query.filter(
         SoloPlan.user_id == current_user.id,
         SoloPlan.status.ilike("approved"),
         SoloPlan.renewal_notification_seen == False
     ).update(
         {"renewal_notification_seen": True},
         synchronize_session=False
+    )
+
+    print(
+        "READ NOTIFICATION DEBUG:",
+        current_user.id,
+        "approval_updated=",
+        approval_updated,
+        "renewal_updated=",
+        renewal_updated
     )
 
     db.session.commit()
