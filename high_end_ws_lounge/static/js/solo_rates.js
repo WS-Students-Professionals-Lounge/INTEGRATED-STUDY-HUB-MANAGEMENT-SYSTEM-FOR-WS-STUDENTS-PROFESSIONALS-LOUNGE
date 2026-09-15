@@ -250,16 +250,20 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    function initMembershipCountdown() {
-        const countdownEl = document.getElementById('membership-countdown');
-        if (!countdownEl) return;
+        function initMembershipCountdown() {
+        const countdownEl = document.getElementById('membership-countdown');
+        if (!countdownEl) return;
 
-        // Check kon paused ang session kag kuhaon ang natipon nga natabilin nga seconds
-        const isPaused = countdownEl.dataset.isPaused === 'true';
-        const remainingSeconds = parseInt(countdownEl.dataset.remainingSeconds || '0', 10);
+        let remainingSeconds = 0;
+        let isPaused = false;
+        let intervalId = null;
 
         function formatSecondsToDHMS(totalSeconds) {
-            if (totalSeconds <= 0) return 'Expired';
+            totalSeconds = Math.max(0, Math.floor(totalSeconds));
+
+            if (totalSeconds <= 0) {
+                return 'Expired';
+            }
 
             const days = Math.floor(totalSeconds / 86400);
             const hours = Math.floor((totalSeconds % 86400) / 3600);
@@ -273,50 +277,167 @@ document.addEventListener("DOMContentLoaded", () => {
             if (days > 0) {
                 return `${days}d ${hoursStr}h ${minutesStr}m ${secondsStr}s`;
             }
+
             return `${hoursStr}h ${minutesStr}m ${secondsStr}s`;
         }
 
-        // KON PAUSED: Freeze ang countdown kag ipakita ang natipon nga natabilin nga oras
-        if (isPaused) {
-            countdownEl.textContent = `${formatSecondsToDHMS(remainingSeconds)} (PAUSED)`;
-            countdownEl.style.color = '#ffc107'; // Yellow/Orange color indicator
-            return;
+        async function syncMembershipCountdown() {
+            try {
+                const response = await fetch('/api/membership/current-session', {
+                    credentials: 'same-origin'
+                });
+
+                const data = await response.json();
+
+                if (!response.ok || data.status !== 'success') {
+                    countdownEl.textContent = 'No active session';
+                    countdownEl.style.color = '';
+                    return;
+                }
+
+                remainingSeconds = Number(data.remaining_seconds) || 0;
+                isPaused = Boolean(data.is_paused);
+
+                if (isPaused) {
+                    countdownEl.textContent =
+                        `${formatSecondsToDHMS(remainingSeconds)} (PAUSED)`;
+
+                    countdownEl.style.color = '#ffc107';
+                } else {
+                    countdownEl.textContent =
+                        formatSecondsToDHMS(remainingSeconds);
+
+                    countdownEl.style.color = '';
+                }
+
+            } catch (error) {
+                console.error('Failed to sync membership countdown:', error);
+                countdownEl.textContent = 'Unable to load';
+                countdownEl.style.color = '';
+            }
         }
 
-        let expiryISO = countdownEl.dataset.expiry;
-        if (!expiryISO) {
-        countdownEl.textContent = 'Not available';
-        return;
-        }
+        function startCountdown() {
+            if (intervalId) {
+                clearInterval(intervalId);
+            }
 
-        expiryISO = expiryISO.replace(' ', 'T');
-        const expiryTime = new Date(expiryISO).getTime();
+            intervalId = setInterval(() => {
 
-        if (isNaN(expiryTime)) {
-        countdownEl.textContent = 'Invalid Date';
-        return;
-        }
+                // PAUSED = freeze countdown
+                if (isPaused) {
+                    countdownEl.textContent =
+                        `${formatSecondsToDHMS(remainingSeconds)} (PAUSED)`;
 
-        const intervalId = setInterval(() => {
-            const now = Date.now();
-            const distance = expiryTime - now;
+                    countdownEl.style.color = '#ffc107';
+                    return;
+                }
 
-            if (distance <= 0) {
-                countdownEl.textContent = 'Expired';
-                countdownEl.style.color = '#dc3545';
-                clearInterval(intervalId);
-                return;
-            }
+                if (remainingSeconds <= 0) {
+                    countdownEl.textContent = 'Expired';
+                    countdownEl.style.color = '#dc3545';
 
-            const totalSeconds = Math.floor(distance / 1000);
-            countdownEl.textContent = formatSecondsToDHMS(totalSeconds);
-        }, 1000);
+                    clearInterval(intervalId);
+                    return;
+                }
+
+                remainingSeconds--;
+
+                countdownEl.textContent =
+                    formatSecondsToDHMS(remainingSeconds);
+
+                countdownEl.style.color = '';
+
+            }, 1000);
+        }
+
+        // Initial load
+        syncMembershipCountdown().then(() => {
+            startCountdown();
+        });
+
+        // Re-sync with backend every 5 seconds
+        // This keeps the countdown synchronized with the actual session state.
+        setInterval(() => {
+            syncMembershipCountdown();
+        }, 5000);
     }
 
-    initMembershipCountdown();
-    
-    // Load payment info and ensure it's ready before page is fully interactive
-    loadPaymentInfo().catch(err => {
-        console.error('Failed to load payment info:', err);
-    });
+    initMembershipCountdown();
+
+    // Load payment info and ensure it's ready before page is fully interactive
+    loadPaymentInfo().catch(err => {
+        console.error('Failed to load payment info:', err);
+    });
 });
+
+//         function initMembershipCountdown() {
+//         const countdownEl = document.getElementById('membership-countdown');
+//         if (!countdownEl) return;
+
+//         // Check kon paused ang session kag kuhaon ang natipon nga natabilin nga seconds
+//         const isPaused = countdownEl.dataset.isPaused === 'true';
+//         const remainingSeconds = parseInt(countdownEl.dataset.remainingSeconds || '0', 10);
+
+//         function formatSecondsToDHMS(totalSeconds) {
+//             if (totalSeconds <= 0) return 'Expired';
+
+//             const days = Math.floor(totalSeconds / 86400);
+//             const hours = Math.floor((totalSeconds % 86400) / 3600);
+//             const minutes = Math.floor((totalSeconds % 3600) / 60);
+//             const seconds = Math.floor(totalSeconds % 60);
+
+//             const hoursStr = hours.toString().padStart(2, '0');
+//             const minutesStr = minutes.toString().padStart(2, '0');
+//             const secondsStr = seconds.toString().padStart(2, '0');
+
+//             if (days > 0) {
+//                 return `${days}d ${hoursStr}h ${minutesStr}m ${secondsStr}s`;
+//             }
+//             return `${hoursStr}h ${minutesStr}m ${secondsStr}s`;
+//         }
+
+//         // KON PAUSED: Freeze ang countdown kag ipakita ang natipon nga natabilin nga oras
+//         if (isPaused) {
+//             countdownEl.textContent = `${formatSecondsToDHMS(remainingSeconds)} (PAUSED)`;
+//             countdownEl.style.color = '#ffc107'; // Yellow/Orange color indicator
+//             return;
+//         }
+
+//         let expiryISO = countdownEl.dataset.expiry;
+//         if (!expiryISO) {
+//         countdownEl.textContent = 'Not available';
+//         return;
+//         }
+
+//         expiryISO = expiryISO.replace(' ', 'T');
+//         const expiryTime = new Date(expiryISO).getTime();
+
+//         if (isNaN(expiryTime)) {
+//         countdownEl.textContent = 'Invalid Date';
+//         return;
+//         }
+
+//         const intervalId = setInterval(() => {
+//             const now = Date.now();
+//             const distance = expiryTime - now;
+
+//             if (distance <= 0) {
+//                 countdownEl.textContent = 'Expired';
+//                 countdownEl.style.color = '#dc3545';
+//                 clearInterval(intervalId);
+//                 return;
+//             }
+
+//             const totalSeconds = Math.floor(distance / 1000);
+//             countdownEl.textContent = formatSecondsToDHMS(totalSeconds);
+//         }, 1000);
+//     }
+
+//     initMembershipCountdown();
+//     
+//     // Load payment info and ensure it's ready before page is fully interactive
+//     loadPaymentInfo().catch(err => {
+//         console.error('Failed to load payment info:', err);
+//     });
+// });

@@ -1289,6 +1289,7 @@ def solo_rates():
 
     active_plan = active_membership
     remaining_days = expiration = None
+    session_start = None
 
     if active_plan and active_plan.expiry_date:
         expiration = active_plan.expiry_date
@@ -1297,6 +1298,11 @@ def solo_rates():
 
         diff = expiration - now_ph
         remaining_days = round(diff.total_seconds() / 86400, 1) if diff.total_seconds() > 0 else 0
+
+    if open_log and open_log.check_in_time:
+        session_start = open_log.check_in_time
+        if session_start.tzinfo is None:
+            session_start = ph_tz.localize(session_start)
 
     active_solo_plan = None
     if is_user_checked_in:
@@ -1432,6 +1438,7 @@ def solo_rates():
         active_plan=active_plan,
         remaining_days=remaining_days,
         expiration=expiration,
+        session_start=session_start,
         message=message,
         active_solo_plan=active_solo_plan,
         has_pending=has_pending,
@@ -1742,11 +1749,17 @@ def membership_current_session():
     # 4. EXACT NET ELAPSED CALCULATION
     raw_elapsed = (ref_time - check_in_dt).total_seconds()
     elapsed_seconds = max(0, int(raw_elapsed - accumulated_paused))
+
+    total_hours = float(membership.total_hours or 0)
+    total_seconds = int(total_hours * 3600)
+
+    remaining_seconds = max(0, total_seconds - elapsed_seconds)
     
     return jsonify({
         "status": "success",
         "check_in_time": check_in_dt.isoformat(),
         "elapsed_seconds": elapsed_seconds,
+        "remaining_seconds": remaining_seconds,
         "is_paused": is_paused,
         "membership_id": membership.id,
         "hours_left": membership.hours_left

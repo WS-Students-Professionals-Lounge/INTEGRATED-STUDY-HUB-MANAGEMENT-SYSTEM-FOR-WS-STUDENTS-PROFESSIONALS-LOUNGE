@@ -53,11 +53,11 @@
             </div>
             <div class="status-card-body">
                 {% if active_plan %}
-                    <p><strong>Plan Name:</strong> {{ active_plan.plan }}</p>
+                    <p><strong>Plan Name:</strong> {{ active_plan.plan_name }}</p>
                     <p>
                     <strong>Started:</strong> 
-                    {% if active_plan and active_plan.start_date %}
-                        {{ active_plan.start_date.strftime('%Y-%m-%d %I:%M %p') }}
+                    {% if session_start %}
+                        {{ session_start.strftime('%Y-%m-%d %I:%M %p') }}
                     {% else %}
                         N/A
                     {% endif %}
@@ -78,12 +78,9 @@
                     <p>
                         <strong>Countdown:</strong> 
                         <span id="membership-countdown" 
-                            data-expiry="{{ expiration.isoformat() if expiration else '' }}"
-                            data-is-paused="{{ 'true' if active_reservation and active_reservation.is_paused else 'false' }}"
-                            data-remaining-seconds="{{ active_reservation.remaining_seconds if active_reservation and active_reservation.remaining_seconds else 0 }}"
-                            style="font-weight: bold;">
+                            Loading...
                         </span>
-                    </p>                
+                    </p>          
                 {% else %}
                     <p>You do not have a currently active membership plan.</p>
                 {% endif %}
