@@ -508,6 +508,7 @@ class SoloPlan(db.Model):
     receipt_image = db.Column(db.String(255))
     created_at = db.Column(db.DateTime, default=lambda: datetime.utcnow() + timedelta(hours=8))
     approved_at = db.Column(db.DateTime, nullable=True)
+    renewed_at = db.Column(db.DateTime, nullable=True)
     expiry_date = db.Column(db.DateTime)
 
     is_paused = db.Column(db.Boolean, default=False)
@@ -521,6 +522,12 @@ class SoloPlan(db.Model):
     )
 
     member_notification_seen = db.Column(
+    db.Boolean,
+    default=False,
+    nullable=False
+    )
+
+    renewal_notification_seen = db.Column(
     db.Boolean,
     default=False,
     nullable=False

@@ -1678,6 +1678,8 @@ def renew_member():
             latest_plan.accumulated_paused_seconds = 0
             latest_plan.start_date = now_ph
             latest_plan.expiry_date = now_ph + timedelta(hours=fresh_hours)
+            latest_plan.renewed_at = now_ph
+            latest_plan.renewal_notification_seen = False
             latest_plan.updated_at = now_ph
 
         if membership:

@@ -291,6 +291,30 @@ def inject_member_notifications():
         unread_membership_notification_count=0
     )
 
+@auth_bp.route("/api/notifications/membership/read", methods=["POST"])
+@login_required
+def mark_membership_notifications_read():
+    if current_user.role != "member":
+        return jsonify({
+            "status": "error",
+            "message": "Unauthorized"
+        }), 403
+
+    SoloPlan.query.filter(
+        SoloPlan.user_id == current_user.id,
+        SoloPlan.status.ilike("approved"),
+        SoloPlan.member_notification_seen == False
+    ).update(
+        {"member_notification_seen": True},
+        synchronize_session=False
+    )
+
+    db.session.commit()
+
+    return jsonify({
+        "status": "success"
+    })
+
 
 def _expire_membership_if_needed(membership):
     if not membership or membership.status != 'active' or not membership.expiry_date:
