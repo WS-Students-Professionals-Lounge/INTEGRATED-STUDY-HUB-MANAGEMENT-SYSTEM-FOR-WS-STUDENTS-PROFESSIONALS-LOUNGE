@@ -53,7 +53,11 @@
                 <div class="dashboard-notification-content">
 
                     <div class="dashboard-notification-top">
-                        <strong>Membership Approved</strong>
+                        {% if notification.renewed_at and not notification.renewal_notification_seen %}
+                            <strong>Membership Renewed</strong>
+                        {% else %}
+                            <strong>Membership Approved</strong>
+                        {% endif %}
 
                         <button
                             type="button"
@@ -64,15 +68,26 @@
                         </button>
                     </div>
 
-                    <p>
-                        Your <strong>{{ notification.plan_name }}</strong> plan has been approved.
-                        Your session will start once the staff checks you in.
-                    </p>
+                    {% if notification.renewed_at and not notification.renewal_notification_seen %}
+                        <p>
+                            Your <strong>{{ notification.plan_name }}</strong> membership has been renewed.
+                            Your new session is ready and will start once the staff checks you in.
+                        </p>
+                    {% else %}
+                        <p>
+                            Your <strong>{{ notification.plan_name }}</strong> plan has been approved.
+                            Your session will start once the staff checks you in.
+                        </p>
+                    {% endif %}
 
-                    {% if notification.approved_at %}
-                    <small>
-                        {{ notification.approved_at.strftime('%b %d, %Y %I:%M %p') }}
-                    </small>
+                    {% if notification.renewed_at and not notification.renewal_notification_seen %}
+                        <small>
+                            {{ notification.renewed_at.strftime('%b %d, %Y %I:%M %p') }}
+                        </small>
+                    {% elif notification.approved_at %}
+                        <small>
+                            {{ notification.approved_at.strftime('%b %d, %Y %I:%M %p') }}
+                        </small>
                     {% endif %}
 
                 </div>

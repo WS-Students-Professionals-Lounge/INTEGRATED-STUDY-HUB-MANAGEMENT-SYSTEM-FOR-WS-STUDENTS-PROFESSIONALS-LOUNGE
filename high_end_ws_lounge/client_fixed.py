@@ -277,11 +277,21 @@ def get_admin_stats():
 @auth_bp.app_context_processor
 def inject_member_notifications():
     if current_user.is_authenticated and current_user.role == "member":
-        unread_membership_notification_count = SoloPlan.query.filter(
+        unread_approval_count = SoloPlan.query.filter(
             SoloPlan.user_id == current_user.id,
             SoloPlan.status.ilike("approved"),
             SoloPlan.member_notification_seen == False
         ).count()
+
+        unread_renewal_count = SoloPlan.query.filter(
+            SoloPlan.user_id == current_user.id,
+            SoloPlan.status.ilike("approved"),
+            SoloPlan.renewal_notification_seen == False
+        ).count()
+
+        unread_membership_notification_count = (
+            unread_approval_count + unread_renewal_count
+        )
 
         return dict(
             unread_membership_notification_count=unread_membership_notification_count
@@ -431,13 +441,23 @@ def dashboard():
 
         # Membership approval notifications
     membership_notifications = (
-        SoloPlan.query.filter(
-            SoloPlan.user_id == current_user.id,
-            SoloPlan.status.ilike("approved")
+    SoloPlan.query.filter(
+        SoloPlan.user_id == current_user.id,
+        SoloPlan.status.ilike("approved"),
+        or_(
+            SoloPlan.member_notification_seen == False,
+            SoloPlan.renewal_notification_seen == False
         )
-        .order_by(SoloPlan.created_at.desc())
-        .limit(10)
-        .all()
+    )
+    .order_by(
+        func.coalesce(
+            SoloPlan.renewed_at,
+            SoloPlan.approved_at,
+            SoloPlan.created_at
+        ).desc()
+    )
+    .limit(10)
+    .all()
     )
 
     unread_membership_notifications = [
