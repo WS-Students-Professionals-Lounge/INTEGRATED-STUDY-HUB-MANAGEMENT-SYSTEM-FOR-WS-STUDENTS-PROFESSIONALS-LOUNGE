@@ -412,44 +412,43 @@ textarea,
 }
     
     /* =========================================
-   THEME TOGGLE
+   THEME TOGGLE - ICON ONLY
    ========================================= */
 
 .theme-toggle-wrapper {
-    padding: 0 15px 5px;
+    display: flex;
+    justify-content: flex-end;
+    padding: 10px 15px;
 }
 
 .theme-toggle-btn {
-    width: 100%;
-    border: 1px solid #d9e1ec;
-    background: #f8f9ff;
-    color: #475569;
-    padding: 10px 15px;
-    border-radius: 12px;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    border: 1px solid #cbd5e1;
+    border-radius: 50%;
+    background: #ffffff;
+    color: #334155;
     display: flex;
     align-items: center;
-    gap: 12px;
-    font-weight: 500;
+    justify-content: center;
     cursor: pointer;
     transition: all 0.3s ease;
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
 }
 
 .theme-toggle-btn:hover {
-    background: #eef2ff;
+    transform: rotate(12deg);
+    background: #f8f9ff;
     color: #4361ee;
-    border-color: #c7d6f7;
+    border-color: #a5b4fc;
 }
 
 .theme-toggle-btn i {
-    width: 20px;
-    font-size: 1.1rem;
-    text-align: center;
+    font-size: 1rem;
 }
 
-.theme-toggle-btn span {
-    flex: 1;
-    text-align: left;
-}
+
 /* =========================================
    DARK MODE
    ========================================= */
@@ -507,6 +506,19 @@ html[data-theme="dark"] .theme-toggle-btn:hover {
     background: #334155;
     color: #f8fafc;
     border-color: #475569;
+}
+
+html[data-theme="dark"] .theme-toggle-btn {
+    background: #111827;
+    border-color: #475569;
+    color: #f8fafc;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+html[data-theme="dark"] .theme-toggle-btn:hover {
+    background: #1e293b;
+    border-color: #64748b;
+    color: #facc15;
 }
 
 html[data-theme="dark"] .main-wrapper {
