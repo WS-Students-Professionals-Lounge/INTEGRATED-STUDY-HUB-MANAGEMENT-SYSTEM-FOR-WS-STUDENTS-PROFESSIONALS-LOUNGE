@@ -28,6 +28,20 @@
                 </div>
             </div>
         </div>
+
+        <!-- THEME TOGGLE -->
+        <div class="theme-toggle-wrapper">
+            <button
+                type="button"
+                id="themeToggle"
+                class="theme-toggle-btn"
+                aria-label="Toggle light and dark mode"
+            >
+                <i class="fas fa-moon" id="themeToggleIcon"></i>
+                <span id="themeToggleText">Dark Mode</span>
+            </button>
+        </div>
+        
         <div class="sidebar-links">
             {% if current_user.is_authenticated %}
                 <a class="side-link {% if request.endpoint in ['main.dashboard', 'admin.dashboard'] %}active{% endif %}"

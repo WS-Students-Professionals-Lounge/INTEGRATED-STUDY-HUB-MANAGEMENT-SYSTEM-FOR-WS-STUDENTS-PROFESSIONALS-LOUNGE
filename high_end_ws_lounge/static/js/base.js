@@ -108,9 +108,13 @@ function initializeBaseJs() {
 }
 
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializeBaseJs);
+    document.addEventListener('DOMContentLoaded', function () {
+        initializeBaseJs();
+        initializeTheme();
+    });
 } else {
     initializeBaseJs();
+    initializeTheme();
 }
 
 /**
@@ -269,6 +273,53 @@ function confirmAction(titleOrText, textOrOptions, confirmText = 'Yes', cancelTe
         btnCancel.addEventListener('click', () => { overlay.remove(); resolve(false); });
         btnConfirm.addEventListener('click', () => { overlay.remove(); resolve(true); });
     });
-}
 
+        /**
+     * Light / Dark Mode
+     */
+    function initializeTheme() {
+        const themeToggle = document.getElementById('themeToggle');
+        const themeToggleIcon = document.getElementById('themeToggleIcon');
+        const themeToggleText = document.getElementById('themeToggleText');
+
+        if (!themeToggle) return;
+
+        const savedTheme = localStorage.getItem('theme') || 'light';
+
+        applyTheme(savedTheme);
+
+        themeToggle.addEventListener('click', function () {
+            const currentTheme =
+                document.documentElement.getAttribute('data-theme') || 'light';
+
+            const newTheme =
+                currentTheme === 'dark' ? 'light' : 'dark';
+
+            applyTheme(newTheme);
+            localStorage.setItem('theme', newTheme);
+        });
+
+        function applyTheme(theme) {
+            document.documentElement.setAttribute('data-theme', theme);
+
+            if (theme === 'dark') {
+                if (themeToggleIcon) {
+                    themeToggleIcon.className = 'fas fa-sun';
+                }
+
+                if (themeToggleText) {
+                    themeToggleText.textContent = 'Light Mode';
+                }
+            } else {
+                if (themeToggleIcon) {
+                    themeToggleIcon.className = 'fas fa-moon';
+                }
+
+                if (themeToggleText) {
+                    themeToggleText.textContent = 'Dark Mode';
+                }
+            }
+        }
+    }
+}
 

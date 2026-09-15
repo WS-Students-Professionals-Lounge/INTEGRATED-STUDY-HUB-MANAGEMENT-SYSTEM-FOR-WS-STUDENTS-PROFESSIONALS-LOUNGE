@@ -409,4 +409,111 @@ textarea,
     .profile-shell {
         grid-template-columns: 1fr;
     }
+    
+    /* =========================================
+   THEME TOGGLE
+   ========================================= */
+
+.theme-toggle-wrapper {
+    padding: 0 15px 5px;
+}
+
+.theme-toggle-btn {
+    width: 100%;
+    border: 1px solid #d9e1ec;
+    background: #f8f9ff;
+    color: #475569;
+    padding: 10px 15px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.theme-toggle-btn:hover {
+    background: #eef2ff;
+    color: #4361ee;
+    border-color: #c7d6f7;
+}
+
+.theme-toggle-btn i {
+    width: 20px;
+    font-size: 1.1rem;
+    text-align: center;
+}
+
+.theme-toggle-btn span {
+    flex: 1;
+    text-align: left;
+}
+/* =========================================
+   DARK MODE
+   ========================================= */
+
+html[data-theme="dark"] {
+    background: #0f172a;
+    color: #e2e8f0;
+}
+
+html[data-theme="dark"] body {
+    background: #0f172a;
+    color: #e2e8f0;
+}
+
+html[data-theme="dark"] .sidebar {
+    background: #111827;
+    border-right-color: #1f2937;
+    box-shadow: 2px 0 12px rgba(0, 0, 0, 0.35);
+}
+
+html[data-theme="dark"] .sidebar-header {
+    border-bottom-color: #1f2937;
+}
+
+html[data-theme="dark"] .logo-main-title {
+    color: #f1f5f9;
+}
+
+html[data-theme="dark"] .logo-sub-header {
+    color: #94a3b8;
+}
+
+html[data-theme="dark"] .side-link {
+    color: #cbd5e1;
+}
+
+html[data-theme="dark"] .side-link:hover {
+    background: #1e293b;
+    color: #93c5fd;
+}
+
+html[data-theme="dark"] .side-link.active {
+    background: #1e293b;
+    color: #93c5fd;
+    border-color: #334155;
+}
+
+html[data-theme="dark"] .theme-toggle-btn {
+    background: #1e293b;
+    border-color: #334155;
+    color: #e2e8f0;
+}
+
+html[data-theme="dark"] .theme-toggle-btn:hover {
+    background: #334155;
+    color: #f8fafc;
+    border-color: #475569;
+}
+
+html[data-theme="dark"] .main-wrapper {
+    background: #0f172a;
+}
+
+html[data-theme="dark"] .content-container {
+    color: #e2e8f0;
+}
+
 }
