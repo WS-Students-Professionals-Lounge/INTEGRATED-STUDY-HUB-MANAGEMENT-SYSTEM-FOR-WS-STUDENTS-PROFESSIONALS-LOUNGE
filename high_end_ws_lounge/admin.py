@@ -2703,34 +2703,123 @@ def common_area_occupants():
     if redirect_response:
         return redirect_response
 
+    ph_tz = pytz.timezone("Asia/Manila")
+    now_ph = datetime.now(ph_tz)
+
     checked_in = db.session.query(Membership).filter(
         Membership.is_checked_in == True
     ).all()
-    
+
     occupants = []
+
     for membership in checked_in:
         _expire_membership_if_needed(membership)
+
         if membership.status != "active" or not membership.is_checked_in:
             continue
 
         active_log = membership.attendance_logs.filter(
             AttendanceLog.check_out_time.is_(None)
         ).first()
-        
+
         if active_log and active_log.check_in_time:
-            formatted_check_in = active_log.check_in_time.strftime("%I:%M %p")
-            
-            epoch_time_ms = int(active_log.check_in_time.timestamp() * 1000)
+            check_in_dt = active_log.check_in_time
+
+            if check_in_dt.tzinfo is None:
+                check_in_dt = ph_tz.localize(check_in_dt)
+
+            # Check paused state from AttendanceLog and Membership
+            session_is_paused = bool(
+                getattr(active_log, "is_paused", False)
+            )
+
+            membership_is_paused = bool(
+                getattr(membership, "is_paused", False)
+            )
+
+            is_paused = session_is_paused or membership_is_paused
+
+            # Get pause timestamp
+            paused_at = (
+                getattr(active_log, "paused_at", None)
+                or getattr(membership, "paused_at", None)
+            )
+
+            if paused_at and paused_at.tzinfo is None:
+                paused_at = ph_tz.localize(paused_at)
+
+            # Get previously accumulated paused seconds
+            accumulated_paused = (
+                getattr(active_log, "accumulated_paused_seconds", 0)
+                or getattr(membership, "accumulated_paused_seconds", 0)
+                or 0
+            )
+
+            # Calculate current pause duration if currently paused
+            current_pause_seconds = 0
+
+            if is_paused and paused_at:
+                current_pause_seconds = max(
+                    0,
+                    int((now_ph - paused_at).total_seconds())
+                )
+
+            # Total pause duration including the current pause
+            total_pause_seconds = (
+                accumulated_paused + current_pause_seconds
+            )
+
+            # Freeze Time Used while paused
+            if is_paused and paused_at:
+                reference_time = paused_at
+            else:
+                reference_time = now_ph
+
+            raw_elapsed = (
+                reference_time - check_in_dt
+            ).total_seconds()
+
+            elapsed_seconds = max(
+                0,
+                int(raw_elapsed - accumulated_paused)
+            )
+
+            # Calculate adjusted end time
+            adjusted_end_time = None
+
+            if membership.expiry_date:
+                expiry_dt = membership.expiry_date
+
+                if expiry_dt.tzinfo is None:
+                    expiry_dt = ph_tz.localize(expiry_dt)
+
+                adjusted_end_time = (
+                    expiry_dt +
+                    timedelta(seconds=total_pause_seconds)
+                )
+
+            formatted_check_in = check_in_dt.strftime("%I:%M %p")
+
+            epoch_time_ms = int(
+                check_in_dt.timestamp() * 1000
+            )
 
             occupants.append({
                 "id": membership.id,
                 "name": membership.user.name,
-                "check_in_time": active_log.check_in_time.isoformat(),
+                "check_in_time": check_in_dt.isoformat(),
                 "check_in_ms": epoch_time_ms,
                 "formatted_check_in": formatted_check_in,
-                "hours_left": membership.hours_left
+                "elapsed_seconds": elapsed_seconds,
+                "is_paused": is_paused,
+                "hours_left": membership.hours_left,
+                "end_time": (
+                    adjusted_end_time.isoformat()
+                    if adjusted_end_time
+                    else None
+                )
             })
-    
+
     return jsonify({
         "status": "success",
         "count": len(occupants),

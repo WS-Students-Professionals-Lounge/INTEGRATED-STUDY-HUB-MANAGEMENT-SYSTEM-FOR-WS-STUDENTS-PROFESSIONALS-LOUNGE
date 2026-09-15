@@ -328,11 +328,34 @@ function renderOccupants(list) {
         const item = document.createElement('div');
         item.className = 'occupant-item';
         
-        // Gamit sang member.check_in_ms para sa exact timer accuracy
+        const formattedEndTime = member.end_time
+            ? new Date(member.end_time).toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true
+            })
+            : 'N/A';
+
         item.innerHTML = `
             <div class="occupant-name">${member.name}</div>
-            <div class="occupant-time">Checked in: ${member.formatted_check_in || 'N/A'}</div>
-            <div class="occupant-elapsed">Time Used: <span class="time-used" data-startms="${member.check_in_ms || ''}" data-starttime="${member.check_in_time}">00:00:00</span></div>
+
+            <div class="occupant-time">
+                Checked in: ${member.formatted_check_in || 'N/A'}
+            </div>
+
+            <div class="occupant-time">
+                Ends: ${formattedEndTime}
+            </div>
+
+            <div class="occupant-elapsed">
+                Time Used:
+                <span
+                    class="time-used"
+                    data-elapsed-seconds="${member.elapsed_seconds || 0}"
+                    data-is-paused="${member.is_paused ? 'true' : 'false'}"
+                    data-synced-at="${Date.now()}"
+                >00:00:00</span>
+            </div>
         `;
         container.appendChild(item);
     });
@@ -341,18 +364,35 @@ function renderOccupants(list) {
 }
 
 function updateOccupantTimers() {
-    const now = Date.now();
     document.querySelectorAll('.time-used').forEach(el => {
-        const startMs = parseInt(el.dataset.startms);
-        let startTime = !isNaN(startMs) ? startMs : new Date(el.dataset.starttime).getTime();
+        let baseSeconds =
+            parseInt(el.dataset.elapsedSeconds || '0', 10);
 
-        if (isNaN(startTime)) {
-            el.textContent = '00:00:00';
+        if (isNaN(baseSeconds) || baseSeconds < 0) {
+            baseSeconds = 0;
+        }
+
+        const isPaused =
+            el.dataset.isPaused === 'true';
+
+        if (isPaused) {
+            el.textContent =
+                `${formatDuration(baseSeconds)} (PAUSED)`;
             return;
         }
 
-        const elapsedSeconds = Math.max(0, Math.floor((now - startTime) / 1000));
-        el.textContent = formatDuration(elapsedSeconds);
+        const syncedAt =
+            parseInt(el.dataset.syncedAt || Date.now(), 10);
+
+        const elapsedSinceSync = Math.floor(
+            (Date.now() - syncedAt) / 1000
+        );
+
+        const displaySeconds =
+            baseSeconds + Math.max(0, elapsedSinceSync);
+
+        el.textContent =
+            formatDuration(displaySeconds);
     });
 }
 
