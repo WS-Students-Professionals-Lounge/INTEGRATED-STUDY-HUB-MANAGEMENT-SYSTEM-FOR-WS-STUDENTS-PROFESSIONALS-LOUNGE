@@ -409,6 +409,7 @@ textarea,
     .profile-shell {
         grid-template-columns: 1fr;
     }
+}
     
     /* =========================================
    THEME TOGGLE
@@ -588,6 +589,4 @@ html[data-theme="dark"] .common-area-occupants-card {
     background: #1e293b;
     color: #e2e8f0;
     border-color: #334155;
-}
-
 }
