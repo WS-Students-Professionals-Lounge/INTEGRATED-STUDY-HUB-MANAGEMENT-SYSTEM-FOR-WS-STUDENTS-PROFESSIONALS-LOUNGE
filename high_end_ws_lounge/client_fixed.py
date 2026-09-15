@@ -322,7 +322,6 @@ def mark_membership_notifications_read():
             "message": "Unauthorized"
         }), 403
 
-    # Mark approval notifications as read
     approval_updated = SoloPlan.query.filter(
         SoloPlan.user_id == current_user.id,
         SoloPlan.status.ilike("approved"),
@@ -341,20 +340,15 @@ def mark_membership_notifications_read():
         synchronize_session=False
     )
 
-    print(
-        "READ NOTIFICATION DEBUG:",
-        current_user.id,
-        "approval_updated=",
-        approval_updated,
-        "renewal_updated=",
-        renewal_updated
-    )
-
     db.session.commit()
 
     return jsonify({
-        "status": "success"
+        "status": "success",
+        "user_id": current_user.id,
+        "approval_updated": approval_updated,
+        "renewal_updated": renewal_updated
     })
+
 
 @main_bp.route("/api/notifications/reservations/read", methods=["POST"])
 @login_required

@@ -489,12 +489,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 : {})
         }
     })
-    .then(response => {
-        console.log('Membership notification read status:', response.status);
-        return response.json();
-    })
+    .then(response => response.json())
     .then(data => {
-        console.log('Membership notification read response:', data);
+        console.log('Membership notification read result:', data);
 
         if (data.status === 'success') {
             badge.textContent = '0';
