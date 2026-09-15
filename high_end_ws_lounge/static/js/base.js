@@ -269,63 +269,7 @@ function confirmAction(titleOrText, textOrOptions, confirmText = 'Yes', cancelTe
         btnCancel.addEventListener('click', () => { overlay.remove(); resolve(false); });
         btnConfirm.addEventListener('click', () => { overlay.remove(); resolve(true); });
     });
-
-    // =========================================
-    // LIGHT / DARK MODE TOGGLE
-    // =========================================
-
-    function setupThemeToggle() {
-        const toggle = document.getElementById('themeToggle');
-        const icon = document.getElementById('themeToggleIcon');
-        const text = document.getElementById('themeToggleText');
-
-        if (!toggle) {
-            console.log('Theme toggle button not found.');
-            return;
-        }
-
-        function applyTheme(theme) {
-            document.documentElement.setAttribute('data-theme', theme);
-
-            if (theme === 'dark') {
-                if (icon) {
-                    icon.className = 'fas fa-sun';
-                }
-
-                if (text) {
-                    text.textContent = 'Light Mode';
-                }
-            } else {
-                if (icon) {
-                    icon.className = 'fas fa-moon';
-                }
-
-                if (text) {
-                    text.textContent = 'Dark Mode';
-                }
-            }
-        }
-
-        const savedTheme = localStorage.getItem('theme') || 'light';
-
-        applyTheme(savedTheme);
-
-        toggle.addEventListener('click', function () {
-            const currentTheme =
-                document.documentElement.getAttribute('data-theme') || 'light';
-
-            const newTheme =
-                currentTheme === 'dark' ? 'light' : 'dark';
-
-            applyTheme(newTheme);
-            localStorage.setItem('theme', newTheme);
-        });
-    }
-
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', setupThemeToggle);
-    } else {
-        setupThemeToggle();
-    }
+    
 }
+
 
