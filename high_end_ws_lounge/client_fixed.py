@@ -313,7 +313,7 @@ def inject_member_notifications():
         unread_reservation_notification_count=0
     )
 
-@auth_bp.route("/api/notifications/membership/read", methods=["POST"])
+@main_bp.route("/api/notifications/membership/read", methods=["POST"])
 @login_required
 def mark_membership_notifications_read():
     if current_user.role != "member":
@@ -348,7 +348,7 @@ def mark_membership_notifications_read():
         "status": "success"
     })
 
-@auth_bp.route("/api/notifications/reservations/read", methods=["POST"])
+@main_bp.route("/api/notifications/reservations/read", methods=["POST"])
 @login_required
 def mark_reservation_notifications_read():
     if current_user.role != "member":
