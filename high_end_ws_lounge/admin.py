@@ -1534,6 +1534,7 @@ def approve_membership(req_id):
     plan.status = "approved"
     plan.approved_at = datetime.utcnow() + timedelta(hours=8)
     plan.member_notification_seen = False
+    plan.renewal_notification_seen = True
 
     ph_tz = pytz.timezone("Asia/Manila")
     now_ph = datetime.now(ph_tz)
@@ -1792,6 +1793,7 @@ def approve_solo_plan(plan_id):
     plan.status = "approved"
     plan.approved_at = datetime.utcnow() + timedelta(hours=8)
     plan.member_notification_seen = False
+    plan.renewal_notification_seen = True
     plan.approved_by_id = current_user.id
     plan.set_expiry_date()  # Set expiry date on SoloPlan
 
