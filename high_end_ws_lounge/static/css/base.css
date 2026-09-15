@@ -497,18 +497,6 @@ html[data-theme="dark"] .side-link.active {
 }
 
 html[data-theme="dark"] .theme-toggle-btn {
-    background: #1e293b;
-    border-color: #334155;
-    color: #e2e8f0;
-}
-
-html[data-theme="dark"] .theme-toggle-btn:hover {
-    background: #334155;
-    color: #f8fafc;
-    border-color: #475569;
-}
-
-html[data-theme="dark"] .theme-toggle-btn {
     background: #111827;
     border-color: #475569;
     color: #f8fafc;
@@ -530,75 +518,193 @@ html[data-theme="dark"] .content-container {
 }
 
 /* =========================================
-   ADMIN DASHBOARD - DARK MODE
+   GLOBAL DARK MODE - SHARED ADMIN UI
    ========================================= */
 
-html[data-theme="dark"] .dashboard-wrapper,
-html[data-theme="dark"] .dashboard-container {
+/* Main page areas */
+html[data-theme="dark"] body {
     background: #0f172a;
     color: #e2e8f0;
 }
 
-html[data-theme="dark"] .dashboard-card {
+html[data-theme="dark"] .main-wrapper {
+    background: #0f172a;
+    color: #e2e8f0;
+}
+
+html[data-theme="dark"] .content-container {
+    color: #e2e8f0;
+}
+
+/* Shared white cards / panels */
+html[data-theme="dark"] .card,
+html[data-theme="dark"] .card-body,
+html[data-theme="dark"] .reservations-section,
+html[data-theme="dark"] .solo-section,
+html[data-theme="dark"] .rate-card,
+html[data-theme="dark"] .status-card,
+html[data-theme="dark"] .plan-card,
+html[data-theme="dark"] .payment-method-card,
+html[data-theme="dark"] .staff-card,
+html[data-theme="dark"] .request-card,
+html[data-theme="dark"] .member-list-card,
+html[data-theme="dark"] .report-card,
+html[data-theme="dark"] .reservations-container,
+html[data-theme="dark"] .members-main-wrapper {
     background: #1e293b;
     color: #e2e8f0;
-    border-color: #334155;
+    border-color: #334155 !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22) !important;
 }
 
-html[data-theme="dark"] .dashboard-card h1,
-html[data-theme="dark"] .dashboard-card h2,
-html[data-theme="dark"] .dashboard-card h3,
-html[data-theme="dark"] .dashboard-card h4,
-html[data-theme="dark"] .dashboard-card h5 {
+/* Titles */
+html[data-theme="dark"] .dashboard-header h1,
+html[data-theme="dark"] .section-title,
+html[data-theme="dark"] .page-title,
+html[data-theme="dark"] .reservations-title,
+html[data-theme="dark"] .payment-settings-title,
+html[data-theme="dark"] .reports-title,
+html[data-theme="dark"] .staff-title,
+html[data-theme="dark"] .card-title {
     color: #f8fafc;
 }
 
-html[data-theme="dark"] .info-label,
-html[data-theme="dark"] .stat-label {
-    color: #94a3b8;
+/* General text */
+html[data-theme="dark"] .text-muted {
+    color: #94a3b8 !important;
 }
 
-html[data-theme="dark"] .info-value,
-html[data-theme="dark"] .stat-value {
-    color: #f8fafc;
+html[data-theme="dark"] .section-subtext,
+html[data-theme="dark"] .section-description,
+html[data-theme="dark"] .detail-text {
+    color: #cbd5e1;
 }
 
-html[data-theme="dark"] .search-input,
-html[data-theme="dark"] input,
+html[data-theme="dark"] .form-label {
+    color: #e2e8f0;
+}
+
+/* Forms */
+html[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]),
 html[data-theme="dark"] select,
-html[data-theme="dark"] textarea {
+html[data-theme="dark"] textarea,
+html[data-theme="dark"] .form-control,
+html[data-theme="dark"] .form-select,
+html[data-theme="dark"] .modern-input,
+html[data-theme="dark"] .modern-select,
+html[data-theme="dark"] .form-input,
+html[data-theme="dark"] .form-textarea,
+html[data-theme="dark"] .search-input,
+html[data-theme="dark"] .filter-input,
+html[data-theme="dark"] .list-search-box input,
+html[data-theme="dark"] .search-box input {
     background: #1e293b;
     color: #e2e8f0;
     border-color: #475569;
 }
 
-html[data-theme="dark"] .search-input::placeholder,
 html[data-theme="dark"] input::placeholder,
-html[data-theme="dark"] textarea::placeholder {
+html[data-theme="dark"] textarea::placeholder,
+html[data-theme="dark"] .search-input::placeholder {
     color: #94a3b8;
 }
 
-html[data-theme="dark"] .waiting-list,
-html[data-theme="dark"] .waiting-list-card {
+html[data-theme="dark"] input:focus,
+html[data-theme="dark"] select:focus,
+html[data-theme="dark"] textarea:focus,
+html[data-theme="dark"] .form-control:focus,
+html[data-theme="dark"] .form-select:focus {
+    background: #1e293b;
+    color: #f8fafc;
+    border-color: #60a5fa;
+}
+
+/* Tables */
+html[data-theme="dark"] .table {
+    color: #e2e8f0;
+    background: #1e293b;
+}
+
+html[data-theme="dark"] .table thead th,
+html[data-theme="dark"] .custom-table thead th,
+html[data-theme="dark"] .staff-table thead th {
+    background: #172033;
+    color: #f8fafc;
+    border-color: #334155;
+}
+
+html[data-theme="dark"] .table tbody td,
+html[data-theme="dark"] .custom-table tbody td,
+html[data-theme="dark"] .staff-table tbody td,
+html[data-theme="dark"] .records-table tbody td,
+html[data-theme="dark"] .attendance-table tbody td {
     background: #1e293b;
     color: #e2e8f0;
     border-color: #334155;
 }
 
-html[data-theme="dark"] .room-card {
+/* Table wrappers */
+html[data-theme="dark"] .table-responsive,
+html[data-theme="dark"] .spreadsheet-table,
+html[data-theme="dark"] .summary-table {
+    color: #e2e8f0;
+}
+
+/* Tabs */
+html[data-theme="dark"] .tabs-nav {
+    border-bottom-color: #334155;
+}
+
+html[data-theme="dark"] .tab-btn {
+    color: #cbd5e1;
+}
+
+html[data-theme="dark"] .tab-btn.active {
+    color: #93c5fd;
+    background: #1e293b;
+    border-color: #334155;
+}
+
+html[data-theme="dark"] .member-tabs .nav-link {
+    color: #cbd5e1;
+}
+
+html[data-theme="dark"] .member-tabs .nav-link.active {
+    color: #93c5fd;
+    background: #1e293b;
+    border-color: #334155;
+}
+
+/* Modals */
+html[data-theme="dark"] .modal-container,
+html[data-theme="dark"] .modal-content,
+html[data-theme="dark"] .modal-header,
+html[data-theme="dark"] .modal-body,
+html[data-theme="dark"] .modal-footer,
+html[data-theme="dark"] .modal-form-side,
+html[data-theme="dark"] .modal-preview-side,
+html[data-theme="dark"] .receipt-modal-content {
     background: #1e293b;
     color: #e2e8f0;
     border-color: #334155;
 }
 
-html[data-theme="dark"] .room-card-header,
-html[data-theme="dark"] .room-card-body {
+html[data-theme="dark"] .modal-header,
+html[data-theme="dark"] .modal-footer {
+    border-color: #334155;
+}
+
+/* Common reservation/member/report page surfaces */
+html[data-theme="dark"] .reservation-page-admin-thq-group42-elm,
+html[data-theme="dark"] .reservation-page-admin-thq-reservation-form-elm,
+html[data-theme="dark"] .reservation-page-admin-thq-reservation-details-elm,
+html[data-theme="dark"] .summary-details-list {
     color: #e2e8f0;
 }
 
-html[data-theme="dark"] .occupants-card,
-html[data-theme="dark"] .common-area-occupants-card {
-    background: #1e293b;
-    color: #e2e8f0;
-    border-color: #334155;
+/* Common borders/dividers */
+html[data-theme="dark"] hr,
+html[data-theme="dark"] .waiting-header,
+html[data-theme="dark"] .section-header {
+    border-color: #334155 !important;
 }
