@@ -277,16 +277,26 @@ def get_admin_stats():
 @auth_bp.app_context_processor
 def inject_member_notifications():
     if current_user.is_authenticated and current_user.role == "member":
+
+        # Membership approval notifications
         unread_approval_count = SoloPlan.query.filter(
             SoloPlan.user_id == current_user.id,
             SoloPlan.status.ilike("approved"),
             SoloPlan.member_notification_seen == False
         ).count()
 
+        # Membership renewal notifications
         unread_renewal_count = SoloPlan.query.filter(
             SoloPlan.user_id == current_user.id,
             SoloPlan.status.ilike("approved"),
             SoloPlan.renewal_notification_seen == False
+        ).count()
+
+        # Confirmed room reservation notifications
+        unread_reservation_notification_count = Reservation.query.filter(
+            Reservation.user_id == current_user.id,
+            Reservation.status.ilike("confirmed"),
+            Reservation.confirmation_notification_seen == False
         ).count()
 
         unread_membership_notification_count = (
@@ -294,11 +304,13 @@ def inject_member_notifications():
         )
 
         return dict(
-            unread_membership_notification_count=unread_membership_notification_count
+            unread_membership_notification_count=unread_membership_notification_count,
+            unread_reservation_notification_count=unread_reservation_notification_count
         )
 
     return dict(
-        unread_membership_notification_count=0
+        unread_membership_notification_count=0,
+        unread_reservation_notification_count=0
     )
 
 @auth_bp.route("/api/notifications/membership/read", methods=["POST"])
@@ -310,12 +322,47 @@ def mark_membership_notifications_read():
             "message": "Unauthorized"
         }), 403
 
+    # Mark approval notifications as read
     SoloPlan.query.filter(
         SoloPlan.user_id == current_user.id,
         SoloPlan.status.ilike("approved"),
         SoloPlan.member_notification_seen == False
     ).update(
         {"member_notification_seen": True},
+        synchronize_session=False
+    )
+
+    # Mark renewal notifications as read
+    SoloPlan.query.filter(
+        SoloPlan.user_id == current_user.id,
+        SoloPlan.status.ilike("approved"),
+        SoloPlan.renewal_notification_seen == False
+    ).update(
+        {"renewal_notification_seen": True},
+        synchronize_session=False
+    )
+
+    db.session.commit()
+
+    return jsonify({
+        "status": "success"
+    })
+
+@auth_bp.route("/api/notifications/reservations/read", methods=["POST"])
+@login_required
+def mark_reservation_notifications_read():
+    if current_user.role != "member":
+        return jsonify({
+            "status": "error",
+            "message": "Unauthorized"
+        }), 403
+
+    Reservation.query.filter(
+        Reservation.user_id == current_user.id,
+        Reservation.status.ilike("confirmed"),
+        Reservation.confirmation_notification_seen == False
+    ).update(
+        {"confirmation_notification_seen": True},
         synchronize_session=False
     )
 
