@@ -708,3 +708,209 @@ html[data-theme="dark"] .waiting-header,
 html[data-theme="dark"] .section-header {
     border-color: #334155 !important;
 }
+
+/* =========================================================
+   MEMBER SIDE - DARK MODE
+   ========================================================= */
+
+html[data-theme="dark"] .dashboard-wrapper,
+html[data-theme="dark"] .timelog-wrapper,
+html[data-theme="dark"] .rooms-container,
+html[data-theme="dark"] .profile-page-shell,
+html[data-theme="dark"] .solo-page {
+    background: #0f172a;
+    color: #e2e8f0;
+}
+
+/* Member cards / panels */
+html[data-theme="dark"] .profile-card,
+html[data-theme="dark"] .profile-summary,
+html[data-theme="dark"] .stat-card,
+html[data-theme="dark"] .solo-plan-card,
+html[data-theme="dark"] .membership-status-card,
+html[data-theme="dark"] .log-stat-card,
+html[data-theme="dark"] .control-container,
+html[data-theme="dark"] .history-card,
+html[data-theme="dark"] .room-list-card,
+html[data-theme="dark"] .reservation-form-card,
+html[data-theme="dark"] .booking-summary-card,
+html[data-theme="dark"] .payment-info-panel,
+html[data-theme="dark"] .plan-comparison-card,
+html[data-theme="dark"] .plan-summary-card,
+html[data-theme="dark"] .modal-card {
+    background: #1e293b;
+    color: #e2e8f0;
+    border-color: #334155;
+}
+
+/* Headers / titles */
+html[data-theme="dark"] .dashboard-header h1,
+html[data-theme="dark"] .welcome-text,
+html[data-theme="dark"] .page-title,
+html[data-theme="dark"] .page-subtitle,
+html[data-theme="dark"] .profile-page-header h1,
+html[data-theme="dark"] .solo-header h2,
+html[data-theme="dark"] .stat-label,
+html[data-theme="dark"] .stat-number,
+html[data-theme="dark"] .info-label,
+html[data-theme="dark"] .info-value,
+html[data-theme="dark"] .history-item .label,
+html[data-theme="dark"] .history-item .value {
+    color: #e2e8f0;
+}
+
+/* General member text */
+html[data-theme="dark"] .dashboard-wrapper p,
+html[data-theme="dark"] .timelog-wrapper p,
+html[data-theme="dark"] .rooms-container p,
+html[data-theme="dark"] .profile-page-shell p,
+html[data-theme="dark"] .solo-page p {
+    color: #cbd5e1;
+}
+
+html[data-theme="dark"] .text-muted {
+    color: #94a3b8 !important;
+}
+
+/* Forms */
+html[data-theme="dark"] input,
+html[data-theme="dark"] select,
+html[data-theme="dark"] textarea,
+html[data-theme="dark"] .form-control,
+html[data-theme="dark"] .form-select,
+html[data-theme="dark"] .modern-input,
+html[data-theme="dark"] .modern-select,
+html[data-theme="dark"] .profile-card .form-control,
+html[data-theme="dark"] .search-box input,
+html[data-theme="dark"] #reservationSearch,
+html[data-theme="dark"] #dashboardSearch,
+html[data-theme="dark"] #filter-date,
+html[data-theme="dark"] #filter-status,
+html[data-theme="dark"] .filter-group select {
+    background: #0f172a;
+    color: #e2e8f0;
+    border-color: #475569;
+}
+
+html[data-theme="dark"] input::placeholder,
+html[data-theme="dark"] textarea::placeholder,
+html[data-theme="dark"] .search-box input::placeholder {
+    color: #64748b;
+}
+
+html[data-theme="dark"] .form-label-modern,
+html[data-theme="dark"] .profile-card .form-label {
+    color: #cbd5e1;
+}
+
+/* Tables */
+html[data-theme="dark"] .modern-table,
+html[data-theme="dark"] .attendance-table,
+html[data-theme="dark"] .booking-table,
+html[data-theme="dark"] .plan-table {
+    background: #1e293b;
+    color: #e2e8f0;
+}
+
+html[data-theme="dark"] .modern-table th,
+html[data-theme="dark"] .modern-table td,
+html[data-theme="dark"] .attendance-table th,
+html[data-theme="dark"] .attendance-table td,
+html[data-theme="dark"] .booking-table th,
+html[data-theme="dark"] .booking-table td,
+html[data-theme="dark"] .plan-table th,
+html[data-theme="dark"] .plan-table td {
+    background: #1e293b;
+    color: #e2e8f0;
+    border-color: #334155;
+}
+
+html[data-theme="dark"] .table-responsive {
+    background: #1e293b;
+}
+
+/* History items */
+html[data-theme="dark"] .history-item {
+    background: #1e293b;
+    color: #e2e8f0;
+    border-color: #334155;
+}
+
+/* Notifications */
+html[data-theme="dark"] .dashboard-notifications {
+    background: #1e293b;
+    color: #e2e8f0;
+    border-color: #334155;
+}
+
+/* Modals */
+html[data-theme="dark"] .payment-modal-overlay,
+html[data-theme="dark"] .custom-modal {
+    background: rgba(0, 0, 0, 0.65);
+}
+
+html[data-theme="dark"] .payment-modal-content,
+html[data-theme="dark"] .custom-modal .modal-content,
+html[data-theme="dark"] .modal-card {
+    background: #1e293b;
+    color: #e2e8f0;
+    border-color: #334155;
+}
+
+html[data-theme="dark"] .modal-payment-details,
+html[data-theme="dark"] .modal-actions {
+    color: #e2e8f0;
+}
+
+/* Preserve modal text hierarchy */
+html[data-theme="dark"] .modal-header,
+html[data-theme="dark"] .modal-body,
+html[data-theme="dark"] .modal-footer {
+    color: #e2e8f0;
+    border-color: #334155;
+}
+
+/* Common borders / dividers */
+html[data-theme="dark"] .dashboard-wrapper hr,
+html[data-theme="dark"] .timelog-wrapper hr,
+html[data-theme="dark"] .rooms-container hr,
+html[data-theme="dark"] .profile-page-shell hr,
+html[data-theme="dark"] .solo-page hr {
+    border-color: #334155;
+}
+
+/* Room / reservation areas */
+html[data-theme="dark"] .room-list-card,
+html[data-theme="dark"] .reservation-form-card,
+html[data-theme="dark"] .booking-summary-card {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
+}
+
+/* Profile */
+html[data-theme="dark"] .profile-page-shell {
+    color: #e2e8f0;
+}
+
+html[data-theme="dark"] .profile-summary {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
+}
+
+/* Timelog */
+html[data-theme="dark"] .log-stat-card,
+html[data-theme="dark"] .control-container,
+html[data-theme="dark"] .history-card {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
+}
+
+/* Solo Plans */
+html[data-theme="dark"] .solo-plan-card,
+html[data-theme="dark"] .membership-status-card,
+html[data-theme="dark"] .plan-comparison-card,
+html[data-theme="dark"] .plan-summary-card {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
+}
+
+/* Keep membership/session colors intact */
+html[data-theme="dark"] #membershipCard {
+    color: #e2e8f0;
+}
