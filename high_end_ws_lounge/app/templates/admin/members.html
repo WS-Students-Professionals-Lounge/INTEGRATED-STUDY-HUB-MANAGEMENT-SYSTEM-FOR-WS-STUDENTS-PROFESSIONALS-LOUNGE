@@ -132,7 +132,7 @@
                 {% for member in members %}
                     {% if member.membership and member.membership.status == 'active' %}
                         {% set ns.count = ns.count + 1 %}
-                        <div class="member-list-card" data-searchable="{{ member.name }} {{ member.email }} WS-WLK-{{ member.id }}" data-user-id="{{ member.id }}" data-membership-id="{{ member.membership.id if member.membership else member.id }}">
+                        <div class="member-list-card" data-searchable="{{ member.name }} {{ member.email }} WS-WLK-{{ member.id }}" data-user-id="{{ member.id }}" data-membership-id="{{ member.membership.id if member.membership else member.id }}" data-end-time="{{ member.membership.expiry_date.isoformat() if member.membership and member.membership.expiry_date else '' }}">
                             {% set is_checked_in_val = member.membership and member.membership.is_checked_in %}
                             {% set raw_paused = (member.membership and member.membership.is_paused) or (member.is_paused if member.is_paused is defined else False) %}
                             {% set is_paused_val = is_checked_in_val and raw_paused %}

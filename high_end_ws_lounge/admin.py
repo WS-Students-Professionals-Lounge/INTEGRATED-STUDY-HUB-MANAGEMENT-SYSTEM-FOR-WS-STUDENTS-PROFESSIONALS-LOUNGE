@@ -212,6 +212,8 @@ def get_common_area_dashboard_counts(now):
     active_members_count = db.session.query(AttendanceLog.id).join(Membership).filter(
         Membership.status == "active",
         Membership.is_checked_in == True,
+        Membership.is_paused == False,
+        AttendanceLog.is_paused == False,
         AttendanceLog.check_out_time.is_(None),
     ).count()
 
@@ -421,7 +423,7 @@ def get_active_room_reservations(rooms):
     reservations = (
         Reservation.query.filter(
             Reservation.room_id.in_(room_ids),
-            Reservation.status.in_(["Confirmed", "Walk-in"]),
+            func.lower(Reservation.status).in_(["confirmed", "in_progress", "walk-in"]),
         )
         .order_by(Reservation.start_time.asc())
         .all()
@@ -567,9 +569,23 @@ def dashboard():
 
     ph_tz = pytz.timezone("Asia/Manila")
     now = datetime.now(ph_tz).replace(tzinfo=None)
-    auto_start_due_reservations(now)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     today_end = today_start + timedelta(days=1)
+
+    due_reservations = Reservation.query.filter(
+        Reservation.start_time >= today_start,
+        Reservation.start_time <= now,
+        func.lower(Reservation.status) == "confirmed",
+        or_(
+            Reservation.end_time > now,
+            Reservation.is_open_time == True,
+            Reservation.end_time.is_(None),
+        ),
+    ).all()
+    if due_reservations:
+        for reservation in due_reservations:
+            reservation.status = "IN_PROGRESS"
+        db.session.commit()
 
     form = WalkinForm()
     rooms = Room.query.filter(~Room.name.ilike('Test Room%')).all()
@@ -643,7 +659,7 @@ def dashboard():
 
     reservations_today = (
         Reservation.query.filter(
-            Reservation.status.in_(["Pending", "Confirmed"]),
+            func.lower(Reservation.status).in_(["pending", "confirmed"]),
             Reservation.start_time >= today_start,
             Reservation.start_time < today_end,
             or_(
@@ -660,20 +676,17 @@ def dashboard():
             Reservation.end_time >= today_start,
             Reservation.is_open_time == True
         ),
-        Reservation.status.in_(["Confirmed", "Checked-in", "Walk-in", "Ended"]),
+        Reservation.status.in_(["Confirmed", "IN_PROGRESS", "Checked-in", "Walk-in", "Ended"]),
     ).all()
 
     active_reservations = sorted(all_res, key=lambda x: (x.status != "Ended", x.end_time if x.end_time else datetime.max))
 
     pending_reservations = (
         Reservation.query.filter(
-            Reservation.status == "Pending",
+            func.lower(Reservation.status) == "confirmed",
             Reservation.start_time >= today_start,
             Reservation.start_time < today_end,
-            or_(
-                Reservation.end_time >= now,
-                Reservation.is_open_time == True
-            )
+            Reservation.start_time > now,
         )
         .order_by(Reservation.start_time.asc())
         .limit(7)
@@ -786,7 +799,7 @@ def dashboard_today_waiting_list():
     reservations = Reservation.query.filter(
         Reservation.start_time >= now,
         Reservation.start_time < today_end,
-        func.lower(Reservation.status).in_(["confirmed", "approved"]),
+        func.lower(Reservation.status) == "confirmed",
     ).order_by(Reservation.start_time.asc()).all()
 
     waiting_list = [{
@@ -1701,22 +1714,19 @@ def admin_reservations_list():
     if redirect_response:
         return redirect_response
     search = request.args.get("search", "")
-    # Keep pending customer requests on the separate confirmation page, but
-    # retain confirmed and active same-day reservations in this list.
+    tomorrow_start = datetime.combine(
+        datetime.now(pytz.timezone("Asia/Manila")).date() + timedelta(days=1),
+        datetime.min.time(),
+    )
     query = Reservation.query.filter(
-        func.lower(Reservation.status).in_([
-            "confirmed",
-            "approved",
-            "in_progress",
-            "checked-in",
-            "checked_in",
-            "on hold",
-        ]),
-        ~func.lower(Reservation.status).in_([
-            "completed",
-            "cancelled",
-            "expired",
-        ]),
+        func.lower(Reservation.status).in_(["confirmed", "pending"]),
+        or_(
+            Reservation.start_time >= tomorrow_start,
+            and_(
+                func.lower(Reservation.status) == "pending",
+                Reservation.user_id.is_(None),
+            ),
+        ),
     )
 
     if search:
@@ -2778,6 +2788,15 @@ def membership_toggle_pause(user_or_membership_id):
     # Determine current status kag i-toggle
     is_currently_paused = getattr(membership, 'is_paused', False)
     target_pause_state = not is_currently_paused
+    paused_seconds = 0
+
+    if target_pause_state is False and is_currently_paused:
+        _, _, occupied_count = get_common_area_dashboard_counts(now_ph.replace(tzinfo=None))
+        if occupied_count >= 70:
+            return jsonify({
+                "status": "error",
+                "message": "Cannot resume session: Common Area is currently at maximum capacity.",
+            }), 400
 
     # ==========================================
     # A. UPDATE MEMBERSHIP STATE & STATUS STRING
@@ -2800,8 +2819,8 @@ def membership_toggle_pause(user_or_membership_id):
             current_log.paused_at = now_ph
         else:
             if current_log.paused_at:
-                paused_duration = (now_ph - current_log.paused_at).total_seconds()
-                current_log.accumulated_paused_seconds = (current_log.accumulated_paused_seconds or 0) + int(paused_duration)
+                paused_seconds = int((now_ph - current_log.paused_at).total_seconds())
+                current_log.accumulated_paused_seconds = (current_log.accumulated_paused_seconds or 0) + paused_seconds
             current_log.paused_at = None
 
     # ==========================================
@@ -2812,12 +2831,19 @@ def membership_toggle_pause(user_or_membership_id):
         if target_pause_state:
             active_solo.paused_at = now_ph
         else:
-            if active_solo.paused_at and active_solo.expiry_date:
-                paused_duration = (now_ph - active_solo.paused_at).total_seconds()
-                active_solo.accumulated_paused_seconds = (active_solo.accumulated_paused_seconds or 0) + int(paused_duration)
-                # Extend expiry date base sa gidangatan sang paused duration
-                active_solo.expiry_date = active_solo.expiry_date + timedelta(seconds=paused_duration)
+            if active_solo.paused_at:
+                paused_seconds = max(
+                    paused_seconds,
+                    int((now_ph - active_solo.paused_at).total_seconds()),
+                )
             active_solo.paused_at = None
+
+    if not target_pause_state and paused_seconds > 0:
+        pause_delta = timedelta(seconds=paused_seconds)
+        if membership.expiry_date:
+            membership.expiry_date = membership.expiry_date + pause_delta
+        if active_solo and active_solo.expiry_date:
+            active_solo.expiry_date = active_solo.expiry_date + pause_delta
 
     # Save sa Database
     _record_member_activity(membership.user_id, "Paused" if target_pause_state else "Resumed")
@@ -2842,6 +2868,9 @@ def membership_toggle_pause(user_or_membership_id):
         "is_paused": target_pause_state,
         "member_status": new_status_str,
         "user_name": user_name
+        ,"paused_seconds": paused_seconds
+        ,"new_end_time": membership.expiry_date.isoformat() if membership.expiry_date else None
+        ,"formatted_end_time": membership.expiry_date.strftime("%I:%M %p") if membership.expiry_date else None
         ,"remaining_seconds": remaining_seconds
         ,"remaining_time_str": f"{hours:02d}h {minutes:02d}m {seconds:02d}s"
         ,"log_entry": {
@@ -3105,6 +3134,9 @@ def common_area_occupants():
             )
 
             is_paused = session_is_paused or membership_is_paused
+
+            if is_paused:
+                continue
 
             # Get pause timestamp
             paused_at = (

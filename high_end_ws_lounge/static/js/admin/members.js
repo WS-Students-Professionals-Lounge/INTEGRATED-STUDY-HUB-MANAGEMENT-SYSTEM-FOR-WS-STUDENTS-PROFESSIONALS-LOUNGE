@@ -31,17 +31,20 @@ document.addEventListener('DOMContentLoaded', function() {
         return `${String(hours).padStart(2, '0')}h ${String(minutes).padStart(2, '0')}m ${String(seconds).padStart(2, '0')}s`;
     }
 
-    function updateRemainingTimeBadge(card, remainingSeconds, isPaused, isSessionActive = true) {
+    function updateRemainingTimeBadge(card, remainingSeconds, isPaused, isSessionActive = true, endTimeIso = null) {
         const badge = card?.querySelector('.remaining-time-badge strong');
         if (!badge) return;
 
         const previousInterval = remainingTimeIntervals.get(card);
         if (previousInterval) clearInterval(previousInterval);
 
+        const endTarget = new Date(endTimeIso || card?.dataset.endTime || '').getTime();
         let currentSeconds = Math.max(0, Math.floor(Number(remainingSeconds) || 0));
         const render = () => {
+            if (!isPaused && Number.isFinite(endTarget)) {
+                currentSeconds = Math.max(0, Math.floor((endTarget - Date.now()) / 1000));
+            }
             badge.textContent = formatRemainingTime(currentSeconds);
-            if (currentSeconds > 0 && isSessionActive && !isPaused) currentSeconds -= 1;
         };
 
         render();
@@ -107,7 +110,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 targetCard,
                 data.remaining_seconds !== undefined ? data.remaining_seconds : fallbackSeconds,
                 Boolean(data.is_paused),
-                data.is_checked_in === true
+                data.is_checked_in === true,
+                targetCard.dataset.endTime
             );
 
             const visitCount = targetCard.querySelector('.member-activity-logs-count');
@@ -852,7 +856,8 @@ async function handlePauseClick(btnElement) {
 
             if (card) {
                 if (data.remaining_seconds !== undefined) {
-                    updateRemainingTimeBadge(card, data.remaining_seconds, newIsPaused);
+                    if (data.new_end_time) card.dataset.endTime = data.new_end_time;
+                    updateRemainingTimeBadge(card, data.remaining_seconds, newIsPaused, true, data.new_end_time);
                 }
                 const statusElement = card.querySelector(`#status-text-${CSS.escape(btnElement.getAttribute('data-member-id') || '')}`);
                 if (statusElement) {

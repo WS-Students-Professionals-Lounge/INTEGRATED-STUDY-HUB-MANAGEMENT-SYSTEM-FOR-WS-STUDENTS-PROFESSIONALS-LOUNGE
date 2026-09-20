@@ -343,10 +343,11 @@ function renderOccupants(list) {
         return;
     }
 
+    const activeOccupants = list.filter(member => !member.is_paused);
     container.innerHTML = '';
-    countEl.textContent = list.length.toString();
+    countEl.textContent = activeOccupants.length.toString();
 
-    if (!list.length) {
+    if (!activeOccupants.length) {
         const empty = document.createElement('p');
         empty.className = 'no-occupants';
         empty.textContent = 'No active common area occupants.';
@@ -354,7 +355,7 @@ function renderOccupants(list) {
         return;
     }
 
-    list.forEach(member => {
+    activeOccupants.forEach(member => {
         const item = document.createElement('div');
         item.className = 'occupant-item';
         
