@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Sep 16, 2026 at 05:51 PM
+-- Generation Time: Sep 20, 2026 at 08:07 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -57,20 +57,6 @@ CREATE TABLE `attendance_logs` (
   `paused_at` datetime DEFAULT NULL,
   `accumulated_paused_seconds` int(11) DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Dumping data for table `attendance_logs`
---
-
-INSERT INTO `attendance_logs` (`id`, `membership_id`, `check_in_time`, `check_out_time`, `hours_deducted`, `created_at`, `is_paused`, `paused_at`, `accumulated_paused_seconds`) VALUES
-(1, 1, '2026-09-16 17:43:11', '2026-09-16 18:48:37', 1.09, '2026-09-16 17:43:11', 1, '2026-09-16 18:47:17', 326),
-(2, 1, '2026-09-16 19:06:12', '2026-09-16 21:32:02', 2.16, '2026-09-16 19:06:12', 0, NULL, 965),
-(3, 1, '2026-09-16 21:43:56', '2026-09-16 21:51:02', 0.12, '2026-09-16 21:43:56', 0, NULL, 0),
-(4, 1, '2026-09-16 22:12:43', '2026-09-16 22:29:43', 0.28, '2026-09-16 22:12:43', 0, NULL, 26),
-(5, 1, '2026-09-16 22:35:40', '2026-09-16 22:36:40', 0.01, '2026-09-16 22:35:40', 0, NULL, 9),
-(6, 1, '2026-09-16 23:01:45', '2026-09-16 23:06:04', 0.07, '2026-09-16 23:01:45', 0, NULL, 10),
-(7, 1, '2026-09-16 23:15:50', '2026-09-16 23:15:56', 0, '2026-09-16 23:15:50', 0, NULL, 0),
-(8, 1, '2026-09-16 23:23:30', '2026-09-16 23:23:57', 0.01, '2026-09-16 23:23:30', 0, NULL, 4);
 
 -- --------------------------------------------------------
 
@@ -150,13 +136,6 @@ CREATE TABLE `memberships` (
   `accumulated_paused_seconds` int(11) DEFAULT 0,
   `member_list_notification_seen` tinyint(1) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Dumping data for table `memberships`
---
-
-INSERT INTO `memberships` (`id`, `user_id`, `status`, `start_date`, `expiry_date`, `total_hours`, `hours_left`, `plan_name`, `is_checked_in`, `created_at`, `updated_at`, `is_checked_out`, `is_paused`, `paused_at`, `accumulated_paused_seconds`, `member_list_notification_seen`) VALUES
-(1, 96, 'active', '2026-09-16 23:23:30', '2026-09-17 00:23:30', 1, 0.99, 'INDIVIDUAL RATE', 0, '2026-09-16 17:20:02', '2026-09-16 23:23:57', 1, 0, NULL, 0, 1);
 
 -- --------------------------------------------------------
 
@@ -263,10 +242,14 @@ INSERT INTO `rooms` (`id`, `name`, `base_rate`, `category`, `status`) VALUES
 (2, 'Small Meeting Room 1', 50, 'meeting', 'available'),
 (3, 'Small Meeting Room 2', 50, 'meeting', 'available'),
 (4, 'Lecture Room', 150, 'lecture', 'available'),
-(5, 'Conference Room', 250, 'conference', 'available'),
+(5, 'Conference Room', 250, 'conference', 'unavailable'),
 (6, 'Comfy Room', 150, 'comfy', 'available'),
 (7, 'Event Room 1', 300, 'event', 'available'),
-(8, 'Event Room 2', 300, 'event', 'available');
+(8, 'Event Room 2', 300, 'event', 'available'),
+(37, 'Duplicate Room 322a', 50, 'standard', 'available'),
+(38, 'Duplicate Room 322a', 50, 'standard', 'available'),
+(39, 'Duplicate Room 78cd', 50, 'standard', 'available'),
+(40, 'Duplicate Room 78cd', 50, 'standard', 'available');
 
 -- --------------------------------------------------------
 
@@ -293,21 +276,6 @@ CREATE TABLE `solo_plans` (
   `renewal_notification_seen` tinyint(1) DEFAULT 0,
   `approved_at` datetime DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Dumping data for table `solo_plans`
---
-
-INSERT INTO `solo_plans` (`id`, `customer_id`, `user_id`, `approved_by_id`, `plan_name`, `status`, `payment_method`, `receipt_image`, `created_at`, `expiry_date`, `is_paused`, `paused_at`, `accumulated_paused_seconds`, `renewed_at`, `member_notification_seen`, `renewal_notification_seen`, `approved_at`) VALUES
-(1, 100, 96, 3, 'INDIVIDUAL RATE', 'checked_out', 'GCash', 'receipt_96_1789550369.jpg', '2026-09-16 17:19:29', '2026-09-16 18:48:37', 1, '2026-09-16 18:47:17', 326, NULL, 1, 1, '2026-09-16 17:20:02'),
-(2, 101, 96, 3, 'INDIVIDUAL RATE (4HRS)', 'checked_out', 'GCash', 'receipt_96_1789556678.jpg', '2026-09-16 19:04:38', '2026-09-16 23:22:17', 0, NULL, 965, NULL, 1, 1, '2026-09-16 19:04:56'),
-(3, 102, 96, 3, 'INDIVIDUAL RATE (4HRS)', 'checked_out', 'GCash', 'receipt_96_1789565717.jpg', '2026-09-16 21:35:17', '2026-09-17 01:43:56', 0, NULL, 0, NULL, 1, 1, '2026-09-16 21:35:52'),
-(4, 103, 96, 3, 'INDIVIDUAL RATE', 'checked_out', 'GCash', 'receipt_96_1789567953.jpg', '2026-09-16 22:12:33', '2026-09-16 23:13:09', 0, NULL, 26, NULL, 1, 1, '2026-09-16 22:12:39'),
-(5, 104, 96, 3, 'INDIVIDUAL RATE', 'checked_out', 'GCash', 'receipt_96_1789569281.jpg', '2026-09-16 22:34:41', '2026-09-16 23:35:49', 0, NULL, 9, NULL, 1, 1, '2026-09-16 22:34:46'),
-(6, 105, 96, NULL, 'INDIVIDUAL RATE', 'rejected', 'GCash', 'receipt_96_1789570122.jpg', '2026-09-16 22:48:42', NULL, 0, NULL, 0, NULL, 0, 0, NULL),
-(7, 106, 96, 3, 'INDIVIDUAL RATE', 'checked_out', 'GCash', 'receipt_96_1789570196.jpg', '2026-09-16 22:49:56', '2026-09-17 00:01:55', 0, NULL, 10, NULL, 1, 1, '2026-09-16 22:53:30'),
-(8, 107, 96, 3, 'INDIVIDUAL RATE', 'checked_out', 'GCash', 'receipt_96_1789571198.jpg', '2026-09-16 23:06:38', '2026-09-17 00:15:50', 0, NULL, 0, NULL, 0, 1, '2026-09-16 23:06:45'),
-(9, 108, 96, 3, 'INDIVIDUAL RATE', 'checked_out', 'GCash', 'receipt_96_1789571785.jpg', '2026-09-16 23:16:25', '2026-09-17 00:23:34', 0, NULL, 4, NULL, 1, 1, '2026-09-16 23:16:57');
 
 -- --------------------------------------------------------
 
@@ -356,9 +324,7 @@ CREATE TABLE `users` (
 --
 
 INSERT INTO `users` (`id`, `customer_id`, `membership_id`, `name`, `email`, `phone`, `password`, `role`, `is_active`, `expiry_date`, `created_at`, `failed_login_attempts`, `last_failed_login`, `locked_until`, `created_via_manage_staff`) VALUES
-(2, NULL, NULL, 'admin', 'admin-f236f8b7@example.com', NULL, 'scrypt:32768:8:1$pI60ZpFeOYoqfnyn$69e19bd539b3cdcd5a12813ea7fd5c8c54136025e496a76971fda4375b6da094661b910f665a5680d8051087bc3d07259243ed1ef40935a8a3e8b57f1eebb19a', 'admin', 1, NULL, '2026-06-07 14:52:33', 0, NULL, NULL, 0),
-(3, NULL, NULL, 'wslounge', 'wslounge@lounge.com', '09171111111', 'scrypt:32768:8:1$S8oZSVmuHbX7Vyqp$95cda42d51e6f347165db2a074d4ae78d919bf709609c47438662a3eb5dc0500ad9fc4b8ae134ab044219aae006819ee22afb9af4f780d46ef2a0f47294e213a', 'admin', 1, NULL, '2026-06-07 14:52:34', 0, NULL, NULL, 0),
-(96, NULL, NULL, 'Ramil Fernandez', 'limar08042026@gmail.com', '09127632434', 'scrypt:32768:8:1$vZdtzwQ7Dt7rvCAx$616734c4e8254a5823e1d4e8dd14688a7361d52e205a5179607f33f19fe522102fb8452716caf6b709920c3996f0c27a900e99a159c2f43da0379fc0ef57c941', 'member', 1, NULL, '2026-09-16 09:17:03', 0, NULL, NULL, 0);
+(3, NULL, NULL, 'wslounge', 'wslounge@lounge.com', '09171111111', 'scrypt:32768:8:1$S8oZSVmuHbX7Vyqp$95cda42d51e6f347165db2a074d4ae78d919bf709609c47438662a3eb5dc0500ad9fc4b8ae134ab044219aae006819ee22afb9af4f780d46ef2a0f47294e213a', 'admin', 1, NULL, '2026-06-07 14:52:34', 0, NULL, NULL, 0);
 
 -- --------------------------------------------------------
 
@@ -373,44 +339,6 @@ CREATE TABLE `user_activity_logs` (
   `activity_time` datetime DEFAULT NULL,
   `ip_address` varchar(45) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Dumping data for table `user_activity_logs`
---
-
-INSERT INTO `user_activity_logs` (`id`, `user_id`, `activity_type`, `activity_time`, `ip_address`) VALUES
-(1, 96, 'attendance|Check-In', '2026-09-16 17:43:11', '127.0.0.1'),
-(2, 96, 'attendance|Paused', '2026-09-16 17:50:31', '127.0.0.1'),
-(3, 96, 'attendance|Resumed', '2026-09-16 17:55:48', '127.0.0.1'),
-(4, 96, 'attendance|Paused', '2026-09-16 18:06:34', '127.0.0.1'),
-(5, 96, 'attendance|Resumed', '2026-09-16 18:06:43', '127.0.0.1'),
-(6, 96, 'attendance|Paused', '2026-09-16 18:47:17', '127.0.0.1'),
-(7, 96, 'attendance|Check-In', '2026-09-16 19:06:12', '127.0.0.1'),
-(8, 96, 'attendance|Paused', '2026-09-16 19:41:41', '127.0.0.1'),
-(9, 96, 'attendance|Resumed', '2026-09-16 19:42:07', '127.0.0.1'),
-(10, 96, 'attendance|Paused', '2026-09-16 19:58:44', '127.0.0.1'),
-(11, 96, 'attendance|Resumed', '2026-09-16 20:14:23', '127.0.0.1'),
-(12, 96, 'attendance|Checked-Out', '2026-09-16 21:32:02', '127.0.0.1'),
-(13, 96, 'attendance|Check-In', '2026-09-16 21:43:56', '127.0.0.1'),
-(14, 96, 'attendance|Checked-Out', '2026-09-16 21:51:02', '127.0.0.1'),
-(15, 96, 'attendance|Check-In', '2026-09-16 22:12:43', '127.0.0.1'),
-(16, 96, 'attendance|Paused', '2026-09-16 22:13:04', '127.0.0.1'),
-(17, 96, 'attendance|Resumed', '2026-09-16 22:13:30', '127.0.0.1'),
-(18, 96, 'attendance|Checked-Out', '2026-09-16 22:29:43', '127.0.0.1'),
-(19, 96, 'attendance|Check-In', '2026-09-16 22:35:40', '127.0.0.1'),
-(20, 96, 'attendance|Paused', '2026-09-16 22:36:25', '127.0.0.1'),
-(21, 96, 'attendance|Resumed', '2026-09-16 22:36:34', '127.0.0.1'),
-(22, 96, 'attendance|Checked-Out', '2026-09-16 22:36:40', '127.0.0.1'),
-(23, 96, 'attendance|Check-In', '2026-09-16 23:01:45', '127.0.0.1'),
-(24, 96, 'attendance|Paused', '2026-09-16 23:05:47', '127.0.0.1'),
-(25, 96, 'attendance|Resumed', '2026-09-16 23:05:57', '127.0.0.1'),
-(26, 96, 'attendance|Checked-Out', '2026-09-16 23:06:04', '127.0.0.1'),
-(27, 96, 'attendance|Check-In', '2026-09-16 23:15:50', '127.0.0.1'),
-(28, 96, 'attendance|Checked-Out', '2026-09-16 23:15:56', '127.0.0.1'),
-(29, 96, 'attendance|Check-In', '2026-09-16 23:23:30', '127.0.0.1'),
-(30, 96, 'attendance|Paused', '2026-09-16 23:23:46', '127.0.0.1'),
-(31, 96, 'attendance|Resumed', '2026-09-16 23:23:50', '127.0.0.1'),
-(32, 96, 'attendance|Checked-Out', '2026-09-16 23:23:57', '127.0.0.1');
 
 -- --------------------------------------------------------
 
@@ -595,13 +523,13 @@ ALTER TABLE `addons`
 -- AUTO_INCREMENT for table `attendance_logs`
 --
 ALTER TABLE `attendance_logs`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=26;
 
 --
 -- AUTO_INCREMENT for table `daily_reports`
 --
 ALTER TABLE `daily_reports`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT for table `equipment`
@@ -619,7 +547,7 @@ ALTER TABLE `inventory`
 -- AUTO_INCREMENT for table `memberships`
 --
 ALTER TABLE `memberships`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- AUTO_INCREMENT for table `payment_info`
@@ -631,7 +559,7 @@ ALTER TABLE `payment_info`
 -- AUTO_INCREMENT for table `reservations`
 --
 ALTER TABLE `reservations`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=31;
 
 --
 -- AUTO_INCREMENT for table `reservation_addons`
@@ -643,13 +571,13 @@ ALTER TABLE `reservation_addons`
 -- AUTO_INCREMENT for table `rooms`
 --
 ALTER TABLE `rooms`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=37;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=41;
 
 --
 -- AUTO_INCREMENT for table `solo_plans`
 --
 ALTER TABLE `solo_plans`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=25;
 
 --
 -- AUTO_INCREMENT for table `time_logs`
@@ -661,13 +589,13 @@ ALTER TABLE `time_logs`
 -- AUTO_INCREMENT for table `users`
 --
 ALTER TABLE `users`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=97;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=102;
 
 --
 -- AUTO_INCREMENT for table `user_activity_logs`
 --
 ALTER TABLE `user_activity_logs`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=33;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=111;
 
 --
 -- AUTO_INCREMENT for table `walkin_addons`
@@ -679,7 +607,7 @@ ALTER TABLE `walkin_addons`
 -- AUTO_INCREMENT for table `walkin_reservations`
 --
 ALTER TABLE `walkin_reservations`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=17;
 
 --
 -- Constraints for dumped tables
