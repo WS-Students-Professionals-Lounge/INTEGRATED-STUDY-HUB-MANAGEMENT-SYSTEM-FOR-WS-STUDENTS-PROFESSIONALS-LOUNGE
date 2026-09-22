@@ -90,7 +90,7 @@
 
                     <div class="room-card dashboard-card {{ 'session-expired' if is_expired }}" 
                         data-customer="{{ res.customer_name|lower }}" 
-                        data-room="{{ res.room.name|lower }}"
+                        data-room="{{ res.room.name|lower if res.room else 'Common Area' }}"
                         data-isopentime="{{ 'true' if res.is_open_time else 'false' }}"
                         data-endtime="{{ res.end_time.isoformat() if res.end_time else '' }}"
                         data-is-paused="{{ 'true' if res.is_paused else 'false' }}"
@@ -99,14 +99,14 @@
                         <div class="end-time-indicator">TIME ENDED - PLEASE CHECKOUT</div>
 
                         <div class="room-card-header">
-                            <span class="room-name">{{ res.room.name }}</span>
+                            <span class="room-name">{{ res.room.name if res.room else 'Common Area' }}</span>
                             <span class="status-pill occupied">Occupied</span>
                         </div>
                         
                         <div class="room-card-body">
                             <div class="info-row">
                                 <span class="info-label">Room</span>
-                                <span class="info-value">{{ res.room.name }}</span>
+                                <span class="info-value">{{ res.room.name if res.room else 'Common Area' }}</span>
                             </div>
                             <div class="info-row">
                                 <span class="info-label">Start</span>
@@ -159,7 +159,7 @@
                                         style="flex: 1; height: 34px; padding: 0 4px; font-size: 11px; font-weight: bold; background-color: #22c55e; color: #fff; border: none; border-radius: 4px; cursor: pointer; white-space: nowrap; margin: 0;"
                                         data-reservation-id="{{ res.id }}"
                                         data-customer-name="{{ res.customer_name }}"
-                                        data-room-name="{{ res.room.name }}"
+                                        data-room-name="{{ res.room.name if res.room else 'Common Area' }}"
                                         data-start-time="{{ res.start_time.isoformat() }}"
                                         data-end-time="{{ res.end_time.isoformat() if res.end_time else '' }}"
                                         data-room-rate="{{ res.room.base_rate or 0 }}"
@@ -191,7 +191,7 @@
                                     style="flex: 1; height: 34px; padding: 0 4px; font-size: 11px; font-weight: bold; background-color: #1e3a8a; color: #fff; border: none; border-radius: 4px; cursor: pointer; white-space: nowrap; margin: 0;"
                                     data-reservation-id="{{ res.id }}"
                                     data-customer-name="{{ res.customer_name }}"
-                                    data-room-name="{{ res.room.name }}"
+                                    data-room-name="{{ res.room.name if res.room else 'Common Area' }}"
                                     data-start-time="{{ res.start_time.isoformat() }}"
                                     data-room-rate="{{ res.room.base_rate or 0 }}"
                                     data-extra-fee="{{ res.extra_fee or 0 }}"
@@ -394,7 +394,7 @@
                     {% for res in pending_reservations %}
                     <div class="waiting-item">
                         <p class="waiting-name">Next: {{ res.customer_name }}</p>
-                        <p class="waiting-details">({{ res.room.name }}, {{ res.start_time.strftime('%I:%M') }} - {{ res.end_time.strftime('%I:%M %p') if res.end_time else 'Open' }})</p>
+                        <p class="waiting-details">({{ res.room.name if res.room else 'Common Area' }}, {{ res.start_time.strftime('%I:%M') if res.start_time else '--:--' }} - {{ res.end_time.strftime('%I:%M %p') if res.end_time else 'Open' }})</p>
                     </div>
                     {% else %}
                     <p class="no-data">No upcoming reservations.</p>

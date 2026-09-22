@@ -3078,7 +3078,7 @@ def member_attendance_history(membership_id):
     
     return jsonify({
         "status": "success",
-        "member_name": membership.user.name,
+        "member_name": membership.user.name if membership.user else "Walk-in / Guest",
         "total_hours": membership.total_hours,
         "hours_left": membership.hours_left,
         "remaining_seconds": remaining_seconds,
@@ -3205,7 +3205,7 @@ def common_area_occupants():
 
             occupants.append({
                 "id": membership.id,
-                "name": membership.user.name,
+                "name": membership.user.name if membership.user else "Walk-in / Guest",
                 "check_in_time": check_in_dt.isoformat(),
                 "check_in_ms": epoch_time_ms,
                 "formatted_check_in": formatted_check_in,

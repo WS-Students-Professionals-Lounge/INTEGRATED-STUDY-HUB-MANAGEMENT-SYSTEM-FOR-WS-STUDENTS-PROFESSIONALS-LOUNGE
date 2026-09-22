@@ -53,9 +53,9 @@
                         {% endif %}
 
                         <div class="member-info">
-                            <div class="member-name">{{ membership.user.name }}</div>
-                            <p class="member-email">{{ membership.user.email }}</p>
-                            {% if membership.user.phone %}
+                            <div class="member-name">{{ membership.user.name if membership.user else 'Walk-in / Guest' }}</div>
+                            <p class="member-email">{{ membership.user.email if membership.user else 'No account linked' }}</p>
+                            {% if membership.user and membership.user.phone %}
                             <p class="member-email">📞 {{ membership.user.phone }}</p>
                             {% endif %}
                             <p class="member-detail-note"><strong>Plan:</strong> {{ membership.plan_name or 'Standard' }}</p>
@@ -64,7 +64,7 @@
                         <div class="card-buttons">
                             <button class="btn btn-sm btn-toggle {% if membership.is_checked_in %}checked-in{% else %}btn-success{% endif %} btn-membership-toggle"
                                     data-membership-id="{{ membership.id }}"
-                                    data-membership-name="{{ membership.user.name }}"
+                                    data-membership-name="{{ membership.user.name if membership.user else 'Walk-in / Guest' }}"
                                     id="btn-{{ membership.id }}">
                                 <span id="btn-text-{{ membership.id }}">
                                     {% if membership.is_checked_in %}
@@ -74,7 +74,7 @@
                                     {% endif %}
                                 </span>
                             </button>
-                            <button class="btn btn-sm btn-info btn-history" data-membership-id="{{ membership.id }}" data-membership-name="{{ membership.user.name }}">
+                            <button class="btn btn-sm btn-info btn-history" data-membership-id="{{ membership.id }}" data-membership-name="{{ membership.user.name if membership.user else 'Walk-in / Guest' }}">
                                 📋 History
                             </button>
                         </div>
@@ -98,8 +98,8 @@
                         <span class="member-status-badge pending">⏳ Pending</span>
 
                         <div class="member-info">
-                            <div class="member-name">{{ membership.user.name }}</div>
-                            <p class="member-email">{{ membership.user.email }}</p>
+                            <div class="member-name">{{ membership.user.name if membership.user else 'Walk-in / Guest' }}</div>
+                            <p class="member-email">{{ membership.user.email if membership.user else 'No account linked' }}</p>
                             <p class="member-detail-note"><strong>Plan Applied:</strong> {{ membership.plan_name or 'Standard' }}</p>
                             <p><small>Applied: {{ membership.start_date.strftime('%b %d, %Y') if membership.start_date else 'N/A' }}</small></p>
                         </div>
@@ -110,10 +110,10 @@
                         </div>
 
                         <div class="card-buttons">
-                            <button class="btn btn-sm btn-success btn-approve" data-membership-id="{{ membership.id }}" data-membership-name="{{ membership.user.name }}">
+                            <button class="btn btn-sm btn-success btn-approve" data-membership-id="{{ membership.id }}" data-membership-name="{{ membership.user.name if membership.user else 'Walk-in / Guest' }}">
                                 ✓ Approve
                             </button>
-                            <button class="btn btn-sm btn-danger btn-reject" data-membership-id="{{ membership.id }}" data-membership-name="{{ membership.user.name }}">
+                            <button class="btn btn-sm btn-danger btn-reject" data-membership-id="{{ membership.id }}" data-membership-name="{{ membership.user.name if membership.user else 'Walk-in / Guest' }}">
                                 ✗ Reject
                             </button>
                         </div>
@@ -137,8 +137,8 @@
                         <span class="member-status-badge expired">❌ Expired</span>
 
                         <div class="member-info">
-                            <div class="member-name">{{ membership.user.name }}</div>
-                            <p class="member-email">{{ membership.user.email }}</p>
+                            <div class="member-name">{{ membership.user.name if membership.user else 'Walk-in / Guest' }}</div>
+                            <p class="member-email">{{ membership.user.email if membership.user else 'No account linked' }}</p>
                             <p class="member-detail-note"><strong>Plan:</strong> {{ membership.plan_name or 'Standard' }}</p>
                         </div>
 
@@ -154,7 +154,7 @@
                         </div>
 
                         <div class="card-buttons">
-                            <button class="btn btn-sm btn-primary btn-history" data-membership-id="{{ membership.id }}" data-membership-name="{{ membership.user.name }}">
+                            <button class="btn btn-sm btn-primary btn-history" data-membership-id="{{ membership.id }}" data-membership-name="{{ membership.user.name if membership.user else 'Walk-in / Guest' }}">
                                 📋 View History
                             </button>
                         </div>
