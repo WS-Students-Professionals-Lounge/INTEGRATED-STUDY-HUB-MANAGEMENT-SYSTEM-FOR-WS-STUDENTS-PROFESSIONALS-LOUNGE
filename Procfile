@@ -1,0 +1,1 @@
+web: cd high_end_ws_lounge && gunicorn --worker-class eventlet -w 1 run:app
