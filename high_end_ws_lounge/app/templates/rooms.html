@@ -1,11 +1,20 @@
 {% extends "base.html" %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/rooms_modern.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/rooms_modern.css') }}?v=2">
 {% endblock %}
 
 {% block content %}
 <div class="rooms-container">
+    <div class="rooms-mobile-bar">
+        <img src="{{ url_for('static', filename='img/main_logo.png') }}" alt="WS Lounge" class="rooms-mobile-logo">
+        <button type="button" class="rooms-menu-toggle" id="roomsMenuToggle"
+            aria-label="Open navigation menu" aria-controls="roomsMobileSidebar" aria-expanded="false">
+            <i class="fas fa-bars" aria-hidden="true"></i>
+        </button>
+    </div>
+    <button type="button" class="rooms-sidebar-backdrop" id="roomsSidebarBackdrop"
+        aria-label="Close navigation menu" tabindex="-1"></button>
     <h2 class="page-title">Rooms & Reservations</h2>
     <p class="page-subtitle">Book your preferred space with ease</p>
 

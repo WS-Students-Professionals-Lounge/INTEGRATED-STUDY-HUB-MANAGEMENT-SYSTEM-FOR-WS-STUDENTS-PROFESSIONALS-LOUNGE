@@ -3,11 +3,20 @@
 {% block title %}Solo Plans & Rates{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/solo_plans_modern.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/solo_plans_modern.css') }}?v=2">
 {% endblock %}
 
 {% block content %}
 <div class="solo-page container">
+    <div class="solo-mobile-bar">
+        <img src="{{ url_for('static', filename='img/main_logo.png') }}" alt="WS Lounge" class="solo-mobile-logo">
+        <button type="button" class="solo-menu-toggle" id="soloMenuToggle"
+            aria-label="Open navigation menu" aria-controls="soloMobileSidebar" aria-expanded="false">
+            <i class="fas fa-bars" aria-hidden="true"></i>
+        </button>
+    </div>
+    <button type="button" class="solo-sidebar-backdrop" id="soloSidebarBackdrop"
+        aria-label="Close navigation menu" tabindex="-1"></button>
     <div class="solo-header">
         <div>
             <h2>Solo Plan Rates</h2>

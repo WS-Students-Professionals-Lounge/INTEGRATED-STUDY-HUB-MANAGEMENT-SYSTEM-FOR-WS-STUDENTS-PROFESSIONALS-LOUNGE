@@ -1,4 +1,43 @@
 document.addEventListener("DOMContentLoaded", () => {
+    const menuButton = document.getElementById('soloMenuToggle');
+    const menuBackdrop = document.getElementById('soloSidebarBackdrop');
+    const sidebar = document.querySelector('.sidebar');
+
+    if (menuButton && menuBackdrop && sidebar) {
+        sidebar.id = 'soloMobileSidebar';
+        const menuIcon = menuButton.querySelector('i');
+
+        function setSoloMenuOpen(isOpen) {
+            sidebar.classList.toggle('solo-drawer-open', isOpen);
+            menuBackdrop.classList.toggle('is-visible', isOpen);
+            menuButton.setAttribute('aria-expanded', String(isOpen));
+            menuButton.setAttribute('aria-label', isOpen ? 'Close navigation menu' : 'Open navigation menu');
+            document.body.classList.toggle('solo-menu-open', isOpen);
+
+            if (menuIcon) {
+                menuIcon.classList.toggle('fa-bars', !isOpen);
+                menuIcon.classList.toggle('fa-xmark', isOpen);
+            }
+        }
+
+        menuButton.addEventListener('click', () => {
+            setSoloMenuOpen(menuButton.getAttribute('aria-expanded') !== 'true');
+        });
+        menuBackdrop.addEventListener('click', () => setSoloMenuOpen(false));
+        sidebar.querySelectorAll('a').forEach(link => {
+            link.addEventListener('click', () => setSoloMenuOpen(false));
+        });
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && menuButton.getAttribute('aria-expanded') === 'true') {
+                setSoloMenuOpen(false);
+                menuButton.focus();
+            }
+        });
+        window.addEventListener('resize', () => {
+            if (window.innerWidth >= 768) setSoloMenuOpen(false);
+        });
+    }
+
     const modal = document.getElementById("plan-selection-modal");
     const planTitle = document.getElementById("modal-plan-title");
     const planPrice = document.getElementById("modal-plan-price");

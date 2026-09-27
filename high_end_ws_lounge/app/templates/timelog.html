@@ -1,11 +1,20 @@
 {% extends "base.html" %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/timelog.css') }}?v=1.4">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/timelog.css') }}?v=1.5">
 {% endblock %}
 
 {% block content %}
 <div class="timelog-wrapper">
+    <div class="timelog-mobile-bar">
+        <img src="{{ url_for('static', filename='img/main_logo.png') }}" alt="WS Lounge" class="timelog-mobile-logo">
+        <button type="button" class="timelog-menu-toggle" id="timelogMenuToggle"
+            aria-label="Open navigation menu" aria-controls="timelogMobileSidebar" aria-expanded="false">
+            <i class="fas fa-bars" aria-hidden="true"></i>
+        </button>
+    </div>
+    <button type="button" class="timelog-sidebar-backdrop" id="timelogSidebarBackdrop"
+        aria-label="Close navigation menu" tabindex="-1"></button>
     <h2 class="page-title" aria-label="Usage History and Insights">Lounge Usage Logs</h2>
 
     <!-- Insights Section -->

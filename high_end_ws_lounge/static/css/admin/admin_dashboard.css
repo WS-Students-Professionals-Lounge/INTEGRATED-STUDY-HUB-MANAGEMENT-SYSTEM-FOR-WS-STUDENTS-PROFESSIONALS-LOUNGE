@@ -218,32 +218,20 @@ body .main-wrapper, body {
 }
 
 .common-area-active-cards-scroll {
-    max-height: 285px;
-    overflow-y: auto;
+    max-height: none;
+    height: auto;
+    overflow: visible;
     overflow-x: hidden;
-    padding-right: 8px;
-    padding-bottom: 12px;
-    margin-bottom: 1.5rem;
-    scrollbar-width: thin;
-    scrollbar-color: #cbd5e1 #f1f5f9;
+    padding-right: 0;
+    padding-bottom: 0;
+    margin-bottom: 0;
+    scrollbar-width: none;
 }
 
 .common-area-active-cards-scroll::-webkit-scrollbar {
-    width: 6px;
-}
-
-.common-area-active-cards-scroll::-webkit-scrollbar-track {
-    background: #f1f5f9;
-    border-radius: 4px;
-}
-
-.common-area-active-cards-scroll::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
-    border-radius: 4px;
-}
-
-.common-area-active-cards-scroll::-webkit-scrollbar-thumb:hover {
-    background: #94a3b8;
+    width: 0;
+    height: 0;
+    display: none;
 }
 
 /* Room Card */
@@ -558,6 +546,13 @@ body .main-wrapper, body {
     margin: 0;
 }
 
+.waiting-items {
+    max-height: 320px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 6px;
+}
+
 .mini-calendar {
     width: 20px;
     height: 20px;
@@ -592,6 +587,32 @@ body .main-wrapper, body {
     font-size: 0.8rem;
     color: var(--gray-500);
     margin: 0;
+}
+
+.waiting-status {
+    display: inline-block;
+    margin-top: 8px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.status-confirmed {
+    background: rgba(34, 197, 94, 0.12);
+    color: #15803d;
+}
+
+.status-waiting {
+    background: rgba(245, 158, 11, 0.12);
+    color: #b45309;
+}
+
+.status-pending {
+    background: rgba(59, 130, 246, 0.12);
+    color: #1d4ed8;
 }
 
 .no-data {
@@ -838,32 +859,32 @@ body .main-wrapper, body {
    ========================================= */
 
 html[data-theme="dark"] .stats-grid .stat-card {
-    background: #1e293b;
-    border-color: #334155;
+    background: var(--bg-card);
+    border-color: var(--border-color);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
 }
 
 html[data-theme="dark"] .stats-grid .stat-label {
-    color: #94a3b8;
+    color: var(--text-muted);
 }
 
 html[data-theme="dark"] .stats-grid .stat-value {
-    color: #f8fafc;
+    color: var(--text-primary);
 }
 
 /* Live Room Status heading */
 html[data-theme="dark"] .section-title {
-    color: #f8fafc;
+    color: var(--text-primary);
 }
 
 html[data-theme="dark"] .section-header {
-    border-bottom-color: #334155;
+    border-bottom-color: var(--border-color);
 }
 
 /* Search box */
 html[data-theme="dark"] .search-input {
-    background: #1e293b;
-    color: #e2e8f0;
+    background: var(--bg-card);
+    color: var(--text-primary);
     border-color: #475569;
 }
 
@@ -872,9 +893,9 @@ html[data-theme="dark"] .search-input::placeholder {
 }
 
 html[data-theme="dark"] .search-input:focus {
-    background: #1e293b;
-    color: #f8fafc;
-    border-color: #60a5fa;
+    background: var(--bg-card);
+    color: var(--text-primary);
+    border-color: var(--accent-blue-hover);
     box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.15);
 }
 
@@ -886,11 +907,11 @@ html[data-theme="dark"] .summary-card {
 }
 
 html[data-theme="dark"] .summary-label {
-    color: #cbd5e1;
+    color: var(--text-secondary);
 }
 
 html[data-theme="dark"] .summary-value {
-    color: #93c5fd;
+    color: var(--accent-blue);
 }
 
 html[data-theme="dark"] .summary-divider {
@@ -904,8 +925,8 @@ html[data-theme="dark"] .summary-divider {
 
 /* Room cards */
 html[data-theme="dark"] .room-card {
-    background: #1e293b;
-    border-color: #334155;
+    background: var(--bg-card);
+    border-color: var(--border-color);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
 }
 
@@ -914,15 +935,15 @@ html[data-theme="dark"] .room-card:hover {
 }
 
 html[data-theme="dark"] .room-name {
-    color: #f8fafc;
+    color: var(--text-primary);
 }
 
 html[data-theme="dark"] .info-label {
-    color: #94a3b8;
+    color: var(--text-muted);
 }
 
 html[data-theme="dark"] .info-value {
-    color: #e2e8f0;
+    color: var(--text-secondary);
 }
 
 /* Live timer */
@@ -971,11 +992,9 @@ html[data-theme="dark"] .waiting-header h3 {
 
 /* Common Area Members */
 html[data-theme="dark"] .common-area-occupants-card {
-    background: linear-gradient(
-        135deg,
-        #1d4ed8,
-        #2563eb
-    );
+    background: #1e3a5f;
+    border: 1px solid #2563eb;
+    color: #f8fafc;
 }
 
 html[data-theme="dark"] .occupants-header {

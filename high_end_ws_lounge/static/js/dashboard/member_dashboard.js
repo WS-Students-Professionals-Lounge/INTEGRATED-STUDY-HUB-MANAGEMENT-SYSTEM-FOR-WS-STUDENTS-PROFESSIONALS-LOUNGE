@@ -1,4 +1,43 @@
 document.addEventListener('DOMContentLoaded', function() {
+    const menuButton = document.getElementById('memberDashboardMenuToggle');
+    const menuBackdrop = document.getElementById('memberDashboardSidebarBackdrop');
+    const sidebar = document.querySelector('.sidebar');
+
+    if (menuButton && menuBackdrop && sidebar) {
+        sidebar.id = 'memberDashboardSidebar';
+        const menuIcon = menuButton.querySelector('i');
+
+        function setMenuOpen(isOpen) {
+            sidebar.classList.toggle('dashboard-drawer-open', isOpen);
+            menuBackdrop.classList.toggle('is-visible', isOpen);
+            menuButton.setAttribute('aria-expanded', String(isOpen));
+            menuButton.setAttribute('aria-label', isOpen ? 'Close navigation menu' : 'Open navigation menu');
+            document.body.classList.toggle('member-dashboard-menu-open', isOpen);
+
+            if (menuIcon) {
+                menuIcon.classList.toggle('fa-bars', !isOpen);
+                menuIcon.classList.toggle('fa-xmark', isOpen);
+            }
+        }
+
+        menuButton.addEventListener('click', () => {
+            setMenuOpen(menuButton.getAttribute('aria-expanded') !== 'true');
+        });
+        menuBackdrop.addEventListener('click', () => setMenuOpen(false));
+        sidebar.querySelectorAll('a').forEach(link => {
+            link.addEventListener('click', () => setMenuOpen(false));
+        });
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && menuButton.getAttribute('aria-expanded') === 'true') {
+                setMenuOpen(false);
+                menuButton.focus();
+            }
+        });
+        window.addEventListener('resize', () => {
+            if (window.innerWidth >= 768) setMenuOpen(false);
+        });
+    }
+
     // 1. Live Clock with Date (PHT Synchronized local display)
     function updateClock() {
         const now = new Date();
@@ -299,7 +338,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const membershipCard = document.getElementById('membershipCard');
     let sessionIntervalId = null;
     let liveMembershipCountdownInterval = null;
-    let liveMembershipRemainingSeconds = 0;
+    let lastRenderedMembershipRemainingSeconds = null;
     const previousMemberState = {
         isCheckedIn: null,
         membershipStatus: null,
@@ -320,33 +359,46 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    function renderLiveMembershipCountdown() {
+    function renderLiveMembershipCountdown(totalSeconds) {
         const countdownEl = document.getElementById('membershipExpiryCountdown');
         const remainingHoursEl = document.querySelector('#remainingHours .hours-value');
-        const totalSeconds = Math.max(0, Math.floor(liveMembershipRemainingSeconds));
-        const formatted = formatHMS(totalSeconds);
-        const hours = Math.floor(totalSeconds / 3600);
-        const minutes = Math.floor((totalSeconds % 3600) / 60);
-        const seconds = totalSeconds % 60;
+        const safeSeconds = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+        const formatted = formatHMS(safeSeconds);
+        const hours = Math.floor(safeSeconds / 3600);
+        const minutes = Math.floor((safeSeconds % 3600) / 60);
+        const seconds = safeSeconds % 60;
 
         if (countdownEl) countdownEl.textContent = formatted;
         if (remainingHoursEl) remainingHoursEl.textContent = `${hours}h ${minutes}m ${seconds}s`;
     }
 
-    function startLiveMembershipCountdown(remainingSeconds) {
-        liveMembershipRemainingSeconds = Math.max(0, Number(remainingSeconds) || 0);
+    function startLiveMembershipCountdown(endTimeIso, isPaused = false) {
         if (liveMembershipCountdownInterval) {
             clearInterval(liveMembershipCountdownInterval);
+            liveMembershipCountdownInterval = null;
         }
 
-        renderLiveMembershipCountdown();
-        liveMembershipCountdownInterval = setInterval(() => {
-            const isPaused = document.getElementById('membershipExpiryCountdown')?.getAttribute('data-is-paused') === 'true';
-            if (!isPaused && liveMembershipRemainingSeconds > 0) {
-                liveMembershipRemainingSeconds -= 1;
+        if (isPaused) {
+            return;
+        }
+
+        const targetEpochMs = new Date(endTimeIso || '').getTime();
+        if (!Number.isFinite(targetEpochMs)) return;
+
+        const updateTick = () => {
+            const remainingSeconds = Math.max(0, Math.floor((targetEpochMs - Date.now()) / 1000));
+            lastRenderedMembershipRemainingSeconds = remainingSeconds;
+            renderLiveMembershipCountdown(remainingSeconds);
+            if (remainingSeconds <= 0 && liveMembershipCountdownInterval) {
+                clearInterval(liveMembershipCountdownInterval);
+                liveMembershipCountdownInterval = null;
             }
-            renderLiveMembershipCountdown();
-        }, 1000);
+        };
+
+        updateTick();
+        if (!isPaused) {
+            liveMembershipCountdownInterval = setInterval(updateTick, 1000);
+        }
     }
 
     function stopLiveMembershipCountdown() {
@@ -658,7 +710,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (countdownEl) {
                             countdownEl.setAttribute('data-expiry', statusData.expiry_date || '');
                         }
-                        startLiveMembershipCountdown(sessionData.remaining_seconds ?? statusData.remaining_seconds);
+                        startLiveMembershipCountdown(
+                            countdownEl?.getAttribute('data-expiry') || statusData.expiry_date,
+                            Boolean(statusData.is_paused || statusData.member_status === 'PAUSED')
+                        );
                     }
                 }
             } else {
@@ -690,6 +745,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     const hoursValue = remainingHoursEl.querySelector('.hours-value');
                     if (hoursValue) hoursValue.textContent = '0h 0m 0s';
                 }
+                lastRenderedMembershipRemainingSeconds = 0;
 
                 const hoursSpent = document.getElementById('hoursSpent');
                 if (hoursSpent) hoursSpent.textContent = '0h 0m';

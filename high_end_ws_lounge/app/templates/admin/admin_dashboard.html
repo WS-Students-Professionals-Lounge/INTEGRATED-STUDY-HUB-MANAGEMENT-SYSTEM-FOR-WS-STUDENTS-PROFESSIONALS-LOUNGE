@@ -79,8 +79,8 @@
                 </div>
             </div>
 
-            <div id="common-area-active-cards-scroll" class="common-area-active-cards-scroll mb-4 pb-2" style="max-height: 340px;">
-                <div class="room-grid common-area-grid">
+            <div id="common-area-active-cards-scroll" class="common-area-active-cards-scroll mb-4 pb-3" style="max-height: 420px; overflow-y: auto; overflow-x: hidden; border-radius: 10px;">
+                <div class="room-grid common-area-grid" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start;">
                 {% if common_area_reservations %}
                     {% for res in common_area_reservations %}
                     {% set is_expired = false %}
@@ -193,6 +193,7 @@
                                     data-customer-name="{{ res.customer_name }}"
                                     data-room-name="{{ res.room.name if res.room else 'Common Area' }}"
                                     data-start-time="{{ res.start_time.isoformat() }}"
+                                    data-end-time="{{ res.end_time.isoformat() if res.end_time else '' }}"
                                     data-room-rate="{{ res.room.base_rate or 0 }}"
                                     data-extra-fee="{{ res.extra_fee or 0 }}"
                                     data-total-amount="{{ res.total_amount or 0 }}"
@@ -303,7 +304,7 @@
 
                         <div class="room-card-footer">
                             {% if active_res %}
-                                <div class="card-action-row" style="display: flex; gap: 4px; align-items: center; justify-content: space-between; width: 100%; margin-top: 10px;">
+                                <div class="card-action-row room-action-buttons" style="display: flex; gap: 4px; align-items: center; justify-content: space-between; width: 100%; margin-top: 10px;">
                                     
                                     <!-- 1. ADD TIME BUTTON (Flex: 1) -->
                                     {% if not active_res.is_open_time %}
@@ -390,11 +391,12 @@
                     <img src="https://img.icons8.com/ios/50/64748b/calendar.png" alt="calendar-icon" class="mini-calendar">
                 </div>
                 
-                <div class="waiting-items" id="today-waiting-list-container">
+                <div class="waiting-items" id="today-waiting-list-container" style="max-height: 320px; overflow-y: auto; overflow-x: hidden; padding-right: 6px;">
                     {% for res in pending_reservations %}
                     <div class="waiting-item">
                         <p class="waiting-name">Next: {{ res.customer_name }}</p>
                         <p class="waiting-details">({{ res.room.name if res.room else 'Common Area' }}, {{ res.start_time.strftime('%I:%M') if res.start_time else '--:--' }} - {{ res.end_time.strftime('%I:%M %p') if res.end_time else 'Open' }})</p>
+                        <span class="waiting-status {{ 'status-confirmed' if (res.status|lower in ['confirmed','pending','waiting']) else 'status-pending' }}">{{ res.status or 'Pending' }}</span>
                     </div>
                     {% else %}
                     <p class="no-data">No upcoming reservations.</p>
@@ -545,6 +547,64 @@
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    if (!document.getElementById('roomGridContainer')) return;
+
+    function refreshLiveRoomCards() {
+        fetch('/admin/api/dashboard/room-status', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(response => response.json())
+            .then(data => {
+                if (typeof updateCommonAreaCardStats === 'function') updateCommonAreaCardStats(data);
+                if (typeof updateRoomStatusCards === 'function') updateRoomStatusCards(data);
+            })
+            .catch(() => null);
+    }
+
+    function refreshDashboardSections() {
+        fetch(window.location.href, {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.text())
+        .then(html => {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+
+            const waitingListContainer = document.querySelector('#today-waiting-list-container');
+            const waitingListBadge = document.querySelector('#waiting-list-count-badge');
+            const liveRoomContainer = document.querySelector('#common-area-active-cards-scroll');
+            const roomGridContainer = document.querySelector('#roomGridContainer');
+
+            const nextWaitingListContainer = doc.querySelector('#today-waiting-list-container');
+            const nextWaitingListBadge = doc.querySelector('#waiting-list-count-badge');
+            const nextLiveRoomContainer = doc.querySelector('#common-area-active-cards-scroll');
+            const nextRoomGridContainer = doc.querySelector('#roomGridContainer');
+
+            if (waitingListContainer && nextWaitingListContainer) {
+                waitingListContainer.innerHTML = nextWaitingListContainer.innerHTML;
+            }
+            if (waitingListBadge && nextWaitingListBadge) {
+                waitingListBadge.textContent = nextWaitingListBadge.textContent;
+            }
+            if (liveRoomContainer && nextLiveRoomContainer) {
+                liveRoomContainer.innerHTML = nextLiveRoomContainer.innerHTML;
+            }
+            if (roomGridContainer && nextRoomGridContainer) {
+                roomGridContainer.innerHTML = nextRoomGridContainer.innerHTML;
+            }
+        })
+        .catch(() => null);
+    }
+
+    refreshLiveRoomCards();
+    refreshDashboardSections();
+    setInterval(refreshLiveRoomCards, 4000);
+    setInterval(refreshDashboardSections, 10000);
+});
+</script>
 
 <div id="addTimeModal" class="modal-overlay">
     <div class="modal-container">

@@ -528,3 +528,60 @@ input:checked + .slider:before {
         font-size: 16px; /* Prevents zoom on iOS */
     }
 }
+
+/* New Reservation page dark theme */
+html[data-theme="dark"] .reservation-page-admin-container1 {
+    --color-white: var(--bg-card);
+    --color-bg: var(--bg-main);
+    --color-light-blue: #172b45;
+    --color-dark-blue: var(--accent-blue);
+    --color-medium-blue: var(--accent-blue-hover);
+    --color-border: var(--border-color);
+    --color-text-muted: var(--text-muted);
+    --color-text-neutral: var(--text-secondary);
+    --color-text-light: var(--text-muted);
+    background: var(--bg-main) !important;
+    color: var(--text-secondary);
+}
+
+html[data-theme="dark"] .reservation-page-admin-thq-group36-elm {
+    background: #172b45;
+    border-color: var(--border-color);
+}
+
+html[data-theme="dark"] .reservation-page-admin-thq-text-elm50,
+html[data-theme="dark"] .reservation-page-admin-thq-text-elm51,
+html[data-theme="dark"] .section-title-break,
+html[data-theme="dark"] .form-label,
+html[data-theme="dark"] .form-label-modern {
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] .reservation-page-admin-thq-button-elm1 {
+    background: #2563eb;
+    color: #ffffff;
+}
+
+html[data-theme="dark"] .reservation-page-admin-thq-button-elm1:hover,
+html[data-theme="dark"] .pax-btn:hover {
+    background: #1d4ed8;
+    color: #ffffff;
+}
+
+html[data-theme="dark"] .reservation-page-admin-thq-button-elm2 {
+    background: #1e293b;
+    border-color: var(--border-color);
+    color: var(--accent-blue);
+}
+
+html[data-theme="dark"] .reservation-page-admin-thq-button-elm2:hover {
+    background: #334155;
+    border-color: var(--accent-blue-hover);
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] .modern-select option,
+html[data-theme="dark"] .discount-select option {
+    background: var(--bg-card);
+    color: var(--text-primary);
+}

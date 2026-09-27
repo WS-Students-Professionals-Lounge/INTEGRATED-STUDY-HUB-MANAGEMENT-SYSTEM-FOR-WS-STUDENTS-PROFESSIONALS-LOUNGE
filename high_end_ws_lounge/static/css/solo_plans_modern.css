@@ -830,3 +830,401 @@ body {
         gap: 10px;
     }
 }
+
+/* Solo Plans page dark theme */
+html[data-theme="dark"] .solo-page {
+    --primary: var(--accent-blue);
+    --primary-light: var(--accent-blue-hover);
+    --accent: #12355b;
+    --success: #86efac;
+    --warning: #fcd34d;
+    --danger: #fca5a5;
+    --text-heading: var(--text-primary);
+    --text-body: var(--text-secondary);
+    --gray-100: #0f172a;
+    --gray-200: var(--border-color);
+    --gray-300: #475569;
+    --gray-400: #64748b;
+    --gray-500: var(--text-muted);
+    --gray-600: var(--text-secondary);
+    color: var(--text-secondary);
+}
+
+html[data-theme="dark"] .solo-page .solo-header h2,
+html[data-theme="dark"] .solo-page .status-card-header h5,
+html[data-theme="dark"] .solo-page .plan-comparison-header h4,
+html[data-theme="dark"] .solo-page .plan-card-title,
+html[data-theme="dark"] .solo-page .plan-summary-card h4 {
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] .solo-page .solo-intro,
+html[data-theme="dark"] .solo-page .status-card-body p,
+html[data-theme="dark"] .solo-page .status-card-body strong,
+html[data-theme="dark"] .solo-page .plan-comparison-header p,
+html[data-theme="dark"] .solo-page .plan-details-list li,
+html[data-theme="dark"] .solo-page .plan-card-details li,
+html[data-theme="dark"] .solo-page .plan-summary-card p,
+html[data-theme="dark"] .solo-page .plan-summary-card li {
+    color: var(--text-secondary);
+}
+
+html[data-theme="dark"] .solo-page .status-card,
+html[data-theme="dark"] .solo-page .plan-comparison-card,
+html[data-theme="dark"] .solo-page .plan-card,
+html[data-theme="dark"] .solo-page .plan-summary-card {
+    background: var(--bg-card);
+    border-color: var(--border-color);
+    color: var(--text-secondary);
+}
+
+html[data-theme="dark"] .solo-page .plan-summary-card {
+    background: #172b45;
+    border-left-color: var(--accent-blue);
+}
+
+html[data-theme="dark"] .solo-page .plan-card-price {
+    color: var(--accent-blue);
+}
+
+html[data-theme="dark"] .solo-page .plan-card-footer,
+html[data-theme="dark"] .solo-page .status-card-header {
+    border-color: var(--border-color);
+}
+
+html[data-theme="dark"] .solo-page .plan-table th {
+    background: #0f172a;
+    color: var(--text-primary);
+    border-color: var(--border-color);
+}
+
+html[data-theme="dark"] .solo-page .plan-table tbody tr,
+html[data-theme="dark"] .solo-page .plan-table td {
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    border-color: var(--border-color);
+}
+
+html[data-theme="dark"] .solo-page .plan-table tbody tr:hover,
+html[data-theme="dark"] .solo-page .plan-table tbody tr:hover td {
+    background: #26364d;
+}
+
+html[data-theme="dark"] .solo-page .badge-success {
+    background: #14532d;
+    border-color: #22c55e;
+    color: #dcfce7;
+}
+
+html[data-theme="dark"] .solo-page .badge-warning {
+    background: #713f12;
+    border-color: #f59e0b;
+    color: #fef3c7;
+}
+
+html[data-theme="dark"] .solo-page .badge-secondary {
+    background: #334155;
+    border-color: #64748b;
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] .solo-page .badge-info {
+    background: #12355b;
+    border-color: #38bdf8;
+    color: #e0f2fe;
+}
+
+html[data-theme="dark"] .solo-page .btn-primary {
+    background: #1d4ed8;
+    color: #ffffff;
+}
+
+html[data-theme="dark"] .solo-page .btn-primary:hover:not(:disabled) {
+    background: #1e40af;
+    color: #ffffff;
+}
+
+html[data-theme="dark"] .solo-page .btn-secondary {
+    background: #334155;
+    border-color: #64748b;
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] #plan-selection-modal {
+    --primary: var(--accent-blue);
+    --primary-light: var(--accent-blue-hover);
+    --accent: #12355b;
+    --text-heading: var(--text-primary);
+    --text-body: var(--text-secondary);
+    --gray-100: #0f172a;
+    --gray-300: #475569;
+    --gray-600: var(--text-secondary);
+}
+
+html[data-theme="dark"] #plan-selection-modal .modal-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+}
+
+html[data-theme="dark"] #plan-selection-modal .modal-content-inner h3,
+html[data-theme="dark"] #plan-selection-modal .modal-label,
+html[data-theme="dark"] #plan-selection-modal .payment-info-line strong {
+    color: var(--text-primary) !important;
+}
+
+html[data-theme="dark"] #plan-selection-modal .modal-price {
+    color: var(--accent-blue);
+}
+
+html[data-theme="dark"] #plan-selection-modal .modal-radio-group label,
+html[data-theme="dark"] #plan-selection-modal .payment-info-line,
+html[data-theme="dark"] #plan-selection-modal .modal-terms-row label {
+    color: var(--text-secondary) !important;
+}
+
+html[data-theme="dark"] #plan-selection-modal .modal-payment-details,
+html[data-theme="dark"] #plan-selection-modal #modal-receipt {
+    background: #0f172a;
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] #plan-selection-modal .modal-actions {
+    background: linear-gradient(to top, rgba(30, 41, 59, 0.98), rgba(30, 41, 59, 0));
+}
+
+html[data-theme="dark"] #plan-selection-modal #modal-submit {
+    background-color: #1d4ed8 !important;
+    color: #ffffff !important;
+}
+
+html[data-theme="dark"] #plan-selection-modal .modal-close {
+    color: var(--text-muted);
+}
+
+/* Responsive Solo Plans layout */
+.solo-mobile-bar,
+.solo-sidebar-backdrop {
+    display: none;
+}
+
+.solo-page,
+.solo-status-grid,
+.plan-cards-grid,
+.plan-card,
+.status-card,
+.plan-summary-card,
+.plan-comparison-card {
+    min-width: 0;
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+    body:has(.solo-page) .sidebar { width: 76px; }
+    body:has(.solo-page) .sidebar-header { padding: 18px 8px; }
+    body:has(.solo-page) .logo-container-circle {
+        width: 48px;
+        height: 48px;
+        margin: 0;
+        padding: 3px;
+    }
+    body:has(.solo-page) .logo-text-group { display: none; }
+    body:has(.solo-page) .theme-toggle-wrapper {
+        justify-content: center;
+        padding: 10px 0;
+    }
+    body:has(.solo-page) .sidebar-links { padding: 14px 7px; gap: 8px; }
+    body:has(.solo-page) .side-link {
+        justify-content: center;
+        gap: 0;
+        padding: 12px 4px;
+        font-size: 0;
+    }
+    body:has(.solo-page) .side-link i { width: auto; font-size: 1.1rem; }
+    body:has(.solo-page) .side-link .badge { display: none; }
+    body:has(.solo-page) .main-wrapper {
+        width: calc(100% - 76px);
+        margin-left: 76px;
+        padding: 28px 24px;
+    }
+    body:has(.solo-page) .content-container { max-width: none; }
+    .solo-page { max-width: none; padding: 24px; }
+    .solo-status-grid { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+    .plan-cards-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .plan-summary-card { width: 100%; }
+    .plan-comparison-card { overflow: hidden; }
+    .table-responsive { overflow-x: auto; }
+    .plan-table { min-width: 680px; }
+}
+
+@media (max-width: 767px) {
+    body:has(.solo-page) { display: block; overflow-x: hidden; }
+    body:has(.solo-page).solo-menu-open { overflow: hidden; }
+    body:has(.solo-page) .sidebar {
+        top: 56px;
+        width: min(320px, calc(100vw - 40px));
+        height: calc(100dvh - 56px);
+        z-index: 1100;
+        visibility: hidden;
+        opacity: 0;
+        transform: translateX(-105%);
+        transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease, visibility 0s linear 320ms;
+    }
+    body:has(.solo-page) .sidebar.solo-drawer-open {
+        visibility: visible;
+        opacity: 1;
+        transform: translateX(0);
+        transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease, visibility 0s;
+    }
+    body:has(.solo-page) .main-wrapper {
+        width: 100%;
+        margin-left: 0;
+        padding: 76px 12px 24px;
+    }
+    body:has(.solo-page) .content-container { max-width: none; }
+    .solo-page {
+        max-width: none;
+        padding: 0;
+    }
+    .solo-mobile-bar {
+        position: fixed;
+        z-index: 1110;
+        inset: 0 0 auto;
+        display: flex;
+        flex-direction: row-reverse;
+        height: 56px;
+        align-items: center;
+        justify-content: space-between;
+        padding: 6px 14px;
+        background: #ffffff;
+        background-color: #ffffff;
+        opacity: 1;
+        border-bottom: 1px solid var(--gray-200);
+        pointer-events: auto;
+    }
+    .solo-mobile-logo { width: 42px; height: 42px; object-fit: contain; }
+    .solo-menu-toggle {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        width: 42px;
+        height: 42px;
+        flex: 0 0 42px;
+        place-items: center;
+        border: 1px solid var(--gray-300);
+        border-radius: 10px;
+        background: #ffffff;
+        background-color: #ffffff;
+        opacity: 1;
+        color: var(--primary);
+        box-shadow: var(--shadow-sm);
+        font-size: 1.1rem;
+        cursor: pointer;
+        pointer-events: auto;
+        touch-action: manipulation;
+    }
+    .solo-sidebar-backdrop {
+        position: fixed;
+        z-index: 1090;
+        inset: 56px 0 0;
+        display: block;
+        visibility: hidden;
+        opacity: 0;
+        pointer-events: none;
+        border: 0;
+        background: rgba(15, 23, 42, 0.48);
+        transition: opacity 240ms ease, visibility 0s linear 240ms;
+    }
+    .solo-sidebar-backdrop.is-visible {
+        visibility: visible;
+        opacity: 1;
+        pointer-events: auto;
+        transition: opacity 240ms ease, visibility 0s;
+    }
+    .solo-header { margin-bottom: 20px; }
+    .solo-header h2 { font-size: 1.45rem; line-height: 1.25; }
+    .solo-intro { font-size: 0.88rem; line-height: 1.5; }
+    .solo-status-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; margin-bottom: 20px; }
+    .status-card { padding: 16px; }
+    .status-card-header { align-items: flex-start; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+    .status-card-header h5 { font-size: 0.9rem; }
+    .status-card-body p { align-items: flex-start; flex-wrap: wrap; font-size: 0.86rem; }
+    .plan-comparison-card { padding: 16px; margin-bottom: 20px; }
+    .plan-comparison-header { margin-bottom: 16px; }
+    .plan-comparison-header h4 { font-size: 1rem; }
+    .plan-comparison-header p { font-size: 0.84rem; }
+    .table-responsive { margin-inline: -4px; overflow-x: auto; }
+    .plan-table { min-width: 620px; }
+    .plan-table th, .plan-table td { padding: 12px; }
+    .plan-cards-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; margin-bottom: 20px; }
+    .plan-card { padding: 16px; }
+    .plan-card-title { font-size: 1rem; }
+    .plan-card-price { font-size: 1.35rem; }
+    .plan-card-details li { font-size: 0.86rem; }
+    .plan-card-footer { padding-top: 12px; }
+    .plan-card .btn { width: 100%; min-height: 46px; }
+    .plan-summary-card { padding: 16px; margin-top: 20px; }
+    .plan-summary-card p, .plan-summary-card li { font-size: 0.86rem; }
+    .modal-backdrop { padding: 12px; align-items: center; }
+    .modal-card {
+        width: min(100%, 440px);
+        max-height: calc(100dvh - 24px);
+        padding: 20px 16px 14px;
+        overflow-y: auto;
+    }
+    .modal-content-inner h3 { font-size: 1.05rem; }
+    .modal-price { font-size: 1.25rem; margin-bottom: 16px; }
+    .modal-radio-group { gap: 12px; }
+    .modal-row { margin-bottom: 14px; }
+    #modal-receipt { min-height: 46px; }
+    .modal-terms-row { align-items: flex-start; }
+    .modal-actions { flex-direction: column-reverse; gap: 8px; }
+    .modal-actions .btn { width: 100%; min-height: 46px; }
+}
+
+@media (max-width: 420px) {
+    body:has(.solo-page) .main-wrapper { padding-right: 10px; padding-left: 10px; }
+    .solo-mobile-bar { padding-inline: 10px; }
+    .status-card, .plan-card, .plan-summary-card { padding: 14px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body:has(.solo-page) .sidebar,
+    .solo-sidebar-backdrop,
+    .modal-card,
+    .plan-card { transition-duration: 0.01ms; transition-delay: 0s; }
+}
+
+@media (max-width: 767px) {
+    .solo-mobile-bar {
+        background: #ffffff;
+        background-color: #ffffff;
+        border-bottom: 1px solid #d9e1ec;
+        box-shadow: none;
+    }
+
+    .solo-menu-toggle {
+        border: 1px solid #d9e1ec;
+        background: #ffffff;
+        background-color: #ffffff;
+        color: var(--primary);
+        box-shadow: var(--shadow-sm);
+        outline: none;
+    }
+
+    .solo-menu-toggle:focus-visible {
+        outline: 2px solid var(--primary);
+        outline-offset: 2px;
+    }
+}
+
+html[data-theme="dark"] .solo-page {
+    --card-white: var(--bg-card);
+}
+
+html[data-theme="dark"] .solo-mobile-bar,
+html[data-theme="dark"] .solo-menu-toggle {
+    border-color: var(--border-color);
+    background: var(--bg-card);
+    color: var(--accent-blue);
+}

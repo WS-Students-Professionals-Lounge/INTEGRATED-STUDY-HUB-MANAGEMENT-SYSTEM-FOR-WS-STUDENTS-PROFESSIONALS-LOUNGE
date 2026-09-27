@@ -50,6 +50,38 @@ def calculate_open_time_minutes_fee(minutes):
     return 35.0  # Fallback for full hour rate
 
 
+def calculate_common_area_overtime_fee(end_time, current_time=None):
+    """Calculate tiered overtime charges for fixed-time Common Area sessions."""
+    if not end_time:
+        return 0.0
+
+    if current_time is None:
+        current_time = datetime.now()
+
+    if current_time <= end_time:
+        return 0.0
+
+    overtime_minutes = int((current_time - end_time).total_seconds() // 60)
+    if overtime_minutes <= 0:
+        return 0.0
+
+    full_hours, remaining_minutes = divmod(overtime_minutes, 60)
+    fee = full_hours * 25.0
+
+    if 1 <= remaining_minutes <= 12:
+        fee += 5.0
+    elif 13 <= remaining_minutes <= 24:
+        fee += 10.0
+    elif 25 <= remaining_minutes <= 36:
+        fee += 15.0
+    elif 37 <= remaining_minutes <= 47:
+        fee += 20.0
+    elif 48 <= remaining_minutes <= 59:
+        fee += 25.0
+
+    return fee
+
+
 def calculate_admin_total_amount(
     room_rate=0.0,
     duration_hours=1.0,
@@ -167,6 +199,19 @@ def auto_start_due_reservations(now=None):
         if not reservation.user_id:
             continue
 
+        active_plan = SoloPlan.query.filter(
+            SoloPlan.user_id == reservation.user_id,
+            func.lower(SoloPlan.status).in_(["approved", "active"]),
+            or_(
+                SoloPlan.expiry_date.is_(None),
+                SoloPlan.expiry_date >= now,
+            ),
+        ).first()
+        if not active_plan:
+            reservation.status = "Checked-in"
+            changed = True
+            continue
+
         membership = Membership.query.filter_by(user_id=reservation.user_id).first()
         if not membership:
             continue
@@ -202,11 +247,21 @@ def auto_start_due_reservations(now=None):
 
 
 def get_common_area_dashboard_counts(now):
+    active_member_user_ids = db.session.query(SoloPlan.user_id).filter(
+        func.lower(SoloPlan.status).in_(["approved", "active"]),
+        or_(
+            SoloPlan.expiry_date.is_(None),
+            SoloPlan.expiry_date >= now,
+        ),
+    )
     active_walkins_count = Reservation.query.join(Room).filter(
         Room.name.ilike("common area"),
-        Reservation.status.in_(["Confirmed", "Walk-in"]),
+        Reservation.status.in_(["Confirmed", "IN_PROGRESS", "Checked-in", "Walk-in"]),
+        or_(
+            Reservation.user_id.is_(None),
+            ~Reservation.user_id.in_(active_member_user_ids),
+        ),
         Reservation.start_time <= now,
-        or_(Reservation.is_open_time == True, Reservation.end_time >= now),
     ).count()
 
     active_members_count = db.session.query(AttendanceLog.id).join(Membership).filter(
@@ -217,7 +272,22 @@ def get_common_area_dashboard_counts(now):
         AttendanceLog.check_out_time.is_(None),
     ).count()
 
-    occupied_count = active_walkins_count + active_members_count
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    today_end = today_start + timedelta(days=1)
+    confirmed_waiting_count = Reservation.query.join(Room).filter(
+        Room.name.ilike("common area"),
+        func.lower(Reservation.status).in_([
+            "confirmed",
+            "approved",
+            "waiting",
+            "pending",
+            "pending confirmation",
+        ]),
+        Reservation.start_time >= today_start,
+        Reservation.start_time < today_end,
+    ).count()
+
+    occupied_count = active_walkins_count + active_members_count + confirmed_waiting_count
     return active_walkins_count, active_members_count, occupied_count
 
 
@@ -420,25 +490,30 @@ def get_active_room_reservations(rooms):
     ph_tz = pytz.timezone("Asia/Manila")
     now = datetime.now(ph_tz).replace(tzinfo=None)
 
-    reservations = (
-        Reservation.query.filter(
-            Reservation.room_id.in_(room_ids),
-            func.lower(Reservation.status).in_(["confirmed", "in_progress", "walk-in"]),
-        )
-        .order_by(Reservation.start_time.asc())
-        .all()
+    query = Reservation.query.filter(
+        Reservation.room_id.in_(room_ids),
+        func.lower(Reservation.status).in_(["confirmed", "in_progress", "checked-in", "walk-in"]),
+        or_(
+            Reservation.is_open_time == True,
+            Reservation.end_time.is_(None),
+            Reservation.end_time > now,
+        ),
     )
+    if hasattr(Reservation, "deleted_at"):
+        query = query.filter(Reservation.deleted_at.is_(None))
+
+    reservations = query.order_by(Reservation.start_time.asc()).all()
 
     def is_current(reservation):
         if not reservation.start_time:
             return False
-            
-        if reservation.end_time:
-            return reservation.start_time <= now <= reservation.end_time
-            
+
         if reservation.is_open_time or reservation.end_time is None:
             return reservation.start_time <= now
-            
+
+        if reservation.end_time:
+            return reservation.start_time <= now <= reservation.end_time
+
         return False
 
     room_reservations = {}
@@ -508,47 +583,38 @@ def check_availability():
         else:
             end_dt = start_dt + timedelta(hours=1)
 
-        conflict = Reservation.query.filter(
-            Reservation.room_id == room_id,
-            Reservation.status.in_(["Confirmed", "APPROVED", "Pending", "Walk-in", "Checked-in"]),
-            Reservation.start_time < end_dt,
-            Reservation.end_time.isnot(None),
-            Reservation.end_time > start_dt,
-        ).first()
-        if conflict:
-            return jsonify({
-                "status": "conflict",
-                "message": f"Time Conflict: Reserved until {conflict.end_time.strftime('%I:%M %p')}",
-            })
+        if not is_common_area:
+            conflict = Reservation.query.filter(
+                Reservation.room_id == room_id,
+                Reservation.status.in_(["Confirmed", "APPROVED", "Pending", "Walk-in", "Checked-in"]),
+                Reservation.start_time < end_dt,
+                Reservation.end_time.isnot(None),
+                Reservation.end_time > start_dt,
+            ).first()
+            if conflict:
+                return jsonify({
+                    "status": "conflict",
+                    "message": f"Time Conflict: Reserved until {conflict.end_time.strftime('%I:%M %p')}",
+                })
 
-        active_session = db.session.query(AttendanceLog).join(Membership).join(
-            Reservation,
-            Reservation.user_id == Membership.user_id,
-        ).filter(
-            Reservation.room_id == room_id,
-            Reservation.status.in_(["Confirmed", "Checked-in", "Walk-in"]),
-            AttendanceLog.check_out_time.is_(None),
-            Membership.is_checked_in == True,
-            Membership.status == "active",
-            AttendanceLog.check_in_time < end_dt,
-            Membership.expiry_date.isnot(None),
-            Membership.expiry_date > start_dt,
-        ).first()
-        if active_session and not is_common_area:
-            return jsonify({
-                "status": "conflict",
-                "message": "Time Conflict: Room is occupied by an active session.",
-            })
-
-        if is_common_area:
-            current_occupancy = get_common_area_count() if 'get_common_area_count' in globals() else 0
-            if current_occupancy >= 70:
-                return jsonify(
-                    {
-                        "status": "conflict",
-                        "message": "Common Area is already at full capacity (70/70).",
-                    }
-                )
+            active_session = db.session.query(AttendanceLog).join(Membership).join(
+                Reservation,
+                Reservation.user_id == Membership.user_id,
+            ).filter(
+                Reservation.room_id == room_id,
+                Reservation.status.in_(["Confirmed", "Checked-in", "Walk-in"]),
+                AttendanceLog.check_out_time.is_(None),
+                Membership.is_checked_in == True,
+                Membership.status == "active",
+                AttendanceLog.check_in_time < end_dt,
+                Membership.expiry_date.isnot(None),
+                Membership.expiry_date > start_dt,
+            ).first()
+            if active_session:
+                return jsonify({
+                    "status": "conflict",
+                    "message": "Time Conflict: Room is occupied by an active session.",
+                })
 
     except Exception as error:
         return jsonify(
@@ -622,7 +688,14 @@ def dashboard():
         .count()
     )
 
-    total_members = User.query.filter_by(role="member").count()
+    active_member_user_ids = db.session.query(SoloPlan.user_id).filter(
+        func.lower(SoloPlan.status).in_(["approved", "active"]),
+        or_(
+            SoloPlan.expiry_date.is_(None),
+            SoloPlan.expiry_date >= now,
+        ),
+    )
+    total_members = User.query.filter(User.id.in_(active_member_user_ids)).count()
     active_plans = (
         SoloPlan.query.filter_by(status="approved")
         .filter(SoloPlan.expiry_date >= now)
@@ -643,6 +716,26 @@ def dashboard():
 
     updated = False
 
+    common_area_room_ids = {
+        room_id
+        for (room_id,) in db.session.query(Room.id).filter(
+            func.lower(func.trim(Room.name)) == "common area"
+        ).all()
+    }
+
+    due_reservations = Reservation.query.filter(
+        Reservation.start_time <= now,
+        func.lower(Reservation.status).in_(["confirmed", "waiting"]),
+    ).all()
+    for res in due_reservations:
+        if res.start_time and res.start_time <= now:
+            res.status = "IN_PROGRESS"
+            check_in_val = getattr(res, 'check_in_time', None) or getattr(res, 'start_time', None) or getattr(res, 'created_at', None)
+            if not check_in_val:
+                pass
+            db.session.add(res)
+            updated = True
+
     expired_sessions = Reservation.query.filter(
         Reservation.end_time <= now,
         Reservation.status.in_(["Confirmed", "Walk-in"]),
@@ -650,48 +743,66 @@ def dashboard():
         Reservation.is_paused == False
     ).all()
     for res in expired_sessions:
+        if res.room_id in common_area_room_ids:
+            continue
         res.status = "Ended"
+        res.customer_id = None
         db.session.add(res)
         updated = True
 
     if updated:
         db.session.commit()
 
-    reservations_today = (
-        Reservation.query.filter(
-            func.lower(Reservation.status).in_(["pending", "confirmed"]),
-            Reservation.start_time >= today_start,
-            Reservation.start_time < today_end,
-            or_(
-                Reservation.end_time >= now,
-                Reservation.is_open_time == True
-            )
-        )
-        .count()
-    )
+    reservations_today = Reservation.query.filter(
+        func.lower(Reservation.status).in_(
+            ["pending", "confirmed", "in_progress", "checked-in"]
+        ),
+    ).count()
 
     all_res = Reservation.query.filter(
         Reservation.start_time <= now,
         or_(
             Reservation.end_time >= today_start,
-            Reservation.is_open_time == True
+            Reservation.is_open_time == True,
+            and_(
+                Reservation.room_id.in_(common_area_room_ids),
+                Reservation.status.in_(["IN_PROGRESS", "Checked-in", "Walk-in"]),
+            ),
         ),
         Reservation.status.in_(["Confirmed", "IN_PROGRESS", "Checked-in", "Walk-in", "Ended"]),
     ).all()
 
     active_reservations = sorted(all_res, key=lambda x: (x.status != "Ended", x.end_time if x.end_time else datetime.max))
 
-    pending_reservations = (
-        Reservation.query.filter(
-            func.lower(Reservation.status) == "confirmed",
-            Reservation.start_time >= today_start,
-            Reservation.start_time < today_end,
-            Reservation.start_time > now,
-        )
-        .order_by(Reservation.start_time.asc())
-        .limit(7)
-        .all()
+    today = now.date()
+    pending_query = Reservation.query.filter(
+        func.date(Reservation.start_time) == today,
+        func.lower(Reservation.status).in_(
+            ["pending", "confirmed", "waiting"]
+        ),
+        Reservation.start_time > now,
     )
+    if hasattr(Reservation, "deleted_at"):
+        pending_query = pending_query.filter(Reservation.deleted_at.is_(None))
+
+    pending_reservations = pending_query.order_by(Reservation.start_time.asc()).all()
+
+    waiting_list_today = [
+        r
+        for r in pending_reservations
+        if r.start_time
+        and r.start_time.date() == today
+        and str(r.status or "").strip().lower() in ("confirmed", "waiting", "pending")
+        and r.start_time > now
+    ]
+
+    live_occupied_reservations = [
+        r
+        for r in active_reservations
+        if str(r.status or "").strip().lower() == "in_progress"
+        and r.start_time is not None
+        and r.start_time <= now
+    ]
 
     active_walkins = [
         r
@@ -703,6 +814,7 @@ def dashboard():
         r
         for r in active_reservations
         if r.room and r.room.name.strip().lower() == "common area"
+        and str(r.status or "").strip().lower() in ("in_progress", "checked-in", "walk-in")
     ]
 
     # Fetch active AttendanceLog entries for checked-in members to bind real-time check-in stamp
@@ -768,6 +880,12 @@ def dashboard_room_status():
             "occupant_name": reservation.customer_name if reservation else None,
             "start_time": reservation.start_time.isoformat() if reservation else None,
             "end_time": reservation.end_time.isoformat() if reservation and reservation.end_time else None,
+            "reservation_id": reservation.id if reservation else None,
+            "is_paused": bool(reservation.is_paused) if reservation else False,
+            "is_open_time": bool(reservation.is_open_time) if reservation else False,
+            "room_rate": float(reservation.room.base_rate or 0) if reservation and reservation.room else 0,
+            "total_amount": float(reservation.total_amount or 0) if reservation else 0,
+            "extra_fee": float(reservation.extra_fee or 0) if reservation else 0,
         })
 
     return jsonify({
@@ -794,13 +912,16 @@ def dashboard_today_waiting_list():
         return redirect_response
 
     now = datetime.now(pytz.timezone("Asia/Manila")).replace(tzinfo=None)
-    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    today_end = today_start + timedelta(days=1)
-    reservations = Reservation.query.filter(
-        Reservation.start_time >= now,
-        Reservation.start_time < today_end,
-        func.lower(Reservation.status) == "confirmed",
-    ).order_by(Reservation.start_time.asc()).all()
+    today = now.date()
+    waiting_query = Reservation.query.filter(
+        func.date(Reservation.start_time) == today,
+        Reservation.start_time > now,
+        func.lower(Reservation.status).in_(["confirmed", "waiting", "pending"]),
+    )
+    if hasattr(Reservation, "deleted_at"):
+        waiting_query = waiting_query.filter(Reservation.deleted_at.is_(None))
+
+    reservations = waiting_query.order_by(Reservation.start_time.asc()).all()
 
     waiting_list = [{
         "id": reservation.id,
@@ -1349,6 +1470,7 @@ def walkin_checkout(res_id):
     report_date = res.end_time.date()
 
     res.status = "Checked-Out"
+    res.customer_id = None
     res.paid = True
 
     if res.room and res.room.name.strip().lower() != "common area":
@@ -1426,6 +1548,7 @@ def process_payment(reservation_id):
     report_date = get_business_date(res.end_time)
 
     res.status = "Checked-Out"
+    res.customer_id = None
     res.paid = True
 
     if res.room and res.room.name.strip().lower() != "common area":
@@ -1562,18 +1685,17 @@ def admin_reservations():
 
             # === 2. DATE & TIME PARSING ===
             try:
-                if is_open_time:
+                if form.start_time.data:
+                    if isinstance(form.start_time.data, str):
+                        full_start = datetime.strptime(form.start_time.data, "%Y-%m-%dT%H:%M")
+                    else:
+                        full_start = form.start_time.data
+                else:
                     full_start = datetime.now()
+
+                if is_open_time:
                     full_end = full_start + timedelta(hours=12)
                 else:
-                    if form.start_time.data:
-                        if isinstance(form.start_time.data, str):
-                            full_start = datetime.strptime(form.start_time.data, "%Y-%m-%dT%H:%M")
-                        else:
-                            full_start = form.start_time.data
-                    else:
-                        full_start = datetime.now()
-
                     if form.end_time.data:
                         if isinstance(form.end_time.data, str):
                             full_end = datetime.strptime(form.end_time.data, "%Y-%m-%dT%H:%M")
@@ -1584,22 +1706,21 @@ def admin_reservations():
                     else:
                         full_end = full_start + timedelta(hours=1)
 
-                # Overlap checking for non-common area
-                reservation_conflict = Reservation.query.filter(
-                    Reservation.room_id == room.id,
-                    Reservation.status.in_(["Confirmed", "APPROVED", "Pending", "Walk-in", "Checked-in"]),
-                    Reservation.start_time < full_end,
-                    Reservation.end_time.isnot(None),
-                    Reservation.end_time > full_start,
-                ).first()
-                if reservation_conflict:
-                    flash(
-                        f"Time Conflict: Reserved until {reservation_conflict.end_time.strftime('%I:%M %p')}",
-                        "danger",
-                    )
-                    return render_template("admin/admin_reservations.html", form=form, rooms=rooms)
-
                 if room_name_lower != "common area":
+                    reservation_conflict = Reservation.query.filter(
+                        Reservation.room_id == room.id,
+                        Reservation.status.in_(["Confirmed", "APPROVED", "Pending", "Walk-in", "Checked-in"]),
+                        Reservation.start_time < full_end,
+                        Reservation.end_time.isnot(None),
+                        Reservation.end_time > full_start,
+                    ).first()
+                    if reservation_conflict:
+                        flash(
+                            f"Time Conflict: Reserved until {reservation_conflict.end_time.strftime('%I:%M %p')}",
+                            "danger",
+                        )
+                        return render_template("admin/admin_reservations.html", form=form, rooms=rooms)
+
                     conflict = Reservation.query.filter(
                         Reservation.room_id == room.id,
                         Reservation.status.in_(["Confirmed", "Walk-in", "Pending"]),
@@ -1657,11 +1778,15 @@ def admin_reservations():
                 paid=False,
             )
 
-            now = datetime.now()
+            # Keep same-day reservations in the waiting/confirmed state until an
+            # explicit check-in or admin action starts them. Do not auto-activate
+            # reservations merely because their start time is current or already in progress.
+            reservation.status = "Confirmed"
+
             if (
                 room
                 and room_name_lower != "common area"
-                and full_start <= now
+                and full_start <= datetime.now()
             ):
                 room.status = "unavailable"
 
@@ -2126,12 +2251,28 @@ def confirm_reservation(res_id):
         return redirect_response
 
     res = Reservation.query.get_or_404(res_id)
-    res.status = "Confirmed"
+    now = datetime.now()
+
+    # Confirming a reservation secures the slot without creating a live
+    # checked-in session unless the scheduled time has actually arrived.
+    res.status = "CONFIRMED"
+    res.check_in_time = None
+
+    if res.start_time:
+        if (
+            res.start_time.date() > now.date()
+            or (res.start_time.date() == now.date() and res.start_time.time() > now.time())
+        ):
+            res.status = "CONFIRMED"
+        elif res.start_time.date() == now.date() and res.start_time.time() <= now.time():
+            res.status = "IN_PROGRESS"
+            if not res.check_in_time:
+                res.check_in_time = now
+
     res.confirmation_notification_seen = False
     res.approved_by_id = current_user.id
     if res.room and res.room.name.strip().lower() != "common area":
-        now = datetime.now()
-        if res.start_time <= now <= res.end_time:
+        if res.start_time and res.start_time <= now <= (res.end_time or now):
             res.room.status = "unavailable"
     db.session.commit()
     flash(f"Reservation confirmed for {res.customer_name}")
@@ -2169,6 +2310,7 @@ def cancel_reservation(res_id):
     if res.status == "Confirmed":
         res.room.status = "available"
     res.status = "Cancelled"
+    res.customer_id = None
     db.session.commit()
     flash(f"Reservation cancelled for {res.customer_name}")
     return redirect(url_for("admin.admin_reservations_list"))
@@ -2913,7 +3055,14 @@ def membership_check_out(user_or_membership_id):
         ).first()
 
         if current_log:
-            current_log.check_out_time = now_ph
+            # FIX: Store the exact termination timestamp before committing the session close.
+            session_end_time = now_ph
+            for field_name in ("ended_at", "actual_end_time", "check_out_time"):
+                if hasattr(current_log, field_name):
+                    setattr(current_log, field_name, session_end_time)
+                    break
+            else:
+                current_log.check_out_time = session_end_time
 
             # --- UPDATED DURATION COMPUTATION WITH PAUSE DEDUCTION ---
             total_elapsed_seconds = (now_ph - current_log.check_in_time).total_seconds()
@@ -3043,7 +3192,7 @@ def member_attendance_history(membership_id):
 
     for log in logs:
         c_in = log.check_in_time
-        c_out = log.check_out_time
+        c_out = getattr(log, "check_out_time", None) or getattr(log, "actual_end_time", None) or getattr(log, "ended_at", None)
 
         # Direct String Formatting (%b %d, %Y kag %I:%M %p)
         date_str = c_in.strftime("%b %d, %Y") if c_in else "-"
@@ -3055,6 +3204,7 @@ def member_attendance_history(membership_id):
             "date": date_str,
             "check_in": check_in_str,
             "check_out": check_out_str,
+            "actual_end_time": c_out.isoformat() if c_out else None,
             "hours": decimal_hours_to_readable(log.hours_deducted) if (log.hours_deducted and log.hours_deducted > 0) else "-"
         })
 
@@ -3100,23 +3250,33 @@ def common_area_occupants():
 
     ph_tz = pytz.timezone("Asia/Manila")
     now_ph = datetime.now(ph_tz)
+    now_naive = now_ph.replace(tzinfo=None)
     auto_start_due_reservations(now_ph.replace(tzinfo=None))
 
-    checked_in = db.session.query(Membership).filter(
-        Membership.is_checked_in == True
+    approved_active_plan_users = db.session.query(SoloPlan.user_id).filter(
+        func.lower(SoloPlan.status).in_(["approved", "active"]),
+        or_(
+            SoloPlan.expiry_date.is_(None),
+            SoloPlan.expiry_date >= now_naive,
+        ),
+    )
+    active_logs = db.session.query(AttendanceLog).join(Membership).filter(
+        Membership.status == "active",
+        Membership.is_checked_in == True,
+        Membership.is_paused == False,
+        AttendanceLog.is_paused == False,
+        AttendanceLog.check_out_time.is_(None),
+        Membership.user_id.in_(approved_active_plan_users),
     ).all()
 
     occupants = []
 
-    for membership in checked_in:
+    for active_log in active_logs:
+        membership = active_log.membership
         _expire_membership_if_needed(membership)
 
         if membership.status != "active" or not membership.is_checked_in:
             continue
-
-        active_log = membership.attendance_logs.filter(
-            AttendanceLog.check_out_time.is_(None)
-        ).first()
 
         if active_log and active_log.check_in_time:
             check_in_dt = active_log.check_in_time
@@ -3203,9 +3363,25 @@ def common_area_occupants():
                 check_in_dt.timestamp() * 1000
             )
 
+            active_reservation = Reservation.query.filter(
+                Reservation.user_id == membership.user_id,
+                Reservation.status.in_(["Checked-in", "IN_PROGRESS", "Walk-in"]),
+                Reservation.start_time <= now_ph.replace(tzinfo=None),
+                or_(
+                    Reservation.end_time >= now_ph.replace(tzinfo=None),
+                    Reservation.is_open_time.is_(True),
+                    Reservation.end_time.is_(None),
+                ),
+            ).order_by(Reservation.start_time.desc()).first()
+            display_name = (
+                active_reservation.customer_name.strip()
+                if active_reservation and active_reservation.customer_name
+                else (membership.user.name if membership.user else "Walk-in / Guest")
+            )
+
             occupants.append({
                 "id": membership.id,
-                "name": membership.user.name if membership.user else "Walk-in / Guest",
+                "name": display_name,
                 "check_in_time": check_in_dt.isoformat(),
                 "check_in_ms": epoch_time_ms,
                 "formatted_check_in": formatted_check_in,

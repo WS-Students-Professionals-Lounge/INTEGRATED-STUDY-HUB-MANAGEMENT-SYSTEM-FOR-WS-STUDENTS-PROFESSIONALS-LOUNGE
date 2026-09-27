@@ -7,13 +7,58 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from run import create_app
 from database_fixed import Config, db, User, Room, Reservation, WalkinReservation, DailyReport
-from admin import get_active_room_reservations
+from admin import admin_bp, get_active_room_reservations
 
 
 class TestConfig(Config):
     TESTING = True
     WTF_CSRF_ENABLED = False
     SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
+
+
+def test_open_time_future_reservation_keeps_scheduled_start_time():
+    app = create_app(TestConfig)
+    app.register_blueprint(admin_bp)
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+        admin = User(name='Admin User', email='admin@lounge.com', role='admin', phone='09171111111')
+        admin.set_password('admin123')
+        room = Room(name='Test Room A', base_rate=100.0, category='meeting')
+        db.session.add_all([admin, room])
+        db.session.commit()
+
+        client = app.test_client()
+        with client.session_transaction() as sess:
+            sess['_user_id'] = str(admin.id)
+            sess['_fresh'] = True
+
+        scheduled_start = (datetime.now() + timedelta(hours=2)).replace(second=0, microsecond=0)
+        payload = {
+            'room_id': str(room.id),
+            'customer_name': 'Open Time Guest',
+            'contact_number': '09171234568',
+            'pax_count': '2',
+            'start_time': scheduled_start.strftime('%Y-%m-%dT%H:%M'),
+            'open_time': 'y',
+            'extra_fee': '0',
+            'addon_subtotal': '0',
+            'total_price': '200',
+            'discount': '0.0',
+            'payment_method': 'Cash',
+            'extra_notes': 'Future scheduled open-time booking',
+        }
+
+        response = client.post('/admin/reservations', data=payload)
+        assert response.status_code in (200, 302)
+
+        reservation = Reservation.query.filter_by(customer_name='Open Time Guest').first()
+        assert reservation is not None
+        assert reservation.is_open_time is True
+        assert abs((reservation.start_time - scheduled_start).total_seconds()) < 60
+        assert reservation.status in ('Confirmed', 'CONFIRMED')
 
 
 def run_admin_tests():

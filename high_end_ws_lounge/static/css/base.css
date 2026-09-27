@@ -914,3 +914,581 @@ html[data-theme="dark"] .plan-summary-card {
 html[data-theme="dark"] #membershipCard {
     color: #e2e8f0;
 }
+
+/* Accessible dark theme refinements */
+html[data-theme="dark"] {
+    --bg-main: #0f172a;
+    --bg-card: #1e293b;
+    --bg-sidebar: #0f172a;
+    --border-color: #334155;
+    --text-primary: #f8fafc;
+    --text-secondary: #cbd5e1;
+    --text-muted: #94a3b8;
+    --accent-blue: #38bdf8;
+    --accent-blue-hover: #60a5fa;
+}
+
+html[data-theme="dark"] body,
+html[data-theme="dark"] .main-wrapper {
+    background: var(--bg-main) !important;
+    color: var(--text-primary) !important;
+}
+
+html[data-theme="dark"] .sidebar {
+    background: var(--bg-sidebar) !important;
+    border-color: var(--border-color) !important;
+}
+
+html[data-theme="dark"] .card,
+html[data-theme="dark"] .stat-card,
+html[data-theme="dark"] .room-card,
+html[data-theme="dark"] .usage-card,
+html[data-theme="dark"] .dashboard-card,
+html[data-theme="dark"] .reservations-container,
+html[data-theme="dark"] .members-main-wrapper,
+html[data-theme="dark"] .staff-container,
+html[data-theme="dark"] .reports-container,
+html[data-theme="dark"] .payment-settings-wrapper,
+html[data-theme="dark"] .solo-apps-container,
+html[data-theme="dark"] .addons-section,
+html[data-theme="dark"] .apps-table-card,
+html[data-theme="dark"] .addon-item:not(.selected),
+html[data-theme="dark"] .profile-card,
+html[data-theme="dark"] .profile-summary,
+html[data-theme="dark"] .solo-plan-card,
+html[data-theme="dark"] .membership-status-card,
+html[data-theme="dark"] .log-stat-card,
+html[data-theme="dark"] .control-container,
+html[data-theme="dark"] .history-card,
+html[data-theme="dark"] .room-list-card,
+html[data-theme="dark"] .rooms-sidebar,
+html[data-theme="dark"] .room-item,
+html[data-theme="dark"] .reservation-form-card,
+html[data-theme="dark"] .booking-summary-card,
+html[data-theme="dark"] .payment-info-panel,
+html[data-theme="dark"] .payment-method-card,
+html[data-theme="dark"] .plan-comparison-card,
+html[data-theme="dark"] .plan-comparison-header,
+html[data-theme="dark"] .plan-summary-card,
+html[data-theme="dark"] .status-card,
+html[data-theme="dark"] .request-card,
+html[data-theme="dark"] .member-list-card,
+html[data-theme="dark"] .member-card,
+html[data-theme="dark"] .staff-card,
+html[data-theme="dark"] .report-card,
+html[data-theme="dark"] .rate-card,
+html[data-theme="dark"] .plan-card,
+html[data-theme="dark"] .active-plan-card,
+html[data-theme="dark"] .membership-card,
+html[data-theme="dark"] .waiting-list-card,
+html[data-theme="dark"] .summary-card,
+html[data-theme="dark"] .session-monitor,
+html[data-theme="dark"] .recent-logs-section,
+html[data-theme="dark"] .attendance-records-container,
+html[data-theme="dark"] .modal-card,
+html[data-theme="dark"] .modal-content,
+html[data-theme="dark"] .modal-container,
+html[data-theme="dark"] .modal-form-side,
+html[data-theme="dark"] .modal-preview-side,
+html[data-theme="dark"] .receipt-modal-content,
+html[data-theme="dark"] .payment-modal-content,
+html[data-theme="dark"] .custom-modal .modal-content,
+html[data-theme="dark"] .dropdown-menu,
+html[data-theme="dark"] .list-group-item,
+html[data-theme="dark"] .accordion-item,
+html[data-theme="dark"] .reservation-page-admin-thq-group42-elm,
+html[data-theme="dark"] .reservation-page-admin-thq-reservation-form-elm,
+html[data-theme="dark"] .reservation-page-admin-thq-reservation-details-elm {
+    background: var(--bg-card) !important;
+    border-color: var(--border-color) !important;
+    color: var(--text-primary) !important;
+}
+
+html[data-theme="dark"] .card,
+html[data-theme="dark"] .stat-card,
+html[data-theme="dark"] .room-card,
+html[data-theme="dark"] .usage-card,
+html[data-theme="dark"] .dashboard-card,
+html[data-theme="dark"] .profile-card,
+html[data-theme="dark"] .profile-summary,
+html[data-theme="dark"] .solo-plan-card,
+html[data-theme="dark"] .membership-status-card,
+html[data-theme="dark"] .log-stat-card,
+html[data-theme="dark"] .history-card,
+html[data-theme="dark"] .room-list-card,
+html[data-theme="dark"] .reservation-form-card,
+html[data-theme="dark"] .booking-summary-card,
+html[data-theme="dark"] .payment-info-panel,
+html[data-theme="dark"] .payment-method-card,
+html[data-theme="dark"] .plan-comparison-card,
+html[data-theme="dark"] .plan-summary-card,
+html[data-theme="dark"] .status-card,
+html[data-theme="dark"] .request-card,
+html[data-theme="dark"] .member-list-card,
+html[data-theme="dark"] .member-card,
+html[data-theme="dark"] .staff-card,
+html[data-theme="dark"] .report-card,
+html[data-theme="dark"] .rate-card,
+html[data-theme="dark"] .plan-card,
+html[data-theme="dark"] .active-plan-card,
+html[data-theme="dark"] .membership-card,
+html[data-theme="dark"] .waiting-list-card,
+html[data-theme="dark"] .summary-card,
+html[data-theme="dark"] .apps-table-card,
+html[data-theme="dark"] .addon-item:not(.selected),
+html[data-theme="dark"] .modal-card {
+    border: 1px solid var(--border-color) !important;
+}
+
+html[data-theme="dark"] h1,
+html[data-theme="dark"] h2,
+html[data-theme="dark"] h3,
+html[data-theme="dark"] h4,
+html[data-theme="dark"] h5,
+html[data-theme="dark"] h6,
+html[data-theme="dark"] .card-title,
+html[data-theme="dark"] .section-title,
+html[data-theme="dark"] .page-title,
+html[data-theme="dark"] .stat-number,
+html[data-theme="dark"] .stat-value,
+html[data-theme="dark"] .members-page-header,
+html[data-theme="dark"] .members-tabs-container,
+html[data-theme="dark"] .staff-title,
+html[data-theme="dark"] .reports-title,
+html[data-theme="dark"] .payment-settings-title,
+html[data-theme="dark"] .apps-header,
+html[data-theme="dark"] .solo-header,
+html[data-theme="dark"] .reservation-page-admin-thq-text-elm13,
+html[data-theme="dark"] .reservation-page-admin-thq-text-elm31 {
+    color: var(--text-primary) !important;
+}
+
+html[data-theme="dark"] .text-primary,
+html[data-theme="dark"] .text-blue,
+html[data-theme="dark"] a:not(.btn) {
+    color: var(--accent-blue) !important;
+}
+
+html[data-theme="dark"] .text-muted,
+html[data-theme="dark"] .label-text,
+html[data-theme="dark"] small,
+html[data-theme="dark"] .card-subtitle,
+html[data-theme="dark"] .stat-label,
+html[data-theme="dark"] .info-label,
+html[data-theme="dark"] .page-subtitle,
+html[data-theme="dark"] .payment-settings-subtitle,
+html[data-theme="dark"] .staff-subtitle,
+html[data-theme="dark"] .section-subtext,
+html[data-theme="dark"] .section-description,
+html[data-theme="dark"] .detail-text,
+html[data-theme="dark"] .column-title,
+html[data-theme="dark"] .customer-name,
+html[data-theme="dark"] .plan-name,
+html[data-theme="dark"] .member-sub-info,
+html[data-theme="dark"] .member-header-plan,
+html[data-theme="dark"] .addon-description,
+html[data-theme="dark"] .stat-desc,
+html[data-theme="dark"] .status-muted,
+html[data-theme="dark"] .form-label,
+html[data-theme="dark"] .form-label-modern,
+html[data-theme="dark"] .form-group label {
+    color: var(--text-muted) !important;
+}
+
+html[data-theme="dark"] input::placeholder,
+html[data-theme="dark"] textarea::placeholder,
+html[data-theme="dark"] select option {
+    color: var(--text-muted) !important;
+}
+
+html[data-theme="dark"] .text-secondary,
+html[data-theme="dark"] .info-value,
+html[data-theme="dark"] td {
+    color: var(--text-secondary) !important;
+}
+
+html[data-theme="dark"] .bg-primary,
+html[data-theme="dark"] .card-primary-custom {
+    background: #1e3a5f !important;
+    border: 1px solid #2563eb !important;
+    color: var(--text-primary) !important;
+}
+
+html[data-theme="dark"] table,
+html[data-theme="dark"] .table,
+html[data-theme="dark"] .custom-table,
+html[data-theme="dark"] .apps-table,
+html[data-theme="dark"] .modern-table,
+html[data-theme="dark"] .attendance-table,
+html[data-theme="dark"] .booking-table,
+html[data-theme="dark"] .plan-table {
+    color: var(--text-primary) !important;
+}
+
+html[data-theme="dark"] table th,
+html[data-theme="dark"] .table th {
+    background: var(--bg-main) !important;
+    color: var(--text-primary) !important;
+    border-color: var(--border-color) !important;
+}
+
+html[data-theme="dark"] table td,
+html[data-theme="dark"] .table td {
+    background: var(--bg-card) !important;
+    color: var(--text-secondary) !important;
+    border-color: var(--border-color) !important;
+}
+
+html[data-theme="dark"] .table-responsive,
+html[data-theme="dark"] .table-wrapper,
+html[data-theme="dark"] .attendance-table-wrapper,
+html[data-theme="dark"] .spreadsheet-table,
+html[data-theme="dark"] .summary-table {
+    background: var(--bg-card) !important;
+    color: var(--text-secondary) !important;
+}
+
+html[data-theme="dark"] .alert-success,
+html[data-theme="dark"] .alert-message.alert-success {
+    background: #14532d !important;
+    border-color: #22c55e !important;
+    color: #dcfce7 !important;
+}
+
+html[data-theme="dark"] .alert-warning {
+    background: #713f12 !important;
+    border-color: #f59e0b !important;
+    color: #fef3c7 !important;
+}
+
+html[data-theme="dark"] .alert-danger,
+html[data-theme="dark"] .alert-message.alert-danger {
+    background: #7f1d1d !important;
+    border-color: #ef4444 !important;
+    color: #fee2e2 !important;
+}
+
+html[data-theme="dark"] .alert-info {
+    background: #164e63 !important;
+    border-color: #22d3ee !important;
+    color: #cffafe !important;
+}
+
+html[data-theme="dark"] .badge-secondary,
+html[data-theme="dark"] .badge-dark,
+html[data-theme="dark"] .status-badge-ended,
+html[data-theme="dark"] .badge-ended {
+    background: var(--border-color) !important;
+    color: var(--text-primary) !important;
+}
+
+html[data-theme="dark"] :focus-visible {
+    outline: 3px solid var(--accent-blue);
+    outline-offset: 2px;
+}
+
+/* Responsive profile page layout */
+.profile-mobile-bar,
+.profile-sidebar-backdrop {
+    display: none;
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+    body:has(.profile-page-shell) .sidebar {
+        width: 76px;
+    }
+
+    body:has(.profile-page-shell) .sidebar-header {
+        padding: 18px 8px;
+    }
+
+    body:has(.profile-page-shell) .logo-wrapper {
+        flex-direction: column;
+    }
+
+    body:has(.profile-page-shell) .logo-container-circle {
+        width: 48px;
+        height: 48px;
+        margin: 0;
+        padding: 3px;
+    }
+
+    body:has(.profile-page-shell) .logo-text-group {
+        display: none;
+    }
+
+    body:has(.profile-page-shell) .theme-toggle-wrapper {
+        justify-content: center;
+        padding: 10px 0;
+    }
+
+    body:has(.profile-page-shell) .sidebar-links {
+        padding: 14px 7px;
+        gap: 8px;
+    }
+
+    body:has(.profile-page-shell) .side-link {
+        justify-content: center;
+        gap: 0;
+        padding: 12px 4px;
+        font-size: 0;
+    }
+
+    body:has(.profile-page-shell) .side-link i {
+        width: auto;
+        flex: 0 0 auto;
+        font-size: 1.1rem;
+    }
+
+    body:has(.profile-page-shell) .side-link .badge {
+        display: none;
+    }
+
+    body:has(.profile-page-shell) .main-wrapper {
+        width: calc(100% - 76px);
+        margin-left: 76px;
+        padding: 28px 24px;
+    }
+
+    body:has(.profile-page-shell) .content-container {
+        max-width: none;
+    }
+
+    .profile-page-shell {
+        max-width: none;
+        padding: 24px;
+    }
+
+    .profile-page-header {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .profile-shell {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 18px;
+    }
+}
+
+@media (max-width: 767px) {
+    body:has(.profile-page-shell) {
+        display: block;
+        overflow-x: hidden;
+    }
+
+    body:has(.profile-page-shell).profile-menu-open {
+        overflow: hidden;
+    }
+
+    body:has(.profile-page-shell) .sidebar {
+        top: 56px;
+        width: min(320px, calc(100vw - 40px));
+        height: calc(100dvh - 56px);
+        z-index: 1100;
+        visibility: hidden;
+        opacity: 0;
+        transform: translateX(-105%);
+        transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease, visibility 0s linear 320ms;
+    }
+
+    body:has(.profile-page-shell) .sidebar.profile-drawer-open {
+        visibility: visible;
+        opacity: 1;
+        transform: translateX(0);
+        transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease, visibility 0s;
+    }
+
+    body:has(.profile-page-shell) .main-wrapper {
+        width: 100%;
+        margin-left: 0;
+        padding: 76px 16px 24px;
+    }
+
+    body:has(.profile-page-shell) .content-container {
+        max-width: none;
+    }
+
+    .profile-page-shell {
+        max-width: none;
+        padding: 0;
+    }
+
+    .profile-mobile-bar {
+        position: fixed;
+        z-index: 1110;
+        inset: 0 0 auto;
+        display: flex;
+        height: 56px;
+        align-items: center;
+        justify-content: space-between;
+        padding: 6px 14px;
+        background: #ffffff;
+        border-bottom: 1px solid #d9e1ec;
+    }
+
+    .profile-mobile-logo {
+        display: block;
+        width: 42px;
+        height: 42px;
+        object-fit: contain;
+    }
+
+    .profile-menu-toggle {
+        display: grid;
+        width: 42px;
+        height: 42px;
+        flex: 0 0 42px;
+        place-items: center;
+        border: 1px solid #d9e1ec;
+        border-radius: 10px;
+        background: #ffffff;
+        color: #1f4e79;
+        font-size: 1.1rem;
+        cursor: pointer;
+    }
+
+    .profile-sidebar-backdrop {
+        position: fixed;
+        z-index: 1090;
+        inset: 56px 0 0;
+        display: block;
+        visibility: hidden;
+        opacity: 0;
+        pointer-events: none;
+        border: 0;
+        background: rgba(0, 0, 0, 0.48);
+        transition: opacity 240ms ease, visibility 0s linear 240ms;
+    }
+
+    .profile-sidebar-backdrop.is-visible {
+        visibility: visible;
+        opacity: 1;
+        pointer-events: auto;
+        transition: opacity 240ms ease, visibility 0s;
+    }
+
+    .profile-page-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+        margin-bottom: 18px;
+        padding-bottom: 14px;
+    }
+
+    .profile-page-header h1 {
+        font-size: 1.6rem;
+    }
+
+    .profile-page-header .welcome-text {
+        font-size: 0.95rem;
+        line-height: 1.5;
+    }
+
+    .profile-pill {
+        align-self: flex-start;
+    }
+
+    .profile-shell {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 14px;
+    }
+
+    .profile-card {
+        min-width: 0;
+        padding: 18px;
+    }
+
+    .profile-summary {
+        min-height: 0;
+    }
+
+    .profile-card form,
+    .profile-card .mb-3,
+    .profile-card .position-relative,
+    .profile-card .form-control {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .profile-card .form-control {
+        min-height: 44px;
+    }
+
+    .profile-card .btn-primary {
+        width: 100%;
+        min-height: 44px;
+    }
+}
+
+@media (max-width: 420px) {
+    body:has(.profile-page-shell) .main-wrapper {
+        padding-right: 12px;
+        padding-left: 12px;
+    }
+
+    .profile-page-header h1 {
+        font-size: 1.45rem;
+    }
+
+    .profile-card {
+        padding: 16px;
+    }
+
+    .profile-summary .summary-value {
+        overflow-wrap: anywhere;
+    }
+}
+
+html[data-theme="dark"] .profile-mobile-bar {
+    background: var(--bg-card);
+    border-color: var(--border-color);
+}
+
+html[data-theme="dark"] .profile-menu-toggle {
+    background: var(--bg-card);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body:has(.profile-page-shell) .sidebar,
+    .profile-sidebar-backdrop {
+        transition-duration: 0.01ms;
+        transition-delay: 0s;
+    }
+}
+
+@media (max-width: 767px) {
+    .profile-mobile-bar {
+        background: #ffffff;
+        border-bottom: 1px solid #d9e1ec;
+        box-shadow: none;
+    }
+
+    .profile-menu-toggle {
+        border: 1px solid #d9e1ec;
+        background: #ffffff;
+        color: #1f4e79;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        outline: none;
+    }
+
+    .profile-menu-toggle:focus-visible {
+        outline: 2px solid #1f4e79;
+        outline-offset: 2px;
+    }
+}
+
+html[data-theme="dark"] .profile-mobile-bar,
+html[data-theme="dark"] .profile-menu-toggle {
+    border-color: var(--border-color);
+    background: var(--bg-card);
+    color: var(--accent-blue);
+}
+
+html[data-theme="dark"] .profile-page-shell .profile-card,
+html[data-theme="dark"] .profile-page-shell .profile-summary {
+    background: var(--bg-card) !important;
+    border-color: var(--border-color) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22) !important;
+}

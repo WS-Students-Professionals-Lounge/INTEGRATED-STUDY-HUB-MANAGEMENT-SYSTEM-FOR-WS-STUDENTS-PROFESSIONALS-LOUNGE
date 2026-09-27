@@ -48,10 +48,16 @@ document.addEventListener('DOMContentLoaded', function() {
         };
 
         render();
-        if (isSessionActive && !isPaused && currentSeconds > 0) {
+        if (isPaused) {
+            remainingTimeIntervals.delete(card);
+            badge.classList.add('text-warning');
+            badge.closest('.remaining-time-badge').style.backgroundColor = '#fff3cd';
+        } else if (isSessionActive && currentSeconds > 0) {
+            badge.classList.remove('text-warning');
             remainingTimeIntervals.set(card, setInterval(render, 1000));
         } else {
             remainingTimeIntervals.delete(card);
+            badge.classList.remove('text-warning');
             badge.closest('.remaining-time-badge').style.backgroundColor = '#edf2f7';
             badge.style.color = '#718096';
         }

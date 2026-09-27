@@ -125,18 +125,36 @@ def generate_membership_id():
 def generate_customer_id(room_type="common"):
     """
     Generate a customer-facing ID based on the type.
-    - Common Area: 1-50
+    - Common Area: 1-70
     - Other rooms and monthly passes: 100-999
     """
     if room_type.lower() == "common area":
+        active_statuses = [
+            "Confirmed", "Pending", "Walk-in", "IN_PROGRESS", "Checked-in",
+            "ACTIVE", "OCCUPIED", "WAITING",
+        ]
+        Reservation.query.filter(
+            Reservation.customer_id.between(1, 70),
+            or_(
+                Reservation.status.is_(None),
+                ~Reservation.status.in_(active_statuses),
+            ),
+        ).update(
+            {Reservation.customer_id: None},
+            synchronize_session=False,
+        )
         existing_ids = set([
-            u.customer_id for u in User.query.filter(User.customer_id.between(1, 50)).all() if u.customer_id
-        ] + [r.customer_id for r in Reservation.query.filter(Reservation.customer_id.between(1, 50)).all() if r.customer_id] + [
-            s.customer_id for s in SoloPlan.query.filter(SoloPlan.customer_id.between(1, 50)).all() if s.customer_id
+            r.customer_id for r in Reservation.query.filter(
+                Reservation.customer_id.between(1, 70),
+                Reservation.status.in_(active_statuses),
+            ).all() if r.customer_id is not None
         ])
-        for i in range(1, 51):
+
+        # Find the first available slot between 1 and 70.
+        for i in range(1, 71):
             if i not in existing_ids:
                 return i
+
         raise ValueError("Common Area capacity reached")
     else:
         existing_ids = set([
@@ -400,6 +418,10 @@ class Reservation(db.Model):
     def check_conflict(room_id, start_dt, end_dt, exclude_id=None):
         # Current PH Time (+8 Hours)
         now = datetime.utcnow() + timedelta(hours=8)
+
+        room = Room.query.get(room_id)
+        if room and "common area" in room.name.lower():
+            return None
 
         query = Reservation.query.filter(
             Reservation.room_id == room_id,

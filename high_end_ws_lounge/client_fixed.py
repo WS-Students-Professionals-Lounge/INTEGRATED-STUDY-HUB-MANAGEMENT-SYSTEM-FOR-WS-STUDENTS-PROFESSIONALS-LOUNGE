@@ -40,7 +40,7 @@ from flask import (
     current_app,
     render_template,
 )
-from sqlalchemy import func, or_
+from sqlalchemy import and_, func, or_
 from werkzeug.utils import secure_filename
 from flask_login import current_user, login_required, login_user, logout_user
 from flask_mail import Message
@@ -486,6 +486,26 @@ def dashboard():
         .limit(10)
         .all()
     )
+    active_reservation = Reservation.query.filter(
+        Reservation.user_id == current_user.id,
+        func.lower(Reservation.status).in_(
+            ["in_progress", "paused", "confirmed", "pending", "checked-in"]
+        ),
+        Reservation.start_time >= now_naive,
+    ).order_by(Reservation.start_time.asc()).first()
+    if not active_reservation:
+        active_reservation = Reservation.query.filter(
+            Reservation.user_id == current_user.id,
+            func.lower(Reservation.status).in_(
+                ["in_progress", "paused", "confirmed", "pending", "checked-in"]
+            ),
+            Reservation.start_time <= now_naive,
+            or_(
+                Reservation.end_time.is_(None),
+                Reservation.end_time >= now_naive,
+                Reservation.is_open_time.is_(True),
+            ),
+        ).order_by(Reservation.start_time.desc()).first()
     latest_log = (
         TimeLog.query.filter_by(user_id=current_user.id)
         .order_by(TimeLog.time_in.desc())
@@ -502,6 +522,10 @@ def dashboard():
     ).order_by(Membership.updated_at.desc(), Membership.id.desc()).first()
     attendance_logs = []
     remaining_days = None
+    all_user_attendance_logs = AttendanceLog.query.join(Membership).filter(
+        Membership.user_id == current_user.id
+    ).all()
+    total_solo_plans = len(all_user_attendance_logs)
 
     if membership:
         _expire_membership_if_needed(membership)
@@ -590,12 +614,11 @@ def dashboard():
         if user_logs and user_logs[0].check_in_time and not user_logs[0].check_out_time:
             is_checked_in = True
 
-    total_consumed_seconds = 0.0
-
-    for log in user_logs:
-        if log.check_in_time:
-            total_consumed_seconds += (log.session_duration_hours * 3600.0)
-
+    total_consumed_seconds = sum(
+        (log.check_out_time - log.check_in_time).total_seconds()
+        for log in all_user_attendance_logs
+        if log.check_in_time and log.check_out_time
+    )
     total_solo_hours = round(total_consumed_seconds / 3600.0, 1)
 
     # Strict Attendance Log & Is_Checked_In Validation para sa Active Session
@@ -632,13 +655,23 @@ def dashboard():
         else:
             active_session = open_log
 
+    is_reservation_paused = bool(
+        active_reservation and (
+            getattr(active_reservation, 'is_paused', False)
+            or str(getattr(active_reservation, 'status', '') or '').strip().upper() == 'PAUSED'
+        )
+    )
+
     return render_template(
         "dashboard/member_dashboard.html",
         reservations=reservations,
         active_plan=active_session,
         active_session=active_session,
+        active_reservation=active_reservation,
+        is_reservation_paused=is_reservation_paused,
         remaining_days=remaining_days,
         solo_plans=solo_plans,
+        total_solo_plans=total_solo_plans,
         total_solo_hours=total_solo_hours,
         membership=membership,
         attendance_logs=attendance_logs,
@@ -647,6 +680,50 @@ def dashboard():
         membership_notifications=membership_notifications,
         unread_membership_notification_count=unread_membership_notification_count
     )
+
+
+@main_bp.route("/api/user-active-reservation", methods=["GET"])
+@login_required
+def user_active_reservation():
+    now_naive = datetime.now(pytz.timezone("Asia/Manila")).replace(
+        second=0, microsecond=0, tzinfo=None
+    )
+    reservation = Reservation.query.filter(
+        Reservation.user_id == current_user.id,
+        func.lower(Reservation.status).in_(
+            ["in_progress", "paused", "confirmed", "pending", "checked-in"]
+        ),
+        or_(
+            Reservation.start_time >= now_naive,
+            and_(
+                Reservation.start_time <= now_naive,
+                or_(
+                    Reservation.end_time.is_(None),
+                    Reservation.end_time >= now_naive,
+                    Reservation.is_open_time.is_(True),
+                ),
+            ),
+        ),
+    ).order_by(Reservation.start_time.asc()).first()
+
+    if not reservation:
+        return jsonify({"has_active": False})
+
+    is_paused = bool(
+        getattr(reservation, "is_paused", False)
+        or str(getattr(reservation, "status", "") or "").strip().upper() == "PAUSED"
+    )
+
+    return jsonify({
+        "has_active": True,
+        "id": reservation.id,
+        "status": "PAUSED" if is_paused else (reservation.status or "IN_PROGRESS"),
+        "is_paused": is_paused,
+        "room_name": reservation.room.name if reservation.room else "Common Area",
+        "start_time": reservation.start_time.isoformat() if reservation.start_time else None,
+        "end_time": reservation.end_time.isoformat() if reservation.end_time else None,
+        "is_open_time": bool(reservation.is_open_time),
+    })
 
 
 @main_bp.route("/profile", methods=["GET", "POST"])
@@ -846,27 +923,50 @@ def rooms():
         if is_open_time:
             end_time = None
 
+        room_name_lower = (room.name or "").strip().lower()
+        is_common_area = "common area" in room_name_lower
+
         pax_count_val = form.pax_count.data or 1
-        if "lecture room" in room.name.lower() and pax_count_val > 15:
+        if "lecture room" in room_name_lower and pax_count_val > 15:
             flash("Lecture Room capacity is limited to a maximum of 15 persons only.", "danger")
             return render_template("rooms.html", rooms=rooms, bookings=bookings, form=form, payment_info=payment_info, occupied_room_ids=occupied_room_ids, room_pax_count=room_pax_count)
 
-        reservation_conflict = Reservation.query.filter(
-            Reservation.room_id == room.id,
-            Reservation.status.in_(["Confirmed", "APPROVED", "Pending", "Walk-in", "Checked-in"]),
-            Reservation.start_time < end_time,
-            Reservation.end_time.isnot(None),
-            Reservation.end_time > start_time,
-        ).first()
-        if reservation_conflict:
-            flash(
-                f"Time Conflict: Reserved until {reservation_conflict.end_time.strftime('%I:%M %p')}",
-                "danger",
+        if not is_common_area:
+            reservation_conflict_query = Reservation.query.filter(
+                Reservation.room_id == room.id,
+                Reservation.status.in_(["Confirmed", "APPROVED", "Pending", "Walk-in", "Checked-in"]),
             )
-            return render_template("rooms.html", rooms=rooms, bookings=bookings, form=form, payment_info=payment_info, occupied_room_ids=occupied_room_ids, room_pax_count=room_pax_count)
+            if end_time is None:
+                reservation_conflict_query = reservation_conflict_query.filter(
+                    or_(
+                        Reservation.end_time.is_(None),
+                        Reservation.end_time > start_time,
+                    )
+                )
+            else:
+                reservation_conflict_query = reservation_conflict_query.filter(
+                    Reservation.start_time < end_time,
+                    or_(
+                        Reservation.end_time.is_(None),
+                        Reservation.end_time > start_time,
+                    ),
+                )
 
-        if "common area" in room.name.lower():
-            # Common Area Capacity Check
+            reservation_conflict = reservation_conflict_query.first()
+            if reservation_conflict:
+                conflict_end = (
+                    reservation_conflict.end_time.strftime('%I:%M %p')
+                    if reservation_conflict.end_time
+                    else "open time"
+                )
+                flash(
+                    f"Time Conflict: Reserved until {conflict_end}",
+                    "danger",
+                )
+                return render_template("rooms.html", rooms=rooms, bookings=bookings, form=form, payment_info=payment_info, occupied_room_ids=occupied_room_ids, room_pax_count=room_pax_count)
+
+        if is_common_area:
+            # Common Area Capacity Check - bypass strict room overlap validation by using shared-space capacity logic instead.
             check_end = end_time if end_time else (start_time + timedelta(hours=12))
             overlapping_reservations = Reservation.query.filter(
                 Reservation.room_id == form.room_id.data,

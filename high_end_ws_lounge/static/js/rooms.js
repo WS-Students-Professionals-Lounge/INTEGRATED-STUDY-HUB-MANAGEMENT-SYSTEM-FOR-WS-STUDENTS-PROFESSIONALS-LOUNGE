@@ -8,6 +8,45 @@ function toLocalISOString(date) {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+    const menuButton = document.getElementById('roomsMenuToggle');
+    const menuBackdrop = document.getElementById('roomsSidebarBackdrop');
+    const sidebar = document.querySelector('.sidebar');
+
+    if (menuButton && menuBackdrop && sidebar) {
+        sidebar.id = 'roomsMobileSidebar';
+        const menuIcon = menuButton.querySelector('i');
+
+        function setRoomsMenuOpen(isOpen) {
+            sidebar.classList.toggle('rooms-drawer-open', isOpen);
+            menuBackdrop.classList.toggle('is-visible', isOpen);
+            menuButton.setAttribute('aria-expanded', String(isOpen));
+            menuButton.setAttribute('aria-label', isOpen ? 'Close navigation menu' : 'Open navigation menu');
+            document.body.classList.toggle('rooms-menu-open', isOpen);
+
+            if (menuIcon) {
+                menuIcon.classList.toggle('fa-bars', !isOpen);
+                menuIcon.classList.toggle('fa-xmark', isOpen);
+            }
+        }
+
+        menuButton.addEventListener('click', () => {
+            setRoomsMenuOpen(menuButton.getAttribute('aria-expanded') !== 'true');
+        });
+        menuBackdrop.addEventListener('click', () => setRoomsMenuOpen(false));
+        sidebar.querySelectorAll('a').forEach(link => {
+            link.addEventListener('click', () => setRoomsMenuOpen(false));
+        });
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && menuButton.getAttribute('aria-expanded') === 'true') {
+                setRoomsMenuOpen(false);
+                menuButton.focus();
+            }
+        });
+        window.addEventListener('resize', () => {
+            if (window.innerWidth >= 768) setRoomsMenuOpen(false);
+        });
+    }
+
     // DOM Query Selectors
     const openTimeToggle = document.getElementById('open-time-toggle');
     const endTimeInput = document.getElementById('end-time');
@@ -423,14 +462,14 @@ function calculateOpenTimeMinutesFee(minutes) {
         const selectedOption = roomSelector.options[roomSelector.selectedIndex];
         const selectedText = selectedOption ? selectedOption.text.toLowerCase() : '';
 
-        // Tsek-on kon Lecture Room o Event Room ang ginpili
-        const isTieredRoom = selectedText.includes('lecture room') || selectedText.includes('event room');
+        const isCapacityRoom = selectedText.includes('common area') || selectedText.includes('lecture room') || selectedText.includes('event room');
 
-        if (isTieredRoom) {
+        if (isCapacityRoom) {
             if (paxContainer) paxContainer.style.display = 'flex';
+            if (paxInput && !paxInput.value) paxInput.value = 1;
         } else {
             if (paxContainer) paxContainer.style.display = 'none';
-            if (paxInput) paxInput.value = 1; // Reset sa 1 kon indi tiered room
+            if (paxInput) paxInput.value = 1; // Reset sa 1 kon indi capacity-based room
         }
     }
 

@@ -1,4 +1,43 @@
 document.addEventListener('DOMContentLoaded', () => {
+    const menuButton = document.getElementById('timelogMenuToggle');
+    const menuBackdrop = document.getElementById('timelogSidebarBackdrop');
+    const sidebar = document.querySelector('.sidebar');
+
+    if (menuButton && menuBackdrop && sidebar) {
+        sidebar.id = 'timelogMobileSidebar';
+        const menuIcon = menuButton.querySelector('i');
+
+        function setTimelogMenuOpen(isOpen) {
+            sidebar.classList.toggle('timelog-drawer-open', isOpen);
+            menuBackdrop.classList.toggle('is-visible', isOpen);
+            menuButton.setAttribute('aria-expanded', String(isOpen));
+            menuButton.setAttribute('aria-label', isOpen ? 'Close navigation menu' : 'Open navigation menu');
+            document.body.classList.toggle('timelog-menu-open', isOpen);
+
+            if (menuIcon) {
+                menuIcon.classList.toggle('fa-bars', !isOpen);
+                menuIcon.classList.toggle('fa-xmark', isOpen);
+            }
+        }
+
+        menuButton.addEventListener('click', () => {
+            setTimelogMenuOpen(menuButton.getAttribute('aria-expanded') !== 'true');
+        });
+        menuBackdrop.addEventListener('click', () => setTimelogMenuOpen(false));
+        sidebar.querySelectorAll('a').forEach(link => {
+            link.addEventListener('click', () => setTimelogMenuOpen(false));
+        });
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && menuButton.getAttribute('aria-expanded') === 'true') {
+                setTimelogMenuOpen(false);
+                menuButton.focus();
+            }
+        });
+        window.addEventListener('resize', () => {
+            if (window.innerWidth >= 768) setTimelogMenuOpen(false);
+        });
+    }
+
     // Global pause state flag
     let isSessionPaused = false;
     let remainingSeconds = 0;
