@@ -279,9 +279,8 @@ def get_common_area_dashboard_counts(now):
         func.lower(Reservation.status).in_([
             "confirmed",
             "approved",
-            "waiting",
-            "pending",
-            "pending confirmation",
+            "active",
+            "occupied",
         ]),
         Reservation.start_time >= today_start,
         Reservation.start_time < today_end,
@@ -778,7 +777,7 @@ def dashboard():
     pending_query = Reservation.query.filter(
         func.date(Reservation.start_time) == today,
         func.lower(Reservation.status).in_(
-            ["pending", "confirmed", "waiting"]
+            ["confirmed", "approved", "active", "occupied"]
         ),
         Reservation.start_time > now,
     )
@@ -792,7 +791,7 @@ def dashboard():
         for r in pending_reservations
         if r.start_time
         and r.start_time.date() == today
-        and str(r.status or "").strip().lower() in ("confirmed", "waiting", "pending")
+        and str(r.status or "").strip().lower() in ("confirmed", "approved", "active", "occupied")
         and r.start_time > now
     ]
 
@@ -916,7 +915,7 @@ def dashboard_today_waiting_list():
     waiting_query = Reservation.query.filter(
         func.date(Reservation.start_time) == today,
         Reservation.start_time > now,
-        func.lower(Reservation.status).in_(["confirmed", "waiting", "pending"]),
+        func.lower(Reservation.status).in_(["confirmed", "approved", "active", "occupied"]),
     )
     if hasattr(Reservation, "deleted_at"):
         waiting_query = waiting_query.filter(Reservation.deleted_at.is_(None))
