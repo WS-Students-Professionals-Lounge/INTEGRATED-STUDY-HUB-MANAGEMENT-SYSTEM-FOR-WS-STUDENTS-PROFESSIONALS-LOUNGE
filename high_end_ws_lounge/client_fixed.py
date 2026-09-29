@@ -1113,6 +1113,28 @@ def rooms():
             "title": "New Reservation Request",
             "message": f"From {reservation.customer_name} for {room.name}.",
             "timestamp": datetime.now(ph_tz).strftime("%I:%M %p"),
+            "request": {
+                "id": reservation.id,
+                "customer_id": reservation.customer_id,
+                "customer_name": reservation.customer_name,
+                "address": reservation.address,
+                "room_name": room.name,
+                "start_time": reservation.start_time.isoformat() if reservation.start_time else None,
+                "end_time": reservation.end_time.isoformat() if reservation.end_time else None,
+                "payment_method": reservation.payment_method,
+                "payment_type": reservation.payment_type,
+                "amount_paid": reservation.amount_paid,
+                "total_amount": reservation.total_amount,
+                "paid": reservation.paid,
+                "added_by": reservation.added_by,
+                "user_name": current_user.name,
+                "user_role": current_user.role,
+                "receipt_url": url_for("static", filename=f"uploads/receipts/{reservation.receipt_image}") if reservation.receipt_image else None,
+                "confirm_url": url_for("admin.confirm_reservation", res_id=reservation.id),
+                "hold_url": url_for("admin.hold_reservation", res_id=reservation.id),
+                "delete_url": url_for("admin.delete_reservation", res_id=reservation.id),
+                "next_url": url_for("admin.admin_reservations_list"),
+            },
         }, room="admin_room")
         
         flash(
@@ -1644,6 +1666,20 @@ def solo_rates():
                     "title": "New Membership Request",
                     "message": f"{current_user.name} submitted a request for {selected_plan}.",
                     "timestamp": now_ph.strftime("%I:%M %p"),
+                    "request": {
+                        "id": solo_plan.id,
+                        "status": solo_plan.status,
+                        "user": {
+                            "name": current_user.name,
+                            "email": current_user.email,
+                            "phone": current_user.phone,
+                        },
+                        "plan_name": solo_plan.plan_name,
+                        "created_at": solo_plan.created_at.isoformat() if solo_plan.created_at else None,
+                        "receipt_url": None,
+                        "approve_url": url_for("admin.approve_membership", req_id=solo_plan.id),
+                        "reject_url": url_for("admin.reject_membership", req_id=solo_plan.id),
+                    },
                 }, room="admin_room")
 
                 message = (
@@ -1788,6 +1824,20 @@ def submit_solo_payment():
             "title": "New Membership Request",
             "message": f"{current_user.name} submitted a request for {plan_name}.",
             "timestamp": now_ph.strftime("%I:%M %p"),
+            "request": {
+                "id": new_plan.id,
+                "status": new_plan.status,
+                "user": {
+                    "name": current_user.name,
+                    "email": current_user.email,
+                    "phone": current_user.phone,
+                },
+                "plan_name": new_plan.plan_name,
+                "created_at": new_plan.created_at.isoformat() if new_plan.created_at else None,
+                "receipt_url": url_for("static", filename=f"uploads/receipts/{new_plan.receipt_image}") if new_plan.receipt_image else None,
+                "approve_url": url_for("admin.approve_membership", req_id=new_plan.id),
+                "reject_url": url_for("admin.reject_membership", req_id=new_plan.id),
+            },
         }, room="admin_room")
 
         return jsonify({'success': True, 'message': 'Payment submitted for verification.'})

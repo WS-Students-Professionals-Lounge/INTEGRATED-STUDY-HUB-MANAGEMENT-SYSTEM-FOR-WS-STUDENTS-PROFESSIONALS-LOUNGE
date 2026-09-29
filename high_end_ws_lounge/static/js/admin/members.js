@@ -347,6 +347,17 @@ document.addEventListener('DOMContentLoaded', function() {
     updateMemberTabNotificationBadges();
     setInterval(updateMemberTabNotificationBadges, 3000);
 
+    const requestsPanel = document.getElementById('requests');
+    const requestsBadge = document.getElementById('membership-request-tab-badge');
+    const isRequestsTabVisible = () => (
+        requestsPanel?.classList.contains('active')
+        && document.visibilityState === 'visible'
+    );
+
+    if (isRequestsTabVisible()) {
+        clearMemberNotificationTab('requests', 'membership-request-tab-badge');
+    }
+
     document.addEventListener('submit', (event) => {
         const form = event.target.closest('#requestsList form');
         if (!form) return;
@@ -446,40 +457,78 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // === 3. MEMBERSHIP REQUEST CARD INJECTION ===
     function createRequestCard(req, container, useMock = false) {
+        const user = req.user || {};
+        const requestId = req.id == null ? '' : String(req.id);
+        if (!useMock && requestId && Array.from(container.querySelectorAll('.request-card'))
+            .some(existing => existing.dataset.requestId === requestId)) {
+            return null;
+        }
+
         const card = document.createElement('div');
         card.className = 'request-card';
+        if (requestId) card.dataset.requestId = requestId;
         card.setAttribute('data-request', JSON.stringify(req));
 
         const info = document.createElement('div');
         info.className = 'request-info';
-        info.innerHTML = `<h3 class="customer-name">${req.user?.name || 'Unknown'}</h3>
-            <p class="detail-text">Email: ${req.user?.email || 'N/A'}</p>
-            <p class="detail-text">Contact Number: ${req.user?.phone || 'N/A'}</p>`;
+        const customerName = document.createElement('h3');
+        customerName.className = 'customer-name';
+        customerName.textContent = user.name || 'Unknown';
+        const customerEmail = document.createElement('p');
+        customerEmail.className = 'detail-text';
+        customerEmail.textContent = `Email: ${user.email || 'N/A'}`;
+        const customerPhone = document.createElement('p');
+        customerPhone.className = 'detail-text';
+        customerPhone.textContent = `Contact Number: ${user.phone || 'N/A'}`;
+        info.append(customerName, customerEmail, customerPhone);
 
         const plan = document.createElement('div');
         plan.className = 'request-plan';
-        const created = new Date(req.created_at || Date.now()).toLocaleString();
-        plan.innerHTML = `<h4 class="column-title">Selected Plan</h4>
-            <p class="plan-name">${req.plan_name || 'N/A'}</p>
-            <p class="detail-text">Date Requested: ${created}</p>`;
+        const planTitle = document.createElement('h4');
+        planTitle.className = 'column-title';
+        planTitle.textContent = 'Selected Plan';
+        const planName = document.createElement('p');
+        planName.className = 'plan-name';
+        planName.textContent = req.plan_name || 'N/A';
+        const createdAt = req.created_at ? new Date(req.created_at) : new Date();
+        const createdText = document.createElement('p');
+        createdText.className = 'detail-text';
+        createdText.textContent = `Date Requested: ${Number.isNaN(createdAt.getTime()) ? 'N/A' : createdAt.toLocaleString()}`;
+        plan.append(planTitle, planName, createdText);
 
         const pay = document.createElement('div');
         pay.className = 'request-payment';
-        pay.innerHTML = `<h4 class="column-title">Payment Verification</h4>
-            <button class="btn-check-receipt" data-receipt-url="${req.receipt_url || ''}" data-request-name="${req.user?.name || 'User'}">Check</button>`;
+        const paymentTitle = document.createElement('h4');
+        paymentTitle.className = 'column-title';
+        paymentTitle.textContent = 'Payment Verification';
+        const checkReceiptButton = document.createElement('button');
+        checkReceiptButton.type = 'button';
+        checkReceiptButton.className = 'btn-check-receipt';
+        checkReceiptButton.dataset.receiptUrl = req.receipt_url || '';
+        checkReceiptButton.dataset.requestName = user.name || 'User';
+        checkReceiptButton.textContent = 'Check';
+        pay.append(paymentTitle, checkReceiptButton);
 
         const actions = document.createElement('div');
         actions.className = 'request-actions';
 
         const approveForm = document.createElement('form');
         approveForm.method = 'POST';
-        approveForm.action = '#';
-        approveForm.innerHTML = `<button type="submit" class="btn-approve">Approve</button>`;
+        approveForm.action = useMock ? '#' : (req.approve_url || `/admin/approve_membership/${encodeURIComponent(requestId)}`);
+        const approveButton = document.createElement('button');
+        approveButton.type = 'submit';
+        approveButton.className = 'btn-approve';
+        approveButton.textContent = 'Approve';
+        approveForm.appendChild(approveButton);
 
         const rejectForm = document.createElement('form');
         rejectForm.method = 'POST';
-        rejectForm.action = '#';
-        rejectForm.innerHTML = `<button type="submit" class="btn-reject">Reject</button>`;
+        rejectForm.action = useMock ? '#' : (req.reject_url || `/admin/reject_membership/${encodeURIComponent(requestId)}`);
+        const rejectButton = document.createElement('button');
+        rejectButton.type = 'submit';
+        rejectButton.className = 'btn-reject';
+        rejectButton.textContent = 'Reject';
+        rejectForm.appendChild(rejectButton);
 
         actions.appendChild(approveForm);
         actions.appendChild(rejectForm);
@@ -489,15 +538,14 @@ document.addEventListener('DOMContentLoaded', function() {
         card.appendChild(pay);
         card.appendChild(actions);
 
-        container.appendChild(card);
+        container.prepend(card);
 
         // Attach receipt viewer logic to dynamic button
-        const checkBtn = card.querySelector('.btn-check-receipt');
-        checkBtn.addEventListener('click', () => {
+        checkReceiptButton.addEventListener('click', () => {
             if (useMock) {
-                showAlert(`Mock: Open receipt for ${req.user?.name || 'user'}`);
+                showAlert(`Mock: Open receipt for ${user.name || 'user'}`);
             } else {
-                createReceiptPreview(req.receipt_url, req.user?.name || 'this request');
+                createReceiptPreview(req.receipt_url, user.name || 'this request');
                 openModal(receiptModal);
             }
         });
@@ -523,6 +571,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 setTimeout(() => card.remove(), 600);
             });
         }
+
+        return card;
     }
 
     const requestsList = document.getElementById('requestsList');
@@ -538,6 +588,32 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch (e) {
             console.warn('Failed to parse membership requests data', e);
         }
+
+        window.addEventListener('newMembershipRequestReceived', event => {
+            const request = event.detail;
+            if (!request || !request.id) return;
+
+            const emptyState = requestsList.querySelector('.no-data-placeholder');
+            if (emptyState) emptyState.remove();
+
+            const card = createRequestCard(request, requestsList, false);
+            if (!card) return;
+
+            if (isRequestsTabVisible()) {
+                sessionStorage.setItem('requests_tab_badge_count', '0');
+                clearMemberNotificationTab('requests', 'membership-request-tab-badge');
+            } else {
+                sessionStorage.removeItem('requests_tab_badge_count');
+                if (requestsBadge) {
+                    const currentCount = Number(requestsBadge.textContent) || 0;
+                    requestsBadge.textContent = String(currentCount + 1);
+                    requestsBadge.classList.remove('d-none');
+                    requestsBadge.style.display = 'inline-flex';
+                }
+            }
+
+            updateMemberTabNotificationBadges();
+        });
     }
 
 

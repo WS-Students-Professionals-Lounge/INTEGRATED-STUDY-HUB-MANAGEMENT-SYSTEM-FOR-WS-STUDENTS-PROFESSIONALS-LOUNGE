@@ -313,6 +313,26 @@ function initializeAdminSocketNotifications() {
 
         const variant = data.type === 'reservation' ? 'info' : 'success';
         showGlobalMemberToast(`${data.title}: ${data.message}`, variant);
+        if (data.type === 'membership' && data.request) {
+            window.dispatchEvent(new CustomEvent('newMembershipRequestReceived', {
+                detail: data.request,
+            }));
+        } else if (data.type === 'reservation' && data.request) {
+            window.dispatchEvent(new CustomEvent('newReservationRequestReceived', {
+                detail: data.request,
+            }));
+            if (window.location.pathname.replace(/\/$/, '') === '/admin/confirm_reservations') {
+                fetch('/admin/api/admin/notifications/clear-tab?tab=reservations', {
+                    method: 'POST',
+                    keepalive: true,
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                }).then(response => {
+                    if (response.ok && typeof fetchSidebarNotifications === 'function') {
+                        fetchSidebarNotifications();
+                    }
+                }).catch(() => {});
+            }
+        }
         if (typeof fetchSidebarNotifications === 'function') {
             fetchSidebarNotifications();
         }
@@ -320,6 +340,24 @@ function initializeAdminSocketNotifications() {
 }
 
 document.addEventListener('DOMContentLoaded', initializeAdminSocketNotifications);
+
+function initializeMemberSocketNotifications() {
+    if (!document.getElementById('member-reservation-event-badge') || typeof io !== 'function') return;
+
+    const socket = window.memberNotificationSocket || io();
+    window.memberNotificationSocket = socket;
+
+    socket.on('connect', function() {
+        socket.emit('join_member_room');
+    });
+
+    socket.on('member_request_rejected', function(data) {
+        if (!data || !data.message) return;
+        showGlobalMemberToast(data.message, 'danger');
+    });
+}
+
+document.addEventListener('DOMContentLoaded', initializeMemberSocketNotifications);
 
 function initializeMemberReservationNotifications() {
     const eventBadge = document.getElementById('member-reservation-event-badge');

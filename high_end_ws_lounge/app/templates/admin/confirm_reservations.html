@@ -14,7 +14,6 @@
         <a href="{{ url_for('admin.admin_reservations_list') }}" class="btn btn-outline-primary">Back to Reservation List</a>
     </div>
 
-    {% if reservations %}
     <div class="table-responsive">
         <table class="table custom-table">
             <thead>
@@ -30,7 +29,7 @@
                     <th>Actions</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="confirmReservationsBody">
                 {% for res in reservations %}
                 <tr id="res-{{ res.id }}">
                     <td><strong>#{{ res.customer_id or res.id }}</strong></td>
@@ -110,17 +109,14 @@
                     </td>
 
                 </tr>
+                {% else %}
+                <tr class="empty-reservations-row">
+                    <td colspan="9" class="text-center text-muted">No pending reservation requests</td>
+                </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
-    {% else %}
-    <div class="empty-state p-4 bg-white rounded shadow-sm">
-        <h5>No pending reservation requests</h5>
-        <p class="text-muted">All pending reservations have been processed. Return to the reservation list to manage confirmed bookings.</p>
-        <a href="{{ url_for('admin.admin_reservations_list') }}" class="btn btn-primary">Reservation List</a>
-    </div>
-    {% endif %}
 
     <div id="receipt-modal" class="receipt-modal-overlay d-none">
         <div class="receipt-modal-content">

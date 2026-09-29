@@ -33,6 +33,12 @@ def join_admin_notification_room():
     if current_user.is_authenticated and getattr(current_user, "role", "") in ("admin", "staff"):
         join_room("admin_room")
 
+
+@socketio.on("join_member_room")
+def join_member_notification_room():
+    if current_user.is_authenticated and getattr(current_user, "role", "") == "member":
+        join_room(f"member_{current_user.id}")
+
 def calculate_open_time_minutes_fee(minutes):
     """
     Helper function para sa Open Time minute-tier pricing:
@@ -1018,6 +1024,7 @@ def resume_reservation(id):
 def _admin_notification_counts():
     requests_seen_at = session.get("admin_requests_seen_at")
     members_seen_at = session.get("admin_members_seen_at")
+    reservations_seen_at = session.get("admin_reservations_seen_at")
     try:
         requests_seen_at = datetime.fromisoformat(requests_seen_at) if requests_seen_at else None
     except (TypeError, ValueError):
@@ -1026,6 +1033,16 @@ def _admin_notification_counts():
         members_seen_at = datetime.fromisoformat(members_seen_at) if members_seen_at else None
     except (TypeError, ValueError):
         members_seen_at = None
+    try:
+        reservations_seen_at = datetime.fromisoformat(reservations_seen_at) if reservations_seen_at else None
+    except (TypeError, ValueError):
+        reservations_seen_at = None
+
+    pending_reservations_query = Reservation.query.filter_by(status="Pending")
+    if reservations_seen_at:
+        pending_reservations_query = pending_reservations_query.filter(
+            Reservation.created_at > reservations_seen_at
+        )
 
     pending_plans_query = SoloPlan.query.filter_by(status="pending")
     if requests_seen_at:
@@ -1039,7 +1056,7 @@ def _admin_notification_counts():
         new_members_query = new_members_query.filter(Membership.updated_at > members_seen_at)
 
     return (
-        Reservation.query.filter_by(status="Pending").count(),
+        pending_reservations_query.count(),
         pending_plans_query.count(),
         new_members_query.count(),
     )
@@ -1086,9 +1103,10 @@ def clear_admin_members_navigation_notifications():
     if current_user.role not in ['admin', 'staff']:
         return jsonify({'error': 'Unauthorized'}), 403
 
-    now = datetime.utcnow()
+    now = datetime.now(pytz.timezone("Asia/Manila")).replace(tzinfo=None)
     session['admin_requests_seen_at'] = now.isoformat()
     session['admin_members_seen_at'] = now.isoformat()
+    session['admin_reservations_seen_at'] = now.isoformat()
     session.modified = True
     return jsonify({'success': True})
 
@@ -1100,10 +1118,13 @@ def clear_admin_members_tab_notifications():
         return jsonify({'error': 'Unauthorized'}), 403
 
     tab = request.args.get('tab')
+    seen_at = datetime.now(pytz.timezone("Asia/Manila")).replace(tzinfo=None).isoformat()
     if tab == 'requests':
-        session['admin_requests_seen_at'] = datetime.utcnow().isoformat()
+        session['admin_requests_seen_at'] = seen_at
     elif tab in ['members', 'list']:
-        session['admin_members_seen_at'] = datetime.utcnow().isoformat()
+        session['admin_members_seen_at'] = seen_at
+    elif tab == 'reservations':
+        session['admin_reservations_seen_at'] = seen_at
     else:
         return jsonify({'success': False, 'message': 'Unknown notification tab.'}), 400
 
@@ -1884,6 +1905,11 @@ def admin_confirm_reservations():
     if redirect_response:
         return redirect_response
 
+    session["admin_reservations_seen_at"] = datetime.now(
+        pytz.timezone("Asia/Manila")
+    ).replace(tzinfo=None).isoformat()
+    session.modified = True
+
     pending_reservations = (
         Reservation.query.filter_by(status="Pending")
         .order_by(Reservation.created_at.desc(), Reservation.start_time.desc())
@@ -1958,9 +1984,17 @@ def reject_membership(req_id):
         return redirect(url_for("admin.members", tab="requests"))
 
     plan = SoloPlan.query.get_or_404(req_id)
+    member_id = plan.user_id
+    plan_name = plan.plan_name
+    member_name = plan.user.name
     plan.status = "rejected"
     db.session.commit()
-    flash(f"Membership rejected for {plan.user.name}")
+    socketio.emit("member_request_rejected", {
+        "type": "membership",
+        "title": "Membership Request Rejected",
+        "message": f"Your request for {plan_name} was rejected by the admin.",
+    }, room=f"member_{member_id}")
+    flash(f"Membership rejected for {member_name}")
     return redirect(url_for("admin.members", tab="requests"))
 
 
@@ -2212,9 +2246,17 @@ def reject_solo_plan(plan_id):
         return redirect(url_for("admin.solo_applications"))
 
     plan = SoloPlan.query.get_or_404(plan_id)
+    member_id = plan.user_id
+    plan_name = plan.plan_name
+    member_name = plan.user.name
     plan.status = "rejected"
     db.session.commit()
-    flash(f"Plan rejected for {plan.user.name}", "info")
+    socketio.emit("member_request_rejected", {
+        "type": "membership",
+        "title": "Membership Request Rejected",
+        "message": f"Your request for {plan_name} was rejected by the admin.",
+    }, room=f"member_{member_id}")
+    flash(f"Plan rejected for {member_name}", "info")
     return redirect(url_for("admin.solo_applications"))
 
 @admin_bp.route("/checkout_user/<int:user_id>", methods=["POST"])
@@ -2330,6 +2372,8 @@ def delete_reservation(res_id):
         return redirect_response
 
     res = Reservation.query.get_or_404(res_id)
+    member_id = res.user_id if str(res.status or "").strip().lower() == "pending" else None
+    reservation_name = res.customer_name or "your reservation"
     # If reservation has associated walkin entries, delete them first to avoid FK constraint errors
     try:
         walkin_entries = WalkinReservation.query.filter_by(reservation_id=res.id).all()
@@ -2346,6 +2390,12 @@ def delete_reservation(res_id):
     next_url = request.form.get("next") or request.args.get("next") or request.referrer
     db.session.delete(res)
     db.session.commit()
+    if member_id:
+        socketio.emit("member_request_rejected", {
+            "type": "reservation",
+            "title": "Reservation Request Rejected",
+            "message": f"Your request for {reservation_name} was rejected by the admin.",
+        }, room=f"member_{member_id}")
     flash(f"Reservation for {res.customer_name} has been permanently deleted.")
     return redirect(next_url or url_for("admin.dashboard"))
 
