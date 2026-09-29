@@ -16,15 +16,22 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, Tabl
 
 from database_fixed import AdminReservationForm, AttendanceLog, DailyReport, Membership, PaymentInfo, Reservation, \
     Room, SoloPlan, TimeLog, User, UserActivityLog, WalkinForm, WalkinReservation, db, generate_customer_id, \
-    get_common_area_count, mail
+    get_common_area_count, mail, socketio
 from flask_mail import Message
 from werkzeug.utils import secure_filename
 from flask_login import current_user, login_required
+from flask_socketio import join_room
 from sqlalchemy import and_, func, inspect, or_, text
 from time_utils import format_checkin_time, format_checkout_time, format_date, decimal_hours_to_readable
 from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, send_file, session, url_for
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
+
+
+@socketio.on("join_admin_room")
+def join_admin_notification_room():
+    if current_user.is_authenticated and getattr(current_user, "role", "") in ("admin", "staff"):
+        join_room("admin_room")
 
 def calculate_open_time_minutes_fee(minutes):
     """
@@ -2626,8 +2633,30 @@ def members():
         SoloPlan.status.ilike('approved'),
         or_(SoloPlan.expiry_date.is_(None), SoloPlan.expiry_date > now_naive)
     )
+    latest_approved_plan_dates = (
+        db.session.query(
+            SoloPlan.user_id.label("user_id"),
+            func.max(SoloPlan.approved_at).label("approved_at"),
+        )
+        .filter(
+            SoloPlan.status.ilike("approved"),
+            or_(SoloPlan.expiry_date.is_(None), SoloPlan.expiry_date > now_naive),
+        )
+        .group_by(SoloPlan.user_id)
+        .subquery()
+    )
 
-    query = User.query.filter(
+    member_order = func.coalesce(
+        latest_approved_plan_dates.c.approved_at,
+        Membership.created_at,
+        User.created_at,
+    )
+    query = User.query.outerjoin(
+        Membership, Membership.user_id == User.id
+    ).outerjoin(
+        latest_approved_plan_dates,
+        latest_approved_plan_dates.c.user_id == User.id,
+    ).filter(
         or_(User.role == "member", User.id.in_(approved_solo_users))
     )
 
@@ -2645,7 +2674,7 @@ def members():
     approved_solo_user_ids = [r[0] for r in approved_solo_users.distinct().all()]
     approved_solo_user_ids_set = set(approved_solo_user_ids)
 
-    all_members = query.order_by(User.created_at.desc()).all()
+    all_members = query.order_by(member_order.desc(), User.id.desc()).all()
 
     # Siguraduhon nga ma-sync ang membership status sa bag-o nga SoloPlan
     created_membership = False
@@ -2655,7 +2684,7 @@ def members():
 
     if created_membership:
         db.session.commit()
-        all_members = query.order_by(User.created_at.desc()).all()
+        all_members = query.order_by(member_order.desc(), User.id.desc()).all()
 
     membership_requests = (
         SoloPlan.query.filter_by(status="pending")
@@ -3030,10 +3059,10 @@ def membership_check_out(user_or_membership_id):
     if redirect_response:
         return redirect_response
 
-    # Pangitaon ang Membership O ang User ID
-    membership = Membership.query.filter_by(id=user_or_membership_id).first()
+    # Admin member cards send a user ID; prefer it because it can overlap a different membership ID.
+    membership = Membership.query.filter_by(user_id=user_or_membership_id).first()
     if not membership:
-        membership = Membership.query.filter_by(user_id=user_or_membership_id).first()
+        membership = Membership.query.filter_by(id=user_or_membership_id).first()
 
     target_user_id = membership.user_id if membership else user_or_membership_id
 

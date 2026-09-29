@@ -565,8 +565,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const currentMemberState = {
                 isCheckedIn: Boolean(statusData.is_checked_in),
+                isPaused: Boolean(statusData.is_paused),
+                isCheckedOut: Boolean(statusData.is_checked_out),
+                isExpired: Boolean(statusData.is_expired),
                 membershipStatus: String(
                     statusData.membership_status
+                    || (statusData.is_expired ? 'EXPIRED' : '')
+                    || (statusData.is_checked_out ? 'CHECKED_OUT' : '')
                     || statusData.member_status
                     || (isNoMembership ? 'NONE' : 'UNKNOWN')
                 ).toUpperCase(),
@@ -580,7 +585,51 @@ document.addEventListener('DOMContentLoaded', function() {
                 const checkInChanged = previousMemberState.isCheckedIn !== currentMemberState.isCheckedIn;
                 const statusChanged = previousMemberState.membershipStatus !== currentMemberState.membershipStatus;
 
+                if (checkInChanged || statusChanged) {
+                    const sessionKey = statusData.session_id || statusData.solo_plan_id || 'current';
+                    let lifecycleEvent = null;
+                    if (!previousMemberState.isCheckedIn && currentMemberState.isCheckedIn) {
+                        lifecycleEvent = {
+                            message: 'Your session has started.',
+                            variant: 'info',
+                            eventKey: `session:${sessionKey}:started`,
+                        };
+                    } else if (!previousMemberState.isPaused && currentMemberState.isPaused) {
+                        lifecycleEvent = {
+                            message: 'Your session has been paused, you can leave the lounge now.',
+                            variant: 'warning',
+                            eventKey: `session:${sessionKey}:paused`,
+                        };
+                    } else if (previousMemberState.isPaused && currentMemberState.isCheckedIn && !currentMemberState.isPaused) {
+                        const firstName = statusData.first_name || (statusData.full_name || 'Member').trim().split(/\s+/)[0];
+                        lifecycleEvent = {
+                            message: `Welcome back, ${firstName}!`,
+                            variant: 'success',
+                            eventKey: `session:${sessionKey}:resumed`,
+                        };
+                    } else if (
+                        !(previousMemberState.isCheckedOut || previousMemberState.isExpired)
+                        && (currentMemberState.isCheckedOut || currentMemberState.isExpired)
+                    ) {
+                        lifecycleEvent = {
+                            message: 'Your session has ended.',
+                            variant: 'danger',
+                            eventKey: `session:${sessionKey}:ended`,
+                        };
+                    }
+                    if (lifecycleEvent && typeof window.queueMemberLifecycleToast === 'function') {
+                        window.queueMemberLifecycleToast(
+                            lifecycleEvent.message,
+                            lifecycleEvent.variant,
+                            lifecycleEvent.eventKey
+                        );
+                    }
+                }
+
                 previousMemberState.isCheckedIn = currentMemberState.isCheckedIn;
+                previousMemberState.isPaused = currentMemberState.isPaused;
+                previousMemberState.isCheckedOut = currentMemberState.isCheckedOut;
+                previousMemberState.isExpired = currentMemberState.isExpired;
                 previousMemberState.membershipStatus = currentMemberState.membershipStatus;
 
                 if ((checkInChanged || statusChanged) && !previousMemberState.reloadRequested) {

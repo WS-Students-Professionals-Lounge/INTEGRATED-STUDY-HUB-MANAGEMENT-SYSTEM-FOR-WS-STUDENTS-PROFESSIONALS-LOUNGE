@@ -1,4 +1,5 @@
-const socket = (typeof io !== 'undefined') ? io() : null;
+const socket = window.adminNotificationSocket || ((typeof io !== 'undefined') ? io() : null);
+if (socket) window.adminNotificationSocket = socket;
 
 document.addEventListener('DOMContentLoaded', function() {
     console.log("Admin Dashboard Modern UI Active", socket ? "+ SocketIO" : "(no socket)");

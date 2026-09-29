@@ -28,6 +28,7 @@ from database_fixed import (
     generate_customer_id,
     get_user_by_email,
     mail,
+    socketio,
 )
 from flask import (
     flash,
@@ -40,7 +41,7 @@ from flask import (
     current_app,
     render_template,
 )
-from sqlalchemy import and_, func, or_
+from sqlalchemy import and_, case, func, or_
 from werkzeug.utils import secure_filename
 from flask_login import current_user, login_required, login_user, logout_user
 from flask_mail import Message
@@ -341,15 +342,27 @@ def inject_member_notifications():
         unread_membership_notification_count = (
             unread_approval_count + unread_renewal_count
         )
+        member_membership = Membership.query.filter_by(
+            user_id=current_user.id
+        ).order_by(Membership.updated_at.desc(), Membership.id.desc()).first()
+        member_session_notification_active = bool(
+            member_membership
+            and (
+                getattr(member_membership, "is_checked_in", False)
+                or getattr(member_membership, "is_paused", False)
+            )
+        )
 
         return dict(
             unread_membership_notification_count=unread_membership_notification_count,
-            unread_reservation_notification_count=unread_reservation_notification_count
+            unread_reservation_notification_count=unread_reservation_notification_count,
+            member_session_notification_active=member_session_notification_active,
         )
 
     return dict(
         unread_membership_notification_count=0,
-        unread_reservation_notification_count=0
+        unread_reservation_notification_count=0,
+        member_session_notification_active=False,
     )
 
 @main_bp.route("/api/notifications/membership/read", methods=["POST"])
@@ -400,7 +413,9 @@ def mark_reservation_notifications_read():
 
     Reservation.query.filter(
         Reservation.user_id == current_user.id,
-        Reservation.status.ilike("confirmed"),
+        func.lower(Reservation.status).in_(
+            ["confirmed", "in_progress", "checked-in", "paused"]
+        ),
         Reservation.confirmation_notification_seen == False
     ).update(
         {"confirmation_notification_seen": True},
@@ -688,6 +703,16 @@ def user_active_reservation():
     now_naive = datetime.now(pytz.timezone("Asia/Manila")).replace(
         second=0, microsecond=0, tzinfo=None
     )
+    unread_confirmation_ids = [
+        reservation_id
+        for (reservation_id,) in Reservation.query.with_entities(Reservation.id).filter(
+            Reservation.user_id == current_user.id,
+            func.lower(Reservation.status).in_(
+                ["confirmed", "in_progress", "checked-in", "paused"]
+            ),
+            Reservation.confirmation_notification_seen == False,
+        ).all()
+    ]
     reservation = Reservation.query.filter(
         Reservation.user_id == current_user.id,
         func.lower(Reservation.status).in_(
@@ -704,20 +729,42 @@ def user_active_reservation():
                 ),
             ),
         ),
-    ).order_by(Reservation.start_time.asc()).first()
+    ).order_by(
+        case(
+            (func.lower(Reservation.status).in_(
+                ["in_progress", "paused", "checked-in"]
+            ), 0),
+            else_=1,
+        ),
+        Reservation.start_time.asc(),
+    ).first()
 
     if not reservation:
-        return jsonify({"has_active": False})
+        return jsonify({
+            "has_active": False,
+            "session_started": False,
+            "started_session_id": None,
+            "unread_confirmation_ids": unread_confirmation_ids,
+        })
 
     is_paused = bool(
         getattr(reservation, "is_paused", False)
         or str(getattr(reservation, "status", "") or "").strip().upper() == "PAUSED"
+    )
+    reservation_status = str(reservation.status or "").strip().lower()
+    session_started = (
+        reservation_status in ("in_progress", "checked-in", "paused")
+        and reservation.start_time is not None
+        and reservation.start_time <= now_naive
     )
 
     return jsonify({
         "has_active": True,
         "id": reservation.id,
         "status": "PAUSED" if is_paused else (reservation.status or "IN_PROGRESS"),
+        "session_started": session_started,
+        "started_session_id": reservation.id if session_started else None,
+        "unread_confirmation_ids": unread_confirmation_ids,
         "is_paused": is_paused,
         "room_name": reservation.room.name if reservation.room else "Common Area",
         "start_time": reservation.start_time.isoformat() if reservation.start_time else None,
@@ -1060,6 +1107,13 @@ def rooms():
         )
         db.session.add(reservation)
         db.session.commit()
+
+        socketio.emit("new_admin_notification", {
+            "type": "reservation",
+            "title": "New Reservation Request",
+            "message": f"From {reservation.customer_name} for {room.name}.",
+            "timestamp": datetime.now(ph_tz).strftime("%I:%M %p"),
+        }, room="admin_room")
         
         flash(
             "Reservation created and payment receipt uploaded. Awaiting admin approval.",
@@ -1585,6 +1639,13 @@ def solo_rates():
                 db.session.add(solo_plan)
                 db.session.commit()
 
+                socketio.emit("new_admin_notification", {
+                    "type": "membership",
+                    "title": "New Membership Request",
+                    "message": f"{current_user.name} submitted a request for {selected_plan}.",
+                    "timestamp": now_ph.strftime("%I:%M %p"),
+                }, room="admin_room")
+
                 message = (
                     f"Plan '{selected_plan}' selected! Waiting for admin approval. Your plan ID is: {customer_id}"
                 )
@@ -1722,6 +1783,13 @@ def submit_solo_payment():
         db.session.add(new_plan)
         db.session.commit()
 
+        socketio.emit("new_admin_notification", {
+            "type": "membership",
+            "title": "New Membership Request",
+            "message": f"{current_user.name} submitted a request for {plan_name}.",
+            "timestamp": now_ph.strftime("%I:%M %p"),
+        }, room="admin_room")
+
         return jsonify({'success': True, 'message': 'Payment submitted for verification.'})
     
     except Exception as e:
@@ -1821,26 +1889,139 @@ def checkout_solo_plan():
 def membership_status():
     """Get current user's membership status"""
     ph_tz = pytz.timezone("Asia/Manila")
+    now_ph = datetime.now(ph_tz)
+    now_naive = now_ph.replace(tzinfo=None)
 
     membership = Membership.query.filter(
         Membership.user_id == current_user.id,
         func.lower(Membership.status).in_(["active", "approved", "pending_checkin"]),
     ).order_by(Membership.updated_at.desc(), Membership.id.desc()).first()
+
+    if not membership:
+        membership = Membership.query.filter_by(
+            user_id=current_user.id
+        ).order_by(Membership.updated_at.desc(), Membership.id.desc()).first()
+
+    latest_plan = SoloPlan.query.filter_by(
+        user_id=current_user.id
+    ).order_by(SoloPlan.created_at.desc(), SoloPlan.id.desc()).first()
+    unread_approval_plan = SoloPlan.query.filter(
+        SoloPlan.user_id == current_user.id,
+        func.lower(SoloPlan.status) == "approved",
+        SoloPlan.member_notification_seen == False,
+    ).order_by(SoloPlan.created_at.desc(), SoloPlan.id.desc()).first()
+    unread_membership_notification_count = (
+        SoloPlan.query.filter(
+            SoloPlan.user_id == current_user.id,
+            func.lower(SoloPlan.status) == "approved",
+            SoloPlan.member_notification_seen == False,
+        ).count()
+        + SoloPlan.query.filter(
+            SoloPlan.user_id == current_user.id,
+            func.lower(SoloPlan.status) == "approved",
+            SoloPlan.renewal_notification_seen == False,
+        ).count()
+    )
+
+    plan_status = str(getattr(latest_plan, "status", "") or "").strip().lower()
+    is_checked_out = bool(
+        (membership and getattr(membership, "is_checked_out", False))
+        or plan_status in {"checked_out", "checked-out", "completed"}
+        or (membership and str(membership.status or "").lower() in {"checked_out", "checked-out"})
+    )
+    expiry_values = [
+        expiry for expiry in (
+            getattr(membership, "expiry_date", None),
+            getattr(latest_plan, "expiry_date", None),
+        ) if expiry is not None
+    ]
+    is_expired = bool(
+        (membership and str(membership.status or "").lower() == "expired")
+        or (latest_plan and plan_status in {"expired", "completed"})
+        or any(
+            (expiry.replace(tzinfo=None) if expiry.tzinfo else expiry) <= now_naive
+            for expiry in expiry_values
+        )
+    ) and not is_checked_out
+
+    active_log = None
+    latest_log = None
+    if membership:
+        active_log = AttendanceLog.query.filter_by(
+            membership_id=membership.id,
+            check_out_time=None
+        ).order_by(AttendanceLog.check_in_time.desc()).first()
+        latest_log = AttendanceLog.query.filter_by(
+            membership_id=membership.id
+        ).order_by(AttendanceLog.check_in_time.desc()).first()
+
+    is_checked_in = bool(membership and getattr(membership, "is_checked_in", False))
+    is_paused = bool(
+        (membership and getattr(membership, "is_paused", False))
+        or (active_log and getattr(active_log, "is_paused", False))
+    )
+    member_name = current_user.name or ""
+    first_name = member_name.strip().split()[0] if member_name.strip() else "Member"
+    lifecycle_data = {
+        "member_id": current_user.id,
+        "unread_approval": bool(unread_approval_plan),
+        "unread_membership_notification_count": unread_membership_notification_count,
+        "unread_approval_plan_id": unread_approval_plan.id if unread_approval_plan else None,
+        "unread_approval_status": str(unread_approval_plan.status or "").strip().lower() if unread_approval_plan else None,
+        "approved": plan_status == "approved",
+        "solo_plan_id": latest_plan.id if latest_plan else None,
+        "solo_plan_status": plan_status,
+        "is_checked_in": is_checked_in,
+        "is_paused": is_paused,
+        "is_checked_out": is_checked_out,
+        "is_expired": is_expired,
+        "first_name": first_name,
+        "full_name": member_name,
+        "session_id": (active_log or latest_log).id if (active_log or latest_log) else None,
+    }
     
     if not membership:
-        return jsonify({"status": "error", "message": "No membership found"})
+        return jsonify({
+            "status": "error",
+            "message": "No membership found",
+            **lifecycle_data,
+        })
 
     _expire_membership_if_needed(membership)
 
-    member_status = "PAUSED" if getattr(membership, "is_paused", False) else (
-        "CHECKED_IN" if membership.is_checked_in else "NOT_CHECKED_IN"
+    is_checked_in = bool(getattr(membership, "is_checked_in", False))
+    is_paused = bool(
+        getattr(membership, "is_paused", False)
+        or (active_log and getattr(active_log, "is_paused", False))
+    )
+    is_checked_out = bool(
+        getattr(membership, "is_checked_out", False)
+        or plan_status in {"checked_out", "checked-out", "completed"}
+        or str(membership.status or "").lower() in {"checked_out", "checked-out"}
+    )
+    is_expired = bool(
+        str(membership.status or "").lower() == "expired"
+        or (membership.expiry_date and (
+            membership.expiry_date.replace(tzinfo=None)
+            if membership.expiry_date.tzinfo else membership.expiry_date
+        ) <= now_naive)
+        or (latest_plan and plan_status == "expired")
+        or (latest_plan and latest_plan.expiry_date and (
+            latest_plan.expiry_date.replace(tzinfo=None)
+            if latest_plan.expiry_date.tzinfo else latest_plan.expiry_date
+        ) <= now_naive)
+    ) and not is_checked_out
+    lifecycle_data.update({
+        "is_checked_in": is_checked_in,
+        "is_paused": is_paused,
+        "is_checked_out": is_checked_out,
+        "is_expired": is_expired,
+    })
+    member_status = "PAUSED" if is_paused else (
+        "CHECKED_IN" if is_checked_in else "NOT_CHECKED_IN"
     )
     remaining_seconds = max(0, int(float(membership.hours_left or 0) * 3600))
     elapsed_seconds = 0
-    active_log = AttendanceLog.query.filter_by(
-        membership_id=membership.id,
-        check_out_time=None
-    ).order_by(AttendanceLog.check_in_time.desc()).first()
     if active_log and active_log.check_in_time and membership.is_checked_in:
         check_in_time = active_log.check_in_time
         if check_in_time.tzinfo is None:
@@ -1904,12 +2085,13 @@ def membership_status():
         "is_countdown_active": bool(membership.is_checked_in and member_status == "CHECKED_IN"),
         "is_checked_in": membership.is_checked_in,
         "is_active": membership.is_active,
-        "is_paused": bool(getattr(membership, 'is_paused', False)),
+        "is_paused": is_paused,
         "member_status": member_status,
         "plan_name": membership.plan_name,
         "expiry_date": expiry_iso,
         "accumulated_hours": 0.0,
         "activities": activities,
+        **lifecycle_data,
     })
 
 
