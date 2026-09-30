@@ -1853,6 +1853,11 @@ def admin_reservations():
 
             db.session.commit()
 
+            today_date = datetime.now(pytz.timezone("Asia/Manila")).date()
+            if reservation.start_time.date() == today_date:
+                flash("Reservation added to Today's Waiting List.", "success")
+                return redirect(url_for("admin.dashboard"))
+
             flash("Reservation added to the Reservation List.", "success")
             return redirect(url_for("admin.admin_reservations_list"))
 
@@ -2323,6 +2328,12 @@ def confirm_reservation(res_id):
         if res.start_time and res.start_time <= now <= (res.end_time or now):
             res.room.status = "unavailable"
     db.session.commit()
+
+    today_date = datetime.now(pytz.timezone("Asia/Manila")).date()
+    if res.start_time and res.start_time.date() == today_date:
+        flash(f"Reservation confirmed for {res.customer_name} and added to Today's Waiting List.", "success")
+        return redirect(url_for("admin.dashboard"))
+
     flash(f"Reservation confirmed for {res.customer_name}")
     return redirect(url_for("admin.admin_reservations_list"))
 
