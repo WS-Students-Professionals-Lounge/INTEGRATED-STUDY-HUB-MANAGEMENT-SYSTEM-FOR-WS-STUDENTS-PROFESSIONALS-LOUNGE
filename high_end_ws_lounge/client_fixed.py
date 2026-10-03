@@ -814,55 +814,93 @@ def rooms():
     ph_tz = pytz.timezone("Asia/Manila")
 
     form = ReservationForm()
-    rooms = Room.query.filter(~Room.name.ilike('Test Room%')).order_by(Room.id).all()
+    rooms = Room.query.filter(
+        ~Room.name.ilike('Test Room%'),
+        ~Room.name.ilike('%Duplicate%'),
+    ).order_by(Room.id).all()
 
     now_ph = datetime.now(ph_tz).replace(tzinfo=None)
+    today_start = now_ph.replace(hour=0, minute=0, second=0, microsecond=0)
+    tomorrow_start = today_start + timedelta(days=1)
 
-    active_occupied_reservations = Reservation.query.filter(
+    active_member_user_ids = db.session.query(SoloPlan.user_id).filter(
+        func.lower(SoloPlan.status).in_( ["approved", "active"]),
+        or_(
+            SoloPlan.expiry_date.is_(None),
+            SoloPlan.expiry_date >= now_ph,
+        ),
+    )
+    active_walkins_query = Reservation.query.join(Room).filter(
+        Room.name.ilike("common area"),
+        func.lower(Reservation.status).in_([
+            "confirmed",
+            "in_progress",
+            "checked-in",
+            "checked in",
+            "walk-in",
+            "active",
+            "occupied",
+        ]),
+        or_(
+            Reservation.user_id.is_(None),
+            ~Reservation.user_id.in_(active_member_user_ids),
+        ),
+        or_(
+            and_(
+                Reservation.start_time >= today_start,
+                Reservation.start_time < tomorrow_start,
+            ),
+            and_(
+                Reservation.start_time <= now_ph,
+                or_(
+                    Reservation.is_open_time == True,
+                    Reservation.end_time.is_(None),
+                    Reservation.end_time >= now_ph,
+                ),
+            ),
+        ),
+    )
+    if hasattr(Reservation, "deleted_at"):
+        active_walkins_query = active_walkins_query.filter(
+            Reservation.deleted_at.is_(None)
+        )
+    active_walkins_count = active_walkins_query.count()
+
+    active_members_count = db.session.query(AttendanceLog.id).join(Membership).filter(
+        Membership.status == "active",
+        Membership.is_checked_in == True,
+        Membership.is_paused == False,
+        AttendanceLog.is_paused == False,
+        AttendanceLog.check_out_time.is_(None),
+    ).count()
+    common_area_occupied_count = active_walkins_count + active_members_count
+    room_pax_count = {
+        room.id: common_area_occupied_count
+        for room in rooms
+        if "common area" in room.name.lower()
+    }
+
+    current_room_reservations = Reservation.query.filter(
         Reservation.room_id.isnot(None),
-        Reservation.status.in_(["Confirmed", "Occupied", "Walk-in", "Pending", "Checked-in"]),
+        func.lower(Reservation.status).in_(
+            ["confirmed", "in_progress", "checked-in", "walk-in", "active", "occupied"]
+        ),
         Reservation.start_time <= now_ph,
         or_(
+            Reservation.is_open_time == True,
+            Reservation.end_time.is_(None),
             Reservation.end_time >= now_ph,
-            Reservation.is_open_time == True
-        )
+        ),
     ).all()
+    occupied_room_ids = {
+        reservation.room_id
+        for reservation in current_room_reservations
+        if reservation.room_id
+    }
 
-    room_pax_count = {}
-    occupied_room_ids = set()
-
-    for res in active_occupied_reservations:
-        if res.room_id:
-            occupied_room_ids.add(res.room_id)
-            room_pax_count[res.room_id] = room_pax_count.get(res.room_id, 0) + (res.pax_count or 1)
-
-    available_rooms = []
-    for r in rooms:
-        if r.status and r.status.lower() == "available":
-            if "common area" in r.name.lower():
-                max_capacity = getattr(r, 'capacity', 70) or 70
-                current_pax = room_pax_count.get(r.id, 0)
-                if current_pax < max_capacity:
-                    available_rooms.append(r)
-            else:
-                if r.id not in occupied_room_ids:
-                    available_rooms.append(r)
-
-    selected_room_id = None
-    try:
-        selected_room_id = int(form.room_id.data) if form.room_id.data is not None else None
-    except (TypeError, ValueError):
-        selected_room_id = None
-
-    if selected_room_id is not None:
-        selected_room = Room.query.get(selected_room_id)
-        if selected_room and selected_room.id not in {room.id for room in available_rooms}:
-            available_rooms.append(selected_room)
-
-    available_rooms = sorted(available_rooms, key=lambda room: room.id)
-    
     form.room_id.choices = [
-        (room.id, f"{room.name} - ₱{room.base_rate}/hr") for room in available_rooms
+        (room.id, f"{room.name} - ₱{room.base_rate}/hr")
+        for room in rooms
     ]
 
     payment_info = {
@@ -973,7 +1011,7 @@ def rooms():
         room_name_lower = (room.name or "").strip().lower()
         is_common_area = "common area" in room_name_lower
 
-        pax_count_val = form.pax_count.data or 1
+        pax_count_val = pax_count
         if "lecture room" in room_name_lower and pax_count_val > 15:
             flash("Lecture Room capacity is limited to a maximum of 15 persons only.", "danger")
             return render_template("rooms.html", rooms=rooms, bookings=bookings, form=form, payment_info=payment_info, occupied_room_ids=occupied_room_ids, room_pax_count=room_pax_count)
@@ -1014,18 +1052,41 @@ def rooms():
 
         if is_common_area:
             # Common Area Capacity Check - bypass strict room overlap validation by using shared-space capacity logic instead.
-            check_end = end_time if end_time else (start_time + timedelta(hours=12))
-            overlapping_reservations = Reservation.query.filter(
-                Reservation.room_id == form.room_id.data,
-                Reservation.status.in_(["Confirmed", "Pending", "Walk-in", "Checked-in"]),
-                or_(
-                    Reservation.end_time > start_time,
-                    Reservation.is_open_time == True
+            reservation_time_filter = or_(
+                Reservation.end_time > start_time,
+                Reservation.is_open_time == True,
+            )
+            if today_start <= start_time < tomorrow_start:
+                reservation_time_filter = or_(
+                    reservation_time_filter,
+                    and_(
+                        Reservation.start_time >= today_start,
+                        Reservation.start_time < tomorrow_start,
+                    ),
                 )
-            ).all()
+
+            overlapping_query = Reservation.query.filter(
+                Reservation.room_id == form.room_id.data,
+                func.lower(Reservation.status).in_([
+                    "confirmed",
+                    "pending",
+                    "in_progress",
+                    "checked-in",
+                    "checked in",
+                    "walk-in",
+                    "active",
+                    "occupied",
+                ]),
+                reservation_time_filter,
+            )
+            if hasattr(Reservation, "deleted_at"):
+                overlapping_query = overlapping_query.filter(
+                    Reservation.deleted_at.is_(None)
+                )
+            overlapping_reservations = overlapping_query.all()
 
             current_booked_pax = sum(r.pax_count or 1 for r in overlapping_reservations)
-            requested_pax = form.pax_count.data or 1
+            requested_pax = pax_count
             max_capacity = getattr(room, 'capacity', 70) or 70
 
             if (current_booked_pax + requested_pax) > max_capacity:
@@ -1090,7 +1151,7 @@ def rooms():
             room_id=form.room_id.data,
             customer_name=form.customer_name.data,
             contact_number=form.contact_number.data,
-            pax_count=form.pax_count.data,
+            pax_count=pax_count,
             start_time=start_time,
             end_time=end_time, # Will save as NULL/None if Open Time!
             is_open_time=is_open_time,
@@ -1629,6 +1690,9 @@ def solo_rates():
         SoloPlan.query.filter_by(user_id=current_user.id, status="pending").first()
         is not None
     )
+    latest_solo_plan = SoloPlan.query.filter_by(
+        user_id=current_user.id
+    ).order_by(SoloPlan.created_at.desc(), SoloPlan.id.desc()).first()
 
     message = None
     if request.method == "POST":
@@ -1697,6 +1761,7 @@ def solo_rates():
         message=message,
         active_solo_plan=active_solo_plan,
         has_pending=has_pending,
+        latest_solo_plan=latest_solo_plan,
     )
 
 # API Blueprint
@@ -1974,6 +2039,15 @@ def membership_status():
     )
 
     plan_status = str(getattr(latest_plan, "status", "") or "").strip().lower()
+    solo_plan_expiry = None
+    if latest_plan and latest_plan.expiry_date:
+        solo_plan_expiry_dt = latest_plan.expiry_date
+        if solo_plan_expiry_dt.tzinfo is None:
+            solo_plan_expiry_dt = ph_tz.localize(solo_plan_expiry_dt)
+        else:
+            solo_plan_expiry_dt = solo_plan_expiry_dt.astimezone(ph_tz)
+        solo_plan_expiry = solo_plan_expiry_dt.isoformat()
+
     is_checked_out = bool(
         (membership and getattr(membership, "is_checked_out", False))
         or plan_status in {"checked_out", "checked-out", "completed"}
@@ -2021,6 +2095,9 @@ def membership_status():
         "approved": plan_status == "approved",
         "solo_plan_id": latest_plan.id if latest_plan else None,
         "solo_plan_status": plan_status,
+        "solo_plan_name": latest_plan.plan_name if latest_plan else None,
+        "solo_plan_expiry_date": solo_plan_expiry,
+        "solo_plan_payment_method": latest_plan.payment_method if latest_plan else None,
         "is_checked_in": is_checked_in,
         "is_paused": is_paused,
         "is_checked_out": is_checked_out,

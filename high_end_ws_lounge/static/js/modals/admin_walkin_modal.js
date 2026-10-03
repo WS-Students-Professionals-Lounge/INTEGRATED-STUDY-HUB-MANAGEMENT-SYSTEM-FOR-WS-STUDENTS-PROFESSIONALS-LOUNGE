@@ -47,6 +47,7 @@ document.addEventListener('DOMContentLoaded', function() {
         openBtn.addEventListener('click', function() {
             modal.classList.add('active');
             document.body.style.overflow = 'hidden';
+            updateWalkinPreview();
         });
     }
 
@@ -72,7 +73,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const fArea = document.getElementById('f-area');
     const fPax = document.getElementById('f-pax');
     const paxWrapper = document.getElementById('pax-count-wrapper');
-    const fStartTime = document.getElementById('f-start-time');
     const fDurationSelect = document.getElementById('f-duration-select');
     const fEndTime = document.getElementById('f-end-time');
     const fEndDisplay = document.getElementById('f-end-display');
@@ -275,6 +275,8 @@ function getTierRate(roomName, paxCount, defaultBaseRate) {
 function updateWalkinPreview() {
     togglePaxVisibility();
 
+    const start = new Date();
+
     if (pCustomer) pCustomer.textContent = fName?.value || '----';
     if (pContact) pContact.textContent = fContact?.value || '----';
     if (pArea) {
@@ -282,7 +284,7 @@ function updateWalkinPreview() {
         pArea.textContent = opt ? opt.text.split(' (')[0] : '----';
     }
 
-    if (pStart) pStart.textContent = fStartTime?.value ? formatDateTimeLocal(fStartTime.value) : 'Now';
+    if (pStart) pStart.textContent = formatDateTimeLocal(toLocalISOString(start));
 
     const extraFee = parseFloat(fFees?.value) || 0;
     const addonSubtotal = parseFloat(addonSubtotalField?.value || 0) || 0;
@@ -294,12 +296,11 @@ function updateWalkinPreview() {
     if (fOpenTime?.checked) {
         if (pEnd) pEnd.textContent = 'OPEN TIME';
         duration = 1;
-    } else if (fStartTime?.value && fDurationSelect?.value) {
-        const start = new Date(fStartTime.value);
+        if (fEndTime) fEndTime.value = '';
+        if (fEndDisplay) fEndDisplay.value = '';
+    } else if (fDurationSelect?.value) {
         const durationHours = parseFloat(fDurationSelect.value) || 1;
-        
-        const end = new Date(start.getTime());
-        end.setHours(end.getHours() + durationHours);
+        const end = new Date(start.getTime() + durationHours * 60 * 60 * 1000);
 
         const formattedEndLocal = toLocalISOString(end);
 
@@ -307,13 +308,6 @@ function updateWalkinPreview() {
         if (fEndTime) fEndTime.value = formattedEndLocal;
         if (fEndDisplay) fEndDisplay.value = formattedEndLocal;
         duration = durationHours;
-    } else if (fStartTime?.value && fEndTime?.value) {
-        if (pEnd) pEnd.textContent = formatDateTimeLocal(fEndTime.value);
-        const s = new Date(fStartTime.value);
-        const e = new Date(fEndTime.value);
-        let diff = (e - s) / 1000 / 60 / 60;
-        if (diff <= 0) diff += 24;
-        duration = diff;
     }
 
     if (pDuration) {
@@ -367,7 +361,7 @@ if (predefinedAddonQtyInput) {
 }
 
 // Attach event listeners correctly without inner loop calls
-const walkinInputs = [fName, fContact, fArea, fPax, fStartTime, fDurationSelect, fEndTime, fFees, fDiscount];
+const walkinInputs = [fName, fContact, fArea, fPax, fDurationSelect, fFees, fDiscount];
 walkinInputs.forEach(el => {
     if (el) {
         el.addEventListener('input', updateWalkinPreview);
@@ -395,26 +389,9 @@ if (fOpenTime) {
         if (this.checked) {
             if (fEndTime) fEndTime.value = '';
             if (fEndDisplay) fEndDisplay.value = '';
-        } else if (fStartTime?.value && fDurationSelect?.value) {
-            const start = new Date(fStartTime.value);
-            const durationHours = parseFloat(fDurationSelect.value) || 1;
-            const end = new Date(start.getTime() + durationHours * 3600 * 1000);
-            if (fEndTime) fEndTime.value = end.toISOString().slice(0, 16);
-            if (fEndDisplay) fEndDisplay.value = end.toISOString().slice(0, 16);
         }
         updateWalkinPreview();
     });
-}
-
-// Set start time to now by default
-if (fStartTime && !fStartTime.value) {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-    fStartTime.value = `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
 // Initial calculation call
@@ -427,7 +404,8 @@ updateWalkinPreview();
             e.preventDefault();
             
             // Validate required fields
-            if (!fName.value.trim() || !fArea.value || !fStartTime.value) {
+            updateWalkinPreview();
+            if (!fName.value.trim() || !fArea.value || !fDurationSelect.value) {
                 // Use SweetAlert2 if available, otherwise use native alert
                 if (typeof Swal !== 'undefined') {
                     Swal.fire({

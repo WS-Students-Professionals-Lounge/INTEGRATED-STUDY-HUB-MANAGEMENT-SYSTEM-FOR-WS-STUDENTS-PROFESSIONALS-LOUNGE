@@ -462,7 +462,11 @@ function calculateOpenTimeMinutesFee(minutes) {
         const selectedOption = roomSelector.options[roomSelector.selectedIndex];
         const selectedText = selectedOption ? selectedOption.text.toLowerCase() : '';
 
-        const isCapacityRoom = selectedText.includes('common area') || selectedText.includes('lecture room') || selectedText.includes('event room');
+        const isCapacityRoom = !selectedText.includes('common area') && (
+            selectedText.includes('lecture room') ||
+            selectedText.includes('conference room') ||
+            selectedText.includes('event room')
+        );
 
         if (isCapacityRoom) {
             if (paxContainer) paxContainer.style.display = 'flex';

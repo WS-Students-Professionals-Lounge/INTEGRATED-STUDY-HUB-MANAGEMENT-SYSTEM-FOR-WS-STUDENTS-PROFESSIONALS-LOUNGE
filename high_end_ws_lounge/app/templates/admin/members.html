@@ -416,29 +416,33 @@
         container.innerHTML = '';
 
         const isSuccess = category === 'success';
-        const bgColor = isSuccess ? '#d1e7dd' : '#f8d7da';
-        const textColor = isSuccess ? '#0f5132' : '#842029';
-        const borderColor = isSuccess ? '#badbcc' : '#f5c2c7';
-
         const alertBox = document.createElement('div');
-        alertBox.style.cssText = `
-            background-color: ${bgColor};
-            color: ${textColor};
-            border: 1px solid ${borderColor};
-            padding: 16px;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            font-family: Arial, sans-serif;
-        `;
+        alertBox.className = `admin-alert-card alert-${isSuccess ? 'success' : 'danger'}`;
 
-        alertBox.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
-                <div style="font-weight: bold; font-size: 14px; line-height: 1.4;">
-                    ${isSuccess ? '⚠️ ' : '❌ '} ${message}
-                </div>
-                <button onclick="closeBannerAndRefresh()" style="background: none; border: none; font-size: 20px; font-weight: bold; cursor: pointer; color: ${textColor}; line-height: 1;">✕</button>
-            </div>
-        `;
+        const iconBadge = document.createElement('span');
+        iconBadge.className = 'admin-alert-icon';
+        iconBadge.setAttribute('aria-hidden', 'true');
+        const icon = document.createElement('i');
+        icon.className = `fas ${isSuccess ? 'fa-circle-check' : 'fa-circle-exclamation'}`;
+        iconBadge.appendChild(icon);
+
+        const content = document.createElement('div');
+        content.className = 'admin-alert-content';
+        const title = document.createElement('strong');
+        title.className = 'admin-alert-title';
+        title.textContent = isSuccess ? 'Update complete' : 'Action needed';
+        const text = document.createElement('span');
+        text.className = 'admin-alert-text';
+        text.textContent = String(message || '');
+        content.append(title, text);
+
+        const closeButton = document.createElement('button');
+        closeButton.type = 'button';
+        closeButton.className = 'admin-alert-close';
+        closeButton.setAttribute('aria-label', 'Close notification');
+        closeButton.textContent = '\u00d7';
+        closeButton.addEventListener('click', closeBannerAndRefresh);
+        alertBox.append(iconBadge, content, closeButton);
 
         container.appendChild(alertBox);
     }

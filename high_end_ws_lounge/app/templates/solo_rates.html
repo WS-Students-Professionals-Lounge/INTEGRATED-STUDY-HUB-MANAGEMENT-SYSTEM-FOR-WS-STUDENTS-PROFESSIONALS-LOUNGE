@@ -29,22 +29,30 @@
         <div class="status-card">
             <div class="status-card-header">
                 <h5>Solo Plan Status</h5>
-                {% if active_solo_plan and active_solo_plan.is_active %}
-                    <span class="badge badge-success">Active</span>
-                {% elif has_pending %}
-                    <span class="badge badge-warning">Pending</span>
+                {% if latest_solo_plan %}
+                    {% set solo_status = (latest_solo_plan.status or 'none')|lower %}
+                    {% if solo_status in ['approved', 'active'] %}
+                        <span id="solo-plan-status-badge" class="badge badge-success">{{ solo_status|title }}</span>
+                    {% elif solo_status == 'pending' %}
+                        <span id="solo-plan-status-badge" class="badge badge-warning">Pending</span>
+                    {% elif solo_status == 'rejected' %}
+                        <span id="solo-plan-status-badge" class="badge bg-danger">Rejected</span>
+                    {% else %}
+                        <span id="solo-plan-status-badge" class="badge badge-secondary">{{ solo_status|title }}</span>
+                    {% endif %}
                 {% else %}
-                    <span class="badge badge-secondary">None</span>
+                    <span id="solo-plan-status-badge" class="badge badge-secondary">None</span>
                 {% endif %}
             </div>
-            <div class="status-card-body">
-                {% if active_solo_plan %}
-                    <p><strong>Plan:</strong> {{ active_solo_plan.plan_name }}</p>
-                    <p><strong>Expiry:</strong> {{ active_solo_plan.expiry_date.strftime('%Y-%m-%d %I:%M %p') if active_solo_plan.expiry_date else 'Not set' }}</p>
-                    <p><strong>Payment Method:</strong> {{ active_solo_plan.payment_method or 'N/A' }}</p>
-                    <p><strong>Status:</strong> {{ (active_solo_plan.status or 'N/A')|title }}</p>
-                {% elif has_pending %}
-                    <p>Your plan request is waiting for admin approval.</p>
+            <div class="status-card-body" id="solo-plan-status-details">
+                {% if latest_solo_plan %}
+                    <p><strong>Plan:</strong> {{ latest_solo_plan.plan_name }}</p>
+                    <p><strong>Expiry:</strong> {{ latest_solo_plan.expiry_date.strftime('%Y-%m-%d %I:%M %p') if latest_solo_plan.expiry_date else 'Not set' }}</p>
+                    <p><strong>Payment Method:</strong> {{ latest_solo_plan.payment_method or 'N/A' }}</p>
+                    <p><strong>Status:</strong> {{ (latest_solo_plan.status or 'N/A')|title }}</p>
+                    {% if (latest_solo_plan.status or '')|lower == 'pending' %}
+                        <p>Your plan request is waiting for admin approval.</p>
+                    {% endif %}
                 {% else %}
                     <p>No solo plan is currently active.</p>
                 {% endif %}

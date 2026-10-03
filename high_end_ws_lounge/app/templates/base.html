@@ -13,7 +13,7 @@
 
     {% block extra_css %}{% endblock %}
 </head>
-<body class="sidebar-layout">
+<body class="sidebar-layout{% if current_user.is_authenticated and current_user.role in ['admin', 'staff'] %} admin-notification-theme{% endif %}">
     <div id="global-toast-container" class="global-toast-container" aria-live="polite" aria-atomic="false"></div>
     <nav class="sidebar">
         <div class="sidebar-header">
@@ -158,7 +158,21 @@
                 {% if messages %}
                     <div class="alert-container">
                         {% for category, message in messages %}
-                            <div class="alert alert-{{ 'info' if not category else category }}">{{ message }}</div>
+                            {% if current_user.is_authenticated and current_user.role in ['admin', 'staff'] %}
+                                {% set alert_variant = 'danger' if category in ['danger', 'error'] else 'warning' if category == 'warning' else 'success' if category == 'success' else 'primary' %}
+                                {% set alert_title = 'Action needed' if alert_variant == 'danger' else 'Please note' if alert_variant == 'warning' else 'Update complete' if alert_variant == 'success' else 'Notification' %}
+                                {% set alert_icon = 'fa-circle-exclamation' if alert_variant == 'danger' else 'fa-triangle-exclamation' if alert_variant == 'warning' else 'fa-circle-check' if alert_variant == 'success' else 'fa-circle-info' %}
+                                <div class="alert alert-{{ alert_variant }} admin-alert-card" role="alert">
+                                    <span class="admin-alert-icon" aria-hidden="true"><i class="fas {{ alert_icon }}"></i></span>
+                                    <div class="admin-alert-content">
+                                        <strong class="admin-alert-title">{{ alert_title }}</strong>
+                                        <p class="admin-alert-text">{{ message }}</p>
+                                    </div>
+                                    <button type="button" class="btn-close btn-close-sm" data-bs-dismiss="alert" aria-label="Close"></button>
+                                </div>
+                            {% else %}
+                                <div class="alert alert-{{ 'info' if not category else category }}">{{ message }}</div>
+                            {% endif %}
                         {% endfor %}
                     </div>
                 {% endif %}

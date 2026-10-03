@@ -410,6 +410,112 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 });
 
+document.addEventListener('DOMContentLoaded', () => {
+    const badge = document.getElementById('solo-plan-status-badge');
+    const details = document.getElementById('solo-plan-status-details');
+    if (!badge || !details) return;
+
+    const statusLabel = status => {
+        const normalized = String(status || '').trim().toLowerCase();
+        if (normalized === 'approved') return 'Approved';
+        if (normalized === 'active') return 'Active';
+        if (normalized === 'pending') return 'Pending';
+        if (normalized === 'rejected') return 'Rejected';
+        if (normalized === 'checked_out' || normalized === 'checked-out') return 'Checked Out';
+        if (!normalized || normalized === 'none') return 'None';
+        return normalized.replace(/(^|[_\s-])\w/g, character => character.toUpperCase());
+    };
+
+    const addDetail = (label, value) => {
+        const row = document.createElement('p');
+        const heading = document.createElement('strong');
+        heading.textContent = `${label}: `;
+        row.append(heading, document.createTextNode(value || 'N/A'));
+        details.appendChild(row);
+    };
+
+    const updateStatusCard = plan => {
+        const normalizedStatus = String(plan.solo_plan_status || 'none').trim().toLowerCase();
+        const label = statusLabel(normalizedStatus);
+        badge.textContent = label;
+        badge.className = 'badge ' + (
+            ['approved', 'active'].includes(normalizedStatus)
+                ? 'badge-success'
+                : normalizedStatus === 'pending'
+                    ? 'badge-warning'
+                    : normalizedStatus === 'rejected'
+                        ? 'bg-danger'
+                        : 'badge-secondary'
+        );
+
+        details.replaceChildren();
+        if (!plan.solo_plan_name) {
+            const emptyMessage = document.createElement('p');
+            emptyMessage.textContent = 'No solo plan is currently active.';
+            details.appendChild(emptyMessage);
+            return;
+        }
+
+        addDetail('Plan', plan.solo_plan_name);
+        const expiry = plan.solo_plan_expiry_date
+            ? new Date(plan.solo_plan_expiry_date).toLocaleString()
+            : 'Not set';
+        addDetail('Expiry', expiry);
+        addDetail('Payment Method', plan.solo_plan_payment_method || 'N/A');
+        addDetail('Status', label);
+
+        if (normalizedStatus === 'pending') {
+            const pendingMessage = document.createElement('p');
+            pendingMessage.textContent = 'Your plan request is waiting for admin approval.';
+            details.appendChild(pendingMessage);
+        }
+    };
+
+    let statusRequestInProgress = false;
+    let statusRefreshRequested = false;
+    const refreshStatusCard = async () => {
+        if (document.visibilityState === 'hidden') return;
+        if (statusRequestInProgress) {
+            statusRefreshRequested = true;
+            return;
+        }
+        statusRequestInProgress = true;
+        try {
+            const response = await fetch('/api/membership/status', {
+                cache: 'no-store',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: Unable to refresh Solo Plan status.`);
+            }
+            const data = await response.json();
+            if (data.solo_plan_status !== undefined) updateStatusCard(data);
+        } catch (error) {
+            console.error('Failed to refresh Solo Plan status card:', error);
+        } finally {
+            statusRequestInProgress = false;
+            if (statusRefreshRequested) {
+                statusRefreshRequested = false;
+                refreshStatusCard();
+            }
+        }
+    };
+
+    const memberSocket = window.memberNotificationSocket;
+    if (memberSocket && typeof memberSocket.on === 'function') {
+        memberSocket.on('solo_plan_status_changed', data => {
+            if (!data || String(data.status || '').toLowerCase() !== 'approved') return;
+            badge.textContent = 'Approved';
+            badge.className = 'badge badge-success';
+            refreshStatusCard();
+        });
+    }
+
+    refreshStatusCard();
+    window.setInterval(refreshStatusCard, 2000);
+    document.addEventListener('visibilitychange', refreshStatusCard);
+});
+
 //         function initMembershipCountdown() {
 //         const countdownEl = document.getElementById('membership-countdown');
 //         if (!countdownEl) return;

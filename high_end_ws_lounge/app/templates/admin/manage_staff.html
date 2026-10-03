@@ -15,7 +15,13 @@
     </div>
 
     {% if message %}
-        <div class="alert alert-warning">{{ message }}</div>
+        <div class="alert alert-warning admin-alert-card" role="alert">
+            <span class="admin-alert-icon" aria-hidden="true"><i class="fas fa-triangle-exclamation"></i></span>
+            <div class="admin-alert-content">
+                <strong class="admin-alert-title">Please note</strong>
+                <p class="admin-alert-text">{{ message }}</p>
+            </div>
+        </div>
     {% endif %}
 
     <div class="row g-4">
@@ -201,7 +207,11 @@ document.addEventListener("DOMContentLoaded", function() {
             // Kun indi maabot ang Alphanumeric / 8+ criteria
             if (!hasLetters || !hasNumbers || !isLong) {
                 e.preventDefault(); // PILIT NGA PI-PUGNGAN ANG FORM SUBMIT
-                alert("Password must be at least 8 characters long and contain both letters and numbers.");
+                if (typeof window.showToast === 'function') {
+                    window.showToast("Password must be at least 8 characters long and contain both letters and numbers.", "warning");
+                } else {
+                    alert("Password must be at least 8 characters long and contain both letters and numbers.");
+                }
                 staffPass.focus();
             }
         });

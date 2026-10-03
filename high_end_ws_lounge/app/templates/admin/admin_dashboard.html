@@ -91,6 +91,8 @@
                     <div class="room-card dashboard-card {{ 'session-expired' if is_expired }}" 
                         data-customer="{{ res.customer_name|lower }}" 
                         data-room="{{ res.room.name|lower if res.room else 'Common Area' }}"
+                        data-session-id="{{ res.id }}"
+                        data-is-open-time="{{ 'true' if res.is_open_time else 'false' }}"
                         data-isopentime="{{ 'true' if res.is_open_time else 'false' }}"
                         data-endtime="{{ res.end_time.isoformat() if res.end_time else '' }}"
                         data-is-paused="{{ 'true' if res.is_paused else 'false' }}"
@@ -234,6 +236,9 @@
                     <div class="room-card dashboard-card {{ 'session-expired' if is_expired }}" 
                         data-customer="{{ active_res.customer_name|lower if active_res else '' }}" 
                         data-room="{{ room.name.strip().lower() }}"
+                        data-room-id="{{ room.id }}"
+                        data-session-id="{{ active_res.id if active_res else '' }}"
+                        data-is-open-time="{{ 'true' if (active_res and active_res.is_open_time) else 'false' }}"
                         data-endtime="{{ active_res.end_time.isoformat() if (active_res and active_res.end_time) else '' }}"
                         data-isopentime="{{ 'true' if (active_res and active_res.is_open_time) else 'false' }}"
                         data-is-paused="{{ 'true' if (active_res and active_res.is_paused) else 'false' }}"
@@ -299,6 +304,10 @@
                             <div class="info-row name-row">
                                 <span class="info-label">Name:</span>
                                 <span class="info-value">{{ active_res.customer_name if active_res else '---' }}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Customer ID:</span>
+                                <span class="info-value room-customer-id">{{ (active_res.customer_id or active_res.user_id or '---') if active_res else '---' }}</span>
                             </div>
                         </div>
 
@@ -443,7 +452,7 @@
                 <div class="input-grid-2">
                     <div class="input-group">
                         <label class="form-label" for="f-area">SELECT AREA</label>
-                        {{ form.room_id(class_="modern-select", id="f-area", style="height: 42px; width: 100%;") }}
+                         {{ form.room_id(class_="modern-select", id="f-area", style="height: 42px; width: 100%;") }}
                     </div>
 
                     <!-- PAX COUNT WRAPPER (Hidden by default) -->
@@ -455,12 +464,12 @@
 
                 <div class="input-grid-3 mb-3">
                     <div class="input-group">
-                        <label class="form-label" for="f-start-time">Start Date/Time</label>
-                        <input type="datetime-local" id="f-start-time" name="start_time" class="modern-input mt-2" style="height: 42px; width: 100%;">
+                        <label class="form-label">Start Time</label>
+                        <div class="modern-input mt-2 d-flex align-items-center" style="height: 42px; width: 100%;">Immediate (Current Time)</div>
                     </div>
                     <div class="input-group">
                         <label class="form-label" for="f-duration-select">Duration</label>
-                        <select id="f-duration-select" class="modern-select" style="height: 42px; width: 100%;">
+                        <select id="f-duration-select" name="duration_hours" class="modern-select" style="height: 42px; width: 100%;">
                             {% for hours in range(1, 25) %}
                                 <option value="{{ hours }}">{{ hours }} hour{{ 's' if hours > 1 else '' }}</option>
                             {% endfor %}
@@ -552,17 +561,41 @@
 document.addEventListener('DOMContentLoaded', function () {
     if (!document.getElementById('roomGridContainer')) return;
 
+    const knownCommonAreaSessionIds = new Set(
+        Array.from(document.querySelectorAll('#common-area-active-cards-scroll .room-card[data-session-id]'))
+            .map(card => card.dataset.sessionId)
+    );
+    let dashboardRefreshInFlight = false;
+    let dashboardRefreshPending = false;
+
     function refreshLiveRoomCards() {
         fetch('/admin/api/dashboard/room-status', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
             .then(response => response.json())
             .then(data => {
                 if (typeof updateCommonAreaCardStats === 'function') updateCommonAreaCardStats(data);
                 if (typeof updateRoomStatusCards === 'function') updateRoomStatusCards(data);
+
+                const commonArea = data.rooms?.find(room =>
+                    String(room.name || '').trim().toLowerCase() === 'common area'
+                );
+                const reservationId = commonArea?.reservation_id == null
+                    ? ''
+                    : String(commonArea.reservation_id);
+                if (reservationId && !knownCommonAreaSessionIds.has(reservationId)) {
+                    knownCommonAreaSessionIds.add(reservationId);
+                    refreshDashboardSections();
+                }
             })
             .catch(() => null);
     }
 
     function refreshDashboardSections() {
+        if (dashboardRefreshInFlight) {
+            dashboardRefreshPending = true;
+            return;
+        }
+        dashboardRefreshInFlight = true;
+
         fetch(window.location.href, {
             headers: {
                 'X-Requested-With': 'XMLHttpRequest'
@@ -583,6 +616,11 @@ document.addEventListener('DOMContentLoaded', function () {
             const nextLiveRoomContainer = doc.querySelector('#common-area-active-cards-scroll');
             const nextRoomGridContainer = doc.querySelector('#roomGridContainer');
 
+            const previousSessionIds = new Set(
+                Array.from(liveRoomContainer?.querySelectorAll('.room-card[data-session-id]') || [])
+                    .map(card => card.dataset.sessionId)
+            );
+
             if (waitingListContainer && nextWaitingListContainer) {
                 waitingListContainer.innerHTML = nextWaitingListContainer.innerHTML;
             }
@@ -591,12 +629,31 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             if (liveRoomContainer && nextLiveRoomContainer) {
                 liveRoomContainer.innerHTML = nextLiveRoomContainer.innerHTML;
+                const newSessionCard = Array.from(
+                    liveRoomContainer.querySelectorAll('.room-card[data-session-id]')
+                ).find(card => !previousSessionIds.has(card.dataset.sessionId));
+                if (newSessionCard) {
+                    newSessionCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    newSessionCard.animate([
+                        { outline: '0 solid rgba(22, 163, 74, 0)', boxShadow: '0 0 0 rgba(22, 163, 74, 0)' },
+                        { outline: '3px solid rgba(22, 163, 74, 0.85)', boxShadow: '0 0 18px rgba(22, 163, 74, 0.35)' },
+                        { outline: '3px solid rgba(22, 163, 74, 0.85)', boxShadow: '0 0 18px rgba(22, 163, 74, 0.35)' },
+                        { outline: '0 solid rgba(22, 163, 74, 0)', boxShadow: '0 0 0 rgba(22, 163, 74, 0)' },
+                    ], { duration: 3000, easing: 'ease-out' });
+                }
             }
             if (roomGridContainer && nextRoomGridContainer) {
                 roomGridContainer.innerHTML = nextRoomGridContainer.innerHTML;
             }
         })
-        .catch(() => null);
+        .catch(() => null)
+        .finally(() => {
+            dashboardRefreshInFlight = false;
+            if (dashboardRefreshPending) {
+                dashboardRefreshPending = false;
+                refreshDashboardSections();
+            }
+        });
     }
 
     refreshLiveRoomCards();
@@ -639,19 +696,19 @@ document.addEventListener('DOMContentLoaded', function () {
             <!-- Rate per Hour -->
             <div class="input-group" style="display: flex !important; justify-content: space-between !important; align-items: center !important; width: 100% !important; margin-bottom: 0.85rem !important;">
                 <label class="form-label" style="position: relative !important; float: none !important; margin: 0 !important; color: #64748b !important; font-size: 0.8rem !important; font-weight: 600 !important; text-transform: uppercase;">Rate per Hour</label>
-                <p id="extendRate" class="info-value" style="position: relative !important; float: none !important; margin: 0 !important; font-weight: 700 !important; color: #0f172a !important;">₱0.00</p>
+                <p id="extendRate" class="info-value price-notification-text" style="position: relative !important; float: none !important; margin: 0 !important;">₱0.00</p>
             </div>
 
             <!-- Original Total -->
             <div class="input-group" style="display: flex !important; justify-content: space-between !important; align-items: center !important; width: 100% !important; margin-bottom: 0.85rem !important;">
                 <label class="form-label" style="position: relative !important; float: none !important; margin: 0 !important; color: #64748b !important; font-size: 0.8rem !important; font-weight: 600 !important; text-transform: uppercase;">Original Total</label>
-                <p id="extendOriginalTotal" class="info-value" style="position: relative !important; float: none !important; margin: 0 !important; font-weight: 700 !important; color: #0f172a !important;">₱0.00</p>
+                <p id="extendOriginalTotal" class="info-value price-notification-text" style="position: relative !important; float: none !important; margin: 0 !important;">₱0.00</p>
             </div>
 
             <!-- New Total -->
             <div class="input-group" style="display: flex !important; justify-content: space-between !important; align-items: center !important; width: 100% !important; margin-bottom: 1.5rem !important;">
                 <label class="form-label" style="position: relative !important; float: none !important; margin: 0 !important; color: #64748b !important; font-size: 0.8rem !important; font-weight: 600 !important; text-transform: uppercase;">New Total</label>
-                <p id="extendUpdatedTotal" class="info-value" style="position: relative !important; float: none !important; margin: 0 !important; font-weight: 700 !important; color: #0f172a !important;">₱0.00</p>
+                <p id="extendUpdatedTotal" class="info-value price-notification-text" style="position: relative !important; float: none !important; margin: 0 !important;">₱0.00</p>
             </div>            
             <div class="modal-btn-group-row">
                 <button type="button" id="confirmExtendBtn" class="btn-confirm-blue">Confirm Extend</button>
@@ -684,7 +741,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     
                     <div class="preview-item d-flex justify-content-between align-items-center py-2">
                         <span class="preview-label text-muted small position-relative" style="position: static !important; float: none !important;">New Total Bill</span>
-                        <span id="extendSummaryTotal" class="fw-bold text-primary">₱0.00</span>
+                        <span id="extendSummaryTotal" class="price-notification-text">₱0.00</span>
                     </div>
                 </div>
                 <p class="text-muted modal-helper-text mt-3 small">This updates the reservation end time and total bill immediately for the fixed session.</p>

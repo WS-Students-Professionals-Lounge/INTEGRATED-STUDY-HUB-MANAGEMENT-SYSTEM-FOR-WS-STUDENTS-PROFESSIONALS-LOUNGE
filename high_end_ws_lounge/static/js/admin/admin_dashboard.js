@@ -64,7 +64,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return isNaN(parsed.getTime()) ? null : parsed;
     }
 
-    function calculateCommonAreaOvertimeFee(endTime, currentTime = new Date()) {
+    function calculateFixedSessionOvertimeFee(endTime, currentTime = new Date()) {
         if (!endTime || currentTime <= endTime) return 0;
 
         const overtimeMinutes = Math.floor((currentTime - endTime) / 60000);
@@ -97,10 +97,22 @@ document.addEventListener('DOMContentLoaded', function() {
             const isPaused = (card && card.getAttribute('data-is-paused') === 'true') || timer.getAttribute('data-is-paused') === 'true';
             const startStr = timer.getAttribute('data-starttime');
             const endStr = timer.getAttribute('data-endtime');
-            const remainingElem = card ? card.querySelector('.remaining-text') : null;
 
             // Kuhaon kon Open Time bala
-            const isOpenTime = (card && card.getAttribute('data-isopentime') === 'true') || timer.getAttribute('data-isopentime') === 'true';
+            const isOpenTime = Boolean(
+                (card && (
+                    card.dataset.isOpenTime === 'true'
+                    || card.dataset.openTime === 'true'
+                    || card.dataset.isopentime === 'true'
+                ))
+                || timer.dataset.isopentime === 'true'
+            );
+            if (isOpenTime) {
+                card?.querySelector('.remaining-text')?.closest('.info-row')?.remove();
+            }
+            const remainingElem = isOpenTime || !card
+                ? null
+                : card.querySelector('.remaining-text');
 
             // [BAG-O]: Kuhaon ang accumulated paused seconds gikan sa database attribute
             const accumPausedSecs = parseInt(
@@ -207,19 +219,16 @@ document.addEventListener('DOMContentLoaded', function() {
             const endStr = card.getAttribute('data-endtime') || (card.querySelector('.timer-text') ? card.querySelector('.timer-text').getAttribute('data-endtime') : null);
             const isOpenTime = card.getAttribute('data-isopentime') === 'true';
             const isPaused = card.getAttribute('data-is-paused') === 'true';
-            const isCommonArea = (card.dataset.room || '').trim().toLowerCase() === 'common area';
-            const statusPill = isCommonArea ? card.querySelector('.status-pill') : null;
+            const statusPill = card.querySelector('.status-pill');
             const endTime = endStr && !isOpenTime ? parseIsoDate(endStr) : null;
             const isOvertime = !isPaused && endTime && now > endTime;
             const overtimeMinutes = isOvertime
                 ? Math.floor((now - endTime) / 60000)
                 : 0;
             const overtimeFee = isOvertime
-                ? calculateCommonAreaOvertimeFee(endTime, now)
+                ? calculateFixedSessionOvertimeFee(endTime, now)
                 : 0;
-            let overtimeTotalRow = isCommonArea
-                ? card.querySelector('.common-area-overtime-total')
-                : null;
+            let overtimeTotalRow = card.querySelector('.fixed-session-overtime-total');
 
             if (statusPill) {
                 if (isOvertime) {
@@ -230,7 +239,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                     if (!overtimeTotalRow) {
                         overtimeTotalRow = document.createElement('div');
-                        overtimeTotalRow.className = 'info-row common-area-overtime-total';
+                        overtimeTotalRow.className = 'info-row fixed-session-overtime-total';
                         overtimeTotalRow.innerHTML = '<span class="info-label">Total Payable</span><span class="info-value"></span>';
                         card.querySelector('.room-card-body')?.appendChild(overtimeTotalRow);
                     }
@@ -563,12 +572,37 @@ function updateCommonAreaCardStats(data) {
 
 }
 
+const roomSessionState = new Map();
+const roomHighlightTimers = new WeakMap();
+
+function highlightUpdatedRoomCard(card) {
+    card.classList.add('card-updated-highlight');
+    card.animate([
+        { outline: '0 solid rgba(22, 163, 74, 0)', boxShadow: '0 0 0 rgba(22, 163, 74, 0)' },
+        { outline: '3px solid rgba(22, 163, 74, 0.85)', boxShadow: '0 0 18px rgba(22, 163, 74, 0.35)' },
+        { outline: '3px solid rgba(22, 163, 74, 0.85)', boxShadow: '0 0 18px rgba(22, 163, 74, 0.35)' },
+        { outline: '0 solid rgba(22, 163, 74, 0)', boxShadow: '0 0 0 rgba(22, 163, 74, 0)' },
+    ], { duration: 3000, easing: 'ease-out' });
+
+    clearTimeout(roomHighlightTimers.get(card));
+    roomHighlightTimers.set(card, setTimeout(() => {
+        card.classList.remove('card-updated-highlight');
+    }, 3000));
+}
+
 function updateRoomStatusCards(data) {
     if (!Array.isArray(data?.rooms)) return;
 
     function ensureRoomTimerRows(card, room, occupied) {
         const existingTimer = card.querySelector('.timer-text');
         const existingRemaining = card.querySelector('.remaining-text');
+        const isOpenTime = typeof room.is_open_time === 'boolean'
+            ? room.is_open_time
+            : (
+                card.dataset.isOpenTime === 'true'
+                || card.dataset.openTime === 'true'
+                || card.dataset.isopentime === 'true'
+            );
         if (!occupied) {
             existingTimer?.closest('.info-row')?.remove();
             existingRemaining?.closest('.info-row')?.remove();
@@ -585,12 +619,16 @@ function updateRoomStatusCards(data) {
             else details.appendChild(timerRow);
         }
 
-        const remainingRow = existingRemaining?.closest('.info-row') || document.createElement('div');
-        remainingRow.className = 'info-row';
-        if (!existingRemaining) {
-            remainingRow.innerHTML = '<span class="info-label">Remaining</span><span class="remaining-text" style="font-weight: bold; color: #dc2626;">(00:00:00)</span>';
-            if (actionButtons) details.insertBefore(remainingRow, actionButtons.parentElement === details ? actionButtons : null);
-            else details.appendChild(remainingRow);
+        if (isOpenTime) {
+            existingRemaining?.closest('.info-row')?.remove();
+        } else {
+            const remainingRow = existingRemaining?.closest('.info-row') || document.createElement('div');
+            remainingRow.className = 'info-row';
+            if (!existingRemaining) {
+                remainingRow.innerHTML = '<span class="info-label">Remaining</span><span class="remaining-text" style="font-weight: bold; color: #dc2626;">(00:00:00)</span>';
+                if (actionButtons) details.insertBefore(remainingRow, actionButtons.parentElement === details ? actionButtons : null);
+                else details.appendChild(remainingRow);
+            }
         }
 
         const timer = timerRow.querySelector('.timer-text');
@@ -684,14 +722,21 @@ function updateRoomStatusCards(data) {
     }
 
     data.rooms.forEach(room => {
-        const card = Array.from(document.querySelectorAll('#roomGridContainer .room-card'))
-            .find(candidate => candidate.dataset.room === room.name.trim().toLowerCase());
+        const roomKey = String(room.id);
+        const card = document.querySelector(`#roomGridContainer .room-card[data-room-id="${roomKey}"]`);
         if (!card) return;
 
         const occupied = room.status === 'OCCUPIED';
+        const previousSessionId = roomSessionState.has(roomKey)
+            ? roomSessionState.get(roomKey)
+            : (card.dataset.sessionId || '');
+        const newSessionId = room.reservation_id == null ? '' : String(room.reservation_id);
+        roomSessionState.set(roomKey, newSessionId);
+        card.dataset.sessionId = newSessionId;
         const statusPill = card.querySelector('.status-pill');
         const statusText = card.querySelector('.status-text');
         const nameValue = card.querySelector('.name-row .info-value');
+        const customerIdValue = card.querySelector('.room-customer-id');
         const startValue = Array.from(card.querySelectorAll('.info-row'))
             .find(row => row.querySelector('.info-label')?.textContent.trim().toLowerCase() === 'start')
             ?.querySelector('.info-value');
@@ -701,6 +746,7 @@ function updateRoomStatusCards(data) {
 
         card.dataset.customer = (room.occupant_name || '').toLowerCase();
         card.dataset.endtime = room.end_time || '';
+        card.dataset.isOpenTime = room.is_open_time ? 'true' : 'false';
         card.dataset.isopentime = room.is_open_time ? 'true' : 'false';
         card.dataset.isPaused = room.is_paused ? 'true' : 'false';
         if (statusPill) {
@@ -714,10 +760,17 @@ function updateRoomStatusCards(data) {
             statusText.classList.toggle('available', !occupied);
         }
         if (nameValue) nameValue.textContent = room.occupant_name || '---';
+        if (customerIdValue) customerIdValue.textContent = occupied
+            ? (room.customer_id || room.user_id || '---')
+            : '---';
         if (startValue) startValue.textContent = room.start_time ? new Date(room.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : '---';
         if (endValue) endValue.textContent = room.end_time ? new Date(room.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : '---';
         ensureRoomTimerRows(card, room, occupied);
         renderRoomActions(card, room, occupied);
+        if (occupied && newSessionId && previousSessionId !== newSessionId) {
+            card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            highlightUpdatedRoomCard(card);
+        }
         if (typeof window.updateAdminDashboardTimers === 'function') {
             window.updateAdminDashboardTimers();
         }
@@ -760,17 +813,13 @@ window.handleCheckout = function(resId) {
     const startStr = btn.getAttribute('data-start-time');
     const endStr = btn.getAttribute('data-end-time');
     const isOpenTime = btn.getAttribute('data-is-open-time') === 'true';
-    const isCommonArea = roomName.trim().toLowerCase() === 'common area';
-    
     let total = 0;
     let overtimeFee = 0;
     let displayDuration = "";
 
     // CHECKOUT LOGIC:
     if (!isOpenTime) {
-        overtimeFee = isCommonArea
-            ? calculateCommonAreaOvertimeFee(parseIsoDate(endStr), new Date())
-            : 0;
+        overtimeFee = calculateFixedSessionOvertimeFee(parseIsoDate(endStr), new Date());
         total = (storedTotal + overtimeFee).toFixed(2);
         displayDuration = "Fixed Session (Original Time)";
     } 

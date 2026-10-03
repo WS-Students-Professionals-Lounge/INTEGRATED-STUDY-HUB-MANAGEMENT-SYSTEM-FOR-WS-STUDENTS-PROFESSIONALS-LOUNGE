@@ -133,7 +133,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         text: 'Lecture Room capacity is strictly limited to 15 pax max.'
                     });
                 } else {
-                    alert('Lecture Room capacity is strictly limited to 15 pax max.');
+                    if (typeof window.showToast === 'function') {
+                        window.showToast('Lecture Room capacity is strictly limited to 15 pax max.', 'warning');
+                    } else {
+                        alert('Lecture Room capacity is strictly limited to 15 pax max.');
+                    }
                 }
                 pax = 15;
                 if (paxInput) paxInput.value = 15;
@@ -144,9 +148,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (rateTitle) rateTitle.textContent = "Lecture Room Tier Rates (Max 15 Pax)";
                 if (rateBody) {
                     rateBody.innerHTML = `
-                        <div class="rate-tier-item ${pax >= 1 && pax <= 5 ? 'active-tier' : ''}">1-5 Pax: ₱150/hr</div>
-                        <div class="rate-tier-item ${pax >= 6 && pax <= 10 ? 'active-tier' : ''}">6-10 Pax: ₱200/hr</div>
-                        <div class="rate-tier-item ${pax >= 11 && pax <= 15 ? 'active-tier' : ''}">11-15 Pax: ₱250/hr</div>
+                        <div class="rate-tier-item price-notification-text ${pax >= 1 && pax <= 5 ? 'active-tier' : ''}">1-5 Pax: ₱150/hr</div>
+                        <div class="rate-tier-item price-notification-text ${pax >= 6 && pax <= 10 ? 'active-tier' : ''}">6-10 Pax: ₱200/hr</div>
+                        <div class="rate-tier-item price-notification-text ${pax >= 11 && pax <= 15 ? 'active-tier' : ''}">11-15 Pax: ₱250/hr</div>
                     `;
                 }
             }
@@ -156,9 +160,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (rateTitle) rateTitle.textContent = "Event Room Tier Rates";
                 if (rateBody) {
                     rateBody.innerHTML = `
-                        <div class="rate-tier-item ${pax >= 1 && pax <= 15 ? 'active-tier' : ''}">1-15 Pax: ₱300/hr</div>
-                        <div class="rate-tier-item ${pax >= 16 && pax <= 30 ? 'active-tier' : ''}">16-30 Pax: ₱400/hr</div>
-                        <div class="rate-tier-item ${pax > 30 ? 'active-tier' : ''}">31+ Pax: ₱500/hr</div>
+                        <div class="rate-tier-item price-notification-text ${pax >= 1 && pax <= 15 ? 'active-tier' : ''}">1-15 Pax: ₱300/hr</div>
+                        <div class="rate-tier-item price-notification-text ${pax >= 16 && pax <= 30 ? 'active-tier' : ''}">16-30 Pax: ₱400/hr</div>
+                        <div class="rate-tier-item price-notification-text ${pax > 30 ? 'active-tier' : ''}">31+ Pax: ₱500/hr</div>
                     `;
                 }
             }
@@ -360,13 +364,13 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!conflictIndicator) return;
 
         if (isConflict) {
-            conflictIndicator.textContent = `⚠️ ${message || 'Time conflict detected.'}`;
+            conflictIndicator.innerHTML = '<span class="admin-alert-icon" aria-hidden="true"><i class="fas fa-triangle-exclamation"></i></span><span class="admin-alert-content"><strong class="admin-alert-title">Schedule conflict</strong><span class="admin-alert-text"></span></span>';
+            conflictIndicator.querySelector('.admin-alert-text').textContent = message || 'Time conflict detected.';
             conflictIndicator.classList.remove('d-none');
-            conflictIndicator.className = 'alert alert-danger py-2 px-3 text-center mb-0 border-0 shadow-sm small fw-semibold';
+            conflictIndicator.className = 'alert alert-danger admin-alert-card py-2 px-3 text-center mb-0 border-0 shadow-sm small fw-semibold';
         } else {
-            conflictIndicator.textContent = '';
+            conflictIndicator.replaceChildren();
             conflictIndicator.classList.add('d-none');
-            conflictIndicator.classList.remove('alert-danger', 'bg-danger');
         }
     }
 

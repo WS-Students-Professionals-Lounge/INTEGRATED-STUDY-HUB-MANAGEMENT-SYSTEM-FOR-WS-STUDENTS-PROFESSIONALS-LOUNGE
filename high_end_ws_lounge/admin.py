@@ -63,8 +63,8 @@ def calculate_open_time_minutes_fee(minutes):
     return 35.0  # Fallback for full hour rate
 
 
-def calculate_common_area_overtime_fee(end_time, current_time=None):
-    """Calculate tiered overtime charges for fixed-time Common Area sessions."""
+def calculate_fixed_session_overtime_fee(end_time, current_time=None):
+    """Calculate tiered overtime charges for fixed-time room sessions."""
     if not end_time:
         return 0.0
 
@@ -138,6 +138,31 @@ def calculate_admin_total_amount(
     total = room_cost + float(extra_fee or 0.0) + float(addon_subtotal or 0.0)
     
     return round(total, 2)
+
+
+def calculate_fixed_session_checkout_total(reservation, current_time=None):
+    """Return a fixed-time session's stored base total plus accrued overtime."""
+    base_total = float(reservation.total_amount or 0)
+    if base_total <= 0 and reservation.start_time and reservation.end_time:
+        duration_hours = max(
+            (reservation.end_time - reservation.start_time).total_seconds() / 3600,
+            0,
+        )
+        base_total = calculate_admin_total_amount(
+            room_rate=reservation.room.base_rate if reservation.room else 0,
+            duration_hours=duration_hours,
+            extra_fee=reservation.extra_fee or 0,
+            addon_subtotal=reservation.addon_subtotal or 0,
+            discount_rate=getattr(reservation, "discount_rate", 0) or 0,
+            is_open_time=False,
+        )
+
+    overtime_fee = calculate_fixed_session_overtime_fee(
+        reservation.end_time,
+        current_time,
+    )
+    return round(base_total + overtime_fee, 2)
+
 
 def get_custom_tier_rate(room_name, pax_count, default_rate):
     """
@@ -260,6 +285,8 @@ def auto_start_due_reservations(now=None):
 
 
 def get_common_area_dashboard_counts(now):
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    tomorrow_start = today_start + timedelta(days=1)
     active_member_user_ids = db.session.query(SoloPlan.user_id).filter(
         func.lower(SoloPlan.status).in_(["approved", "active"]),
         or_(
@@ -267,15 +294,41 @@ def get_common_area_dashboard_counts(now):
             SoloPlan.expiry_date >= now,
         ),
     )
-    active_walkins_count = Reservation.query.join(Room).filter(
+    active_walkins_query = Reservation.query.join(Room).filter(
         Room.name.ilike("common area"),
-        Reservation.status.in_(["Confirmed", "IN_PROGRESS", "Checked-in", "Walk-in"]),
+        func.lower(Reservation.status).in_([
+            "confirmed",
+            "in_progress",
+            "checked-in",
+            "checked in",
+            "walk-in",
+            "active",
+            "occupied",
+        ]),
         or_(
             Reservation.user_id.is_(None),
             ~Reservation.user_id.in_(active_member_user_ids),
         ),
-        Reservation.start_time <= now,
-    ).count()
+        or_(
+            and_(
+                Reservation.start_time >= today_start,
+                Reservation.start_time < tomorrow_start,
+            ),
+            and_(
+                Reservation.start_time <= now,
+                or_(
+                    Reservation.is_open_time == True,
+                    Reservation.end_time.is_(None),
+                    Reservation.end_time >= now,
+                ),
+            ),
+        ),
+    )
+    if hasattr(Reservation, "deleted_at"):
+        active_walkins_query = active_walkins_query.filter(
+            Reservation.deleted_at.is_(None)
+        )
+    active_walkins_count = active_walkins_query.count()
 
     active_members_count = db.session.query(AttendanceLog.id).join(Membership).filter(
         Membership.status == "active",
@@ -285,21 +338,7 @@ def get_common_area_dashboard_counts(now):
         AttendanceLog.check_out_time.is_(None),
     ).count()
 
-    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    today_end = today_start + timedelta(days=1)
-    confirmed_waiting_count = Reservation.query.join(Room).filter(
-        Room.name.ilike("common area"),
-        func.lower(Reservation.status).in_([
-            "confirmed",
-            "approved",
-            "active",
-            "occupied",
-        ]),
-        Reservation.start_time >= today_start,
-        Reservation.start_time < today_end,
-    ).count()
-
-    occupied_count = active_walkins_count + active_members_count + confirmed_waiting_count
+    occupied_count = active_walkins_count + active_members_count
     return active_walkins_count, active_members_count, occupied_count
 
 
@@ -504,29 +543,20 @@ def get_active_room_reservations(rooms):
 
     query = Reservation.query.filter(
         Reservation.room_id.in_(room_ids),
-        func.lower(Reservation.status).in_(["confirmed", "in_progress", "checked-in", "walk-in"]),
-        or_(
-            Reservation.is_open_time == True,
-            Reservation.end_time.is_(None),
-            Reservation.end_time > now,
+        func.lower(Reservation.status).in_(
+            ["confirmed", "in_progress", "checked-in", "walk-in", "active", "occupied", "ended"]
         ),
     )
     if hasattr(Reservation, "deleted_at"):
         query = query.filter(Reservation.deleted_at.is_(None))
 
-    reservations = query.order_by(Reservation.start_time.asc()).all()
+    reservations = query.order_by(Reservation.start_time.desc()).all()
 
     def is_current(reservation):
         if not reservation.start_time:
             return False
 
-        if reservation.is_open_time or reservation.end_time is None:
-            return reservation.start_time <= now
-
-        if reservation.end_time:
-            return reservation.start_time <= now <= reservation.end_time
-
-        return False
+        return reservation.start_time <= now
 
     room_reservations = {}
     for res in reservations:
@@ -550,7 +580,7 @@ def get_active_room_reservations(rooms):
             continue
 
         if res.start_time and existing.start_time:
-            if res.start_time < existing.start_time:
+            if res.start_time > existing.start_time:
                 room_reservations[res.room_id] = res
     return room_reservations
 
@@ -638,6 +668,27 @@ def check_availability():
 
 # Admin Routes
 
+def _get_today_waiting_reservations(now):
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    tomorrow_start = today_start + timedelta(days=1)
+    waiting_statuses = [
+        "confirmed",
+        "pending",
+        "waiting",
+        "approved",
+    ]
+
+    waiting_query = Reservation.query.filter(
+        Reservation.start_time >= today_start,
+        Reservation.start_time < tomorrow_start,
+        func.lower(Reservation.status).in_(waiting_statuses),
+    )
+    if hasattr(Reservation, "deleted_at"):
+        waiting_query = waiting_query.filter(Reservation.deleted_at.is_(None))
+
+    return waiting_query.order_by(Reservation.start_time.asc()).all()
+
+
 @admin_bp.route("/dashboard")
 @login_required
 def dashboard():
@@ -666,7 +717,10 @@ def dashboard():
         db.session.commit()
 
     form = WalkinForm()
-    rooms = Room.query.filter(~Room.name.ilike('Test Room%')).all()
+    rooms = Room.query.filter(
+        ~Room.name.ilike('Test Room%'),
+        ~Room.name.ilike('%Duplicate%'),
+    ).all()
     unique_rooms = []
     seen_room_names = set()
     for room in rooms:
@@ -680,7 +734,6 @@ def dashboard():
         (room.id, f"{room.name} (₱{room.base_rate}/hr)") for room in rooms
     ]
 
-    room_reservations = get_active_room_reservations(unique_rooms)
     recent_members = (
         User.query.filter_by(role="member")
         .order_by(User.created_at.desc())
@@ -758,11 +811,25 @@ def dashboard():
         if res.room_id in common_area_room_ids:
             continue
         res.status = "Ended"
-        res.customer_id = None
         db.session.add(res)
         updated = True
 
     if updated:
+        db.session.commit()
+
+    room_reservations = get_active_room_reservations(unique_rooms)
+    stale_room_status_updated = False
+    for room in unique_rooms:
+        room_status = (room.status or "").strip().lower()
+        if (
+            room.name.strip().lower() != "common area"
+            and room_status in ("unavailable", "occupied")
+            and room.id not in room_reservations
+        ):
+            room.status = "available"
+            stale_room_status_updated = True
+
+    if stale_room_status_updated:
         db.session.commit()
 
     reservations_today = Reservation.query.filter(
@@ -781,32 +848,12 @@ def dashboard():
                 Reservation.status.in_(["IN_PROGRESS", "Checked-in", "Walk-in"]),
             ),
         ),
-        Reservation.status.in_(["Confirmed", "IN_PROGRESS", "Checked-in", "Walk-in", "Ended"]),
+        func.lower(Reservation.status).in_(["confirmed", "in_progress", "checked-in", "walk-in", "ended", "active", "occupied"]),
     ).all()
 
     active_reservations = sorted(all_res, key=lambda x: (x.status != "Ended", x.end_time if x.end_time else datetime.max))
 
-    today = now.date()
-    pending_query = Reservation.query.filter(
-        func.date(Reservation.start_time) == today,
-        func.lower(Reservation.status).in_(
-            ["confirmed", "approved", "active", "occupied"]
-        ),
-        Reservation.start_time > now,
-    )
-    if hasattr(Reservation, "deleted_at"):
-        pending_query = pending_query.filter(Reservation.deleted_at.is_(None))
-
-    pending_reservations = pending_query.order_by(Reservation.start_time.asc()).all()
-
-    waiting_list_today = [
-        r
-        for r in pending_reservations
-        if r.start_time
-        and r.start_time.date() == today
-        and str(r.status or "").strip().lower() in ("confirmed", "approved", "active", "occupied")
-        and r.start_time > now
-    ]
+    pending_reservations = _get_today_waiting_reservations(now)
 
     live_occupied_reservations = [
         r
@@ -826,7 +873,7 @@ def dashboard():
         r
         for r in active_reservations
         if r.room and r.room.name.strip().lower() == "common area"
-        and str(r.status or "").strip().lower() in ("in_progress", "checked-in", "walk-in")
+        and str(r.status or "").strip().lower() in ("in_progress", "checked-in", "walk-in", "active", "occupied")
     ]
 
     # Fetch active AttendanceLog entries for checked-in members to bind real-time check-in stamp
@@ -890,6 +937,8 @@ def dashboard_room_status():
             "name": room.name,
             "status": "OCCUPIED" if reservation else "AVAILABLE",
             "occupant_name": reservation.customer_name if reservation else None,
+            "customer_id": reservation.customer_id if reservation else None,
+            "user_id": reservation.user_id if reservation else None,
             "start_time": reservation.start_time.isoformat() if reservation else None,
             "end_time": reservation.end_time.isoformat() if reservation and reservation.end_time else None,
             "reservation_id": reservation.id if reservation else None,
@@ -924,16 +973,7 @@ def dashboard_today_waiting_list():
         return redirect_response
 
     now = datetime.now(pytz.timezone("Asia/Manila")).replace(tzinfo=None)
-    today = now.date()
-    waiting_query = Reservation.query.filter(
-        func.date(Reservation.start_time) == today,
-        Reservation.start_time > now,
-        func.lower(Reservation.status).in_(["confirmed", "approved", "active", "occupied"]),
-    )
-    if hasattr(Reservation, "deleted_at"):
-        waiting_query = waiting_query.filter(Reservation.deleted_at.is_(None))
-
-    reservations = waiting_query.order_by(Reservation.start_time.asc()).all()
+    reservations = _get_today_waiting_reservations(now)
 
     waiting_list = [{
         "id": reservation.id,
@@ -1283,7 +1323,10 @@ def toggle_staff_status(user_id):
 @login_required
 def walkin_checkin_modal():
     form = WalkinForm()
-    rooms = Room.query.filter(~Room.name.ilike('Test Room%')).all()
+    rooms = Room.query.filter(
+        ~Room.name.ilike('Test Room%'),
+        ~Room.name.ilike('%Duplicate%'),
+    ).all()
     form.room_id.choices = [(room.id, room.name) for room in rooms]
 
     current_app.logger.debug("walkin_checkin request.form at entry: %s", request.form.to_dict())
@@ -1297,36 +1340,19 @@ def walkin_checkin_modal():
 
         now = datetime.now()
         is_open_time = form.open_time.data
+        try:
+            duration_hours = float(request.form.get("duration_hours", "1"))
+        except (TypeError, ValueError):
+            duration_hours = 0
+        if not 1 <= duration_hours <= 24 or not duration_hours.is_integer():
+            message = "Select a whole-hour walk-in duration between 1 and 24 hours."
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return jsonify({"success": False, "message": message}), 400
+            flash(message, "danger")
+            return redirect(url_for("admin.dashboard"))
 
-        if is_open_time:
-            start_time = now
-        else:
-            if form.start_time.data:
-                if isinstance(form.start_time.data, str):
-                    try:
-                        start_time = datetime.strptime(form.start_time.data, "%Y-%m-%dT%H:%M")
-                    except ValueError:
-                        start_time = now
-                else:
-                    start_time = form.start_time.data
-            else:
-                start_time = now
-
-        if is_open_time:
-            end_time = start_time  # UPDATED CODE
-        else:
-            if form.end_time.data:
-                if isinstance(form.end_time.data, str):
-                    try:
-                        end_time = datetime.strptime(form.end_time.data, "%Y-%m-%dT%H:%M")
-                    except ValueError:
-                        end_time = start_time + timedelta(hours=1)
-                else:
-                    end_time = form.end_time.data
-                if end_time <= start_time:
-                    end_time += timedelta(days=1)
-            else:
-                end_time = start_time + timedelta(hours=1)
+        start_time = now
+        end_time = start_time if is_open_time else start_time + timedelta(hours=duration_hours)
 
         if room.name.strip().lower() != "common area":
             reservation_query = Reservation.query.filter(
@@ -1382,7 +1408,7 @@ def walkin_checkin_modal():
         room_rate = get_custom_tier_rate(room.name, pax_count, room.base_rate)
         total_amount = calculate_admin_total_amount(
             room_rate=room_rate,
-            duration_hours=1.0,
+            duration_hours=1.0 if is_open_time else duration_hours,
             extra_fee=extra_fee,
             addon_subtotal=addon_subtotal,
             discount_rate=float(form.discount.data) if getattr(form, "discount", None) else 0.0,
@@ -1461,7 +1487,7 @@ def walkin_checkout(res_id):
         except (TypeError, ValueError):
             final_bill = None
 
-    if final_bill is not None and final_bill > 0:
+    if res.is_open_time and final_bill is not None and final_bill > 0:
         res.total_amount = round(final_bill, 2)
         res.end_time = now
     elif res.is_open_time:
@@ -1477,21 +1503,7 @@ def walkin_checkout(res_id):
         )
         res.end_time = now
     else:
-        if not res.total_amount or res.total_amount == 0:
-            try:
-                if res.end_time and res.start_time:
-                    diff_hours = (res.end_time - res.start_time).total_seconds() / 3600
-                    diff_hours = max(diff_hours, 0)
-                    res.total_amount = calculate_admin_total_amount(
-                        room_rate=res.room.base_rate or 0,
-                        duration_hours=diff_hours,
-                        extra_fee=res.extra_fee or 0,
-                        addon_subtotal=res.addon_subtotal or 0,
-                        discount_rate=getattr(res, "discount_rate", 0) or 0,
-                        is_open_time=False,
-                    )
-            except Exception:
-                pass
+        res.total_amount = calculate_fixed_session_checkout_total(res, now)
         res.end_time = now
 
     report_date = res.end_time.date()
@@ -1536,7 +1548,7 @@ def process_payment(reservation_id):
 
     amount_passed = request.form.get("total_bill") or request.args.get("total_bill")
 
-    if amount_passed and float(amount_passed) > 0:
+    if res.is_open_time and amount_passed and float(amount_passed) > 0:
         res.total_amount = round(float(amount_passed), 2)
         if res.is_open_time or not res.end_time:
             res.end_time = now
@@ -1556,21 +1568,9 @@ def process_payment(reservation_id):
         )
         res.end_time = now
 
-    if not res.is_open_time and (not res.total_amount or res.total_amount == 0):
-        try:
-            if res.end_time and res.start_time:
-                diff_hours = (res.end_time - res.start_time).total_seconds() / 3600
-                diff_hours = max(diff_hours, 0)
-                res.total_amount = calculate_admin_total_amount(
-                    room_rate=res.room.base_rate or 0,
-                    duration_hours=diff_hours,
-                    extra_fee=res.extra_fee or 0,
-                    addon_subtotal=res.addon_subtotal or 0,
-                    discount_rate=getattr(res, "discount_rate", 0) or 0,
-                    is_open_time=False,
-                )
-        except Exception:
-            pass
+    if not res.is_open_time:
+        res.total_amount = calculate_fixed_session_checkout_total(res, now)
+        res.end_time = now
 
     report_date = get_business_date(res.end_time)
 
@@ -1667,7 +1667,10 @@ def admin_reservations():
     if redirect_response:
         return redirect_response
 
-    rooms = Room.query.filter(~Room.name.ilike('Test Room%')).all()
+    rooms = Room.query.filter(
+        ~Room.name.ilike('Test Room%'),
+        ~Room.name.ilike('%Duplicate%'),
+    ).all()
     form = AdminReservationForm()
     form.room_id.choices = [
         (r.id, f"{r.name} (₱{r.base_rate}/hr)") for r in rooms
@@ -1684,7 +1687,7 @@ def admin_reservations():
                 selected_room_id = None
         if selected_room_id and selected_room_id not in [choice[0] for choice in form.room_id.choices]:
             selected_room = Room.query.get(selected_room_id)
-            if selected_room:
+            if selected_room and "duplicate" not in selected_room.name.strip().lower():
                 form.room_id.choices.append(
                     (selected_room.id, f"{selected_room.name} (₱{selected_room.base_rate}/hr)")
                 )
@@ -1976,6 +1979,11 @@ def approve_membership(req_id):
         membership.member_list_notification_seen = False
 
     db.session.commit()
+    socketio.emit("solo_plan_status_changed", {
+        "user_id": plan.user_id,
+        "status": "approved",
+        "plan_name": plan.plan_name,
+    }, room=f"member_{plan.user_id}")
 
     flash(f"Membership approved for {plan.user.name}", "success")
     return redirect(url_for("admin.members", tab="list"))
@@ -2239,6 +2247,11 @@ def approve_solo_plan(plan_id):
         membership.member_list_notification_seen = False
 
     db.session.commit()
+    socketio.emit("solo_plan_status_changed", {
+        "user_id": plan.user_id,
+        "status": "approved",
+        "plan_name": plan.plan_name,
+    }, room=f"member_{plan.user_id}")
     flash(f"Plan approved for {plan.user.name}", "success")
     return redirect(url_for("admin.solo_applications"))
 

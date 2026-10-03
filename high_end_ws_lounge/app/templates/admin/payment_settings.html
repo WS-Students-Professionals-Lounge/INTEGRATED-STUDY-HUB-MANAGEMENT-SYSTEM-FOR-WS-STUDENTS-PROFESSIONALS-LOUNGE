@@ -17,9 +17,16 @@
         {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
             {% for category, message in messages %}
-            <div class="alert alert-{{ 'danger' if category=='danger' else 'success' if category=='success' else 'info' }}">
-                {{ message }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            {% set alert_variant = 'danger' if category in ['danger', 'error'] else 'warning' if category == 'warning' else 'success' if category == 'success' else 'info' %}
+            {% set alert_title = 'Action needed' if alert_variant == 'danger' else 'Please note' if alert_variant == 'warning' else 'Update complete' if alert_variant == 'success' else 'Notification' %}
+            {% set alert_icon = 'fa-circle-exclamation' if alert_variant == 'danger' else 'fa-triangle-exclamation' if alert_variant == 'warning' else 'fa-circle-check' if alert_variant == 'success' else 'fa-circle-info' %}
+            <div class="alert alert-{{ alert_variant }} admin-alert-card" role="alert">
+                <span class="admin-alert-icon" aria-hidden="true"><i class="fas {{ alert_icon }}"></i></span>
+                <div class="admin-alert-content">
+                    <strong class="admin-alert-title">{{ alert_title }}</strong>
+                    <p class="admin-alert-text">{{ message }}</p>
+                </div>
+                <button type="button" class="btn-close btn-close-sm" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
             {% endfor %}
         {% endif %}

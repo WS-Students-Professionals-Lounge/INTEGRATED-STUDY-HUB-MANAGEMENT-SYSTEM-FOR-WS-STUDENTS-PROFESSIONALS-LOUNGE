@@ -30,7 +30,7 @@ body {
     --toast-soft: #eef2ff;
     display: grid;
     grid-template-columns: 40px minmax(0, 1fr) 30px;
-    align-items: center;
+    align-items: start;
     gap: 12px;
     padding: 12px;
     border: 1px solid #d9e1ec;
@@ -39,6 +39,7 @@ body {
     background: linear-gradient(110deg, #ffffff 0%, #f8faff 100%);
     box-shadow: 0 10px 28px rgba(15, 23, 42, 0.18);
     color: #1e293b;
+    font-family: 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     pointer-events: auto;
     animation: global-toast-enter 220ms ease-out both;
 }
@@ -72,6 +73,7 @@ body {
     background: var(--toast-soft);
     color: var(--toast-accent);
     font-size: 17px;
+    align-self: center;
 }
 
 .global-member-toast-content {
@@ -82,10 +84,9 @@ body {
     display: block;
     margin-bottom: 2px;
     color: var(--toast-accent);
-    font-size: 0.72rem;
-    font-weight: 800;
+    font-size: 0.875rem;
+    font-weight: 700;
     line-height: 1.2;
-    text-transform: uppercase;
 }
 
 .global-member-toast.is-info {
@@ -100,9 +101,9 @@ body {
 
 .global-member-toast-message {
     margin: 0;
-    color: #26364a;
-    font-size: 0.91rem;
-    font-weight: 550;
+    color: #475569;
+    font-size: 0.8125rem;
+    font-weight: 400;
     line-height: 1.4;
     overflow-wrap: anywhere;
 }
@@ -119,6 +120,7 @@ body {
     font-size: 19px;
     line-height: 1;
     cursor: pointer;
+    align-self: start;
 }
 
 .global-member-toast-close:hover {
@@ -134,7 +136,7 @@ html[data-theme="dark"] .global-member-toast {
 }
 
 html[data-theme="dark"] .global-member-toast-message {
-    color: #e2e8f0;
+    color: #cbd5e1;
 }
 
 html[data-theme="dark"] .global-member-toast-close {
@@ -172,6 +174,236 @@ html[data-theme="dark"] .global-member-toast-close:hover {
     .global-member-toast.is-dismissing {
         transition: none;
     }
+}
+
+/* Admin notification styling follows the client toast's title/message hierarchy. */
+.admin-alert-card,
+.admin-notification-theme .alert-container .alert,
+.admin-notification-theme .alert-box,
+.admin-notification-theme .alert-message {
+    --admin-alert-accent: #4361ee;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid #d9e1ec;
+    border-left: 4px solid var(--admin-alert-accent);
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+    color: #1e293b;
+    font-size: 0.8125rem;
+    font-weight: 400;
+}
+
+.admin-notification-theme .alert-danger,
+.admin-notification-theme .alert-error,
+.admin-alert-card.alert-danger,
+.admin-alert-card.alert-error {
+    --admin-alert-accent: #c83d4d;
+    background: #fff1f2;
+}
+
+.admin-notification-theme .alert-warning,
+.admin-alert-card.alert-warning {
+    --admin-alert-accent: #b87908;
+    background: #fff8e8;
+}
+
+.admin-notification-theme .alert-success,
+.admin-alert-card.alert-success {
+    --admin-alert-accent: #16864a;
+    background: #edf9f1;
+}
+
+.admin-notification-theme .alert-info,
+.admin-notification-theme .alert-primary,
+.admin-alert-card.alert-info,
+.admin-alert-card.alert-primary {
+    --admin-alert-accent: #4361ee;
+    background: #eef2ff;
+}
+
+.admin-alert-icon {
+    display: grid;
+    width: 36px;
+    height: 36px;
+    flex: 0 0 36px;
+    place-items: center;
+    border-radius: 8px;
+    background: #eef2ff;
+    color: var(--admin-alert-accent);
+    font-size: 16px;
+}
+
+.admin-alert-card.alert-danger .admin-alert-icon,
+.admin-alert-card.alert-error .admin-alert-icon {
+    background: #fdebed;
+}
+
+.admin-alert-card.alert-warning .admin-alert-icon {
+    background: #fff4db;
+}
+
+.admin-alert-card.alert-success .admin-alert-icon {
+    background: #e7f6ed;
+}
+
+.admin-alert-card.alert-info .admin-alert-icon,
+.admin-alert-card.alert-primary .admin-alert-icon {
+    background: #eaf0ff;
+}
+
+.admin-alert-content {
+    min-width: 0;
+    flex: 1;
+}
+
+.admin-alert-title,
+.admin-notification-theme .custom-notification-toast .notification-title {
+    display: block;
+    margin: 0 0 2px;
+    color: var(--admin-alert-accent, #4361ee);
+    font-size: 0.875rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1.25;
+}
+
+.admin-alert-text,
+.admin-notification-theme .custom-notification-toast .notification-message {
+    display: block;
+    margin: 0;
+    color: #475569;
+    font-size: 0.8125rem;
+    font-weight: 400;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+}
+
+.admin-alert-card .btn-close {
+    margin: 0 0 0 auto;
+    padding: 0.45rem;
+}
+
+.admin-alert-close {
+    align-self: flex-start;
+    margin-left: auto;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #64748b;
+    font-size: 1.25rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.admin-alert-close:hover {
+    background: #edf1f7;
+    color: #1e293b;
+}
+
+.admin-notification-theme .custom-notification-toast {
+    --admin-alert-accent: #4361ee;
+    position: relative;
+    display: block;
+    padding: 14px 38px 14px 16px;
+    border: 1px solid #d9e1ec !important;
+    border-left: 4px solid var(--admin-alert-accent) !important;
+    border-radius: 8px !important;
+    background: #fff !important;
+    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.18) !important;
+    color: #1e293b !important;
+    font-family: 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+.admin-notification-theme .custom-notification-toast.is-success {
+    --admin-alert-accent: #16864a;
+}
+
+.admin-notification-theme .custom-notification-toast.is-warning {
+    --admin-alert-accent: #b87908;
+}
+
+.admin-notification-theme .custom-notification-toast.is-danger,
+.admin-notification-theme .custom-notification-toast.is-error {
+    --admin-alert-accent: #c83d4d;
+}
+
+.admin-notification-theme .custom-notification-toast .notification-title {
+    color: var(--admin-alert-accent);
+}
+
+.admin-notification-theme .custom-notification-toast .notification-message {
+    text-align: left;
+}
+
+.admin-notification-theme .custom-notification-toast .swal2-close {
+    position: absolute;
+    top: 5px;
+    right: 6px;
+    color: #64748b;
+    font-size: 1.25rem;
+}
+
+.admin-notification-theme .swal2-popup {
+    border-left: 4px solid #4361ee;
+    border-radius: 10px;
+    font-family: 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+.admin-notification-theme .swal2-popup:has(.swal2-icon.swal2-error) {
+    border-left-color: #c83d4d;
+}
+
+.admin-notification-theme .swal2-popup:has(.swal2-icon.swal2-warning) {
+    border-left-color: #b87908;
+}
+
+.admin-notification-theme .swal2-popup:has(.swal2-icon.swal2-success) {
+    border-left-color: #16864a;
+}
+
+.admin-notification-theme .swal2-title {
+    color: #1e293b;
+    font-size: 0.875rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+}
+
+.admin-notification-theme .swal2-html-container {
+    color: #475569;
+    font-size: 0.8125rem;
+    font-weight: 400;
+    line-height: 1.4;
+}
+
+.admin-notification-theme .price-notification-text {
+    color: #1e293b;
+    font-size: 0.875rem;
+    font-weight: 700;
+}
+
+html[data-theme="dark"] .admin-notification-theme .admin-alert-card,
+html[data-theme="dark"] .admin-notification-theme .alert-container .alert,
+html[data-theme="dark"] .admin-notification-theme .alert-box,
+html[data-theme="dark"] .admin-notification-theme .alert-message,
+html[data-theme="dark"] .admin-notification-theme .custom-notification-toast {
+    border-color: #334155 !important;
+    background: #172033 !important;
+    color: #e2e8f0 !important;
+}
+
+html[data-theme="dark"] .admin-notification-theme .admin-alert-text,
+html[data-theme="dark"] .admin-notification-theme .custom-notification-toast .notification-message,
+html[data-theme="dark"] .admin-notification-theme .swal2-html-container {
+    color: #cbd5e1 !important;
+}
+
+html[data-theme="dark"] .admin-notification-theme .admin-alert-title,
+html[data-theme="dark"] .admin-notification-theme .swal2-title,
+html[data-theme="dark"] .admin-notification-theme .price-notification-text {
+    color: #e2e8f0;
 }
 
 /* Client palette tokens to match admin blue theme */

@@ -119,26 +119,134 @@ if (document.readyState === 'loading') {
  */
 function showToast(message, icon = 'info', timer = 5000) {
     if (window.Swal && typeof Swal.fire === 'function') {
+        const normalizedIcon = icon === 'danger'
+            ? 'error'
+            : ['success', 'error', 'warning', 'info', 'question'].includes(icon)
+                ? icon
+                : 'info';
+        const notificationTitle = {
+            success: 'Update complete',
+            error: 'Action needed',
+            warning: 'Please note',
+            question: 'Confirmation',
+            info: 'Notification',
+        }[normalizedIcon];
         Swal.fire({
             toast: true,
             position: 'top-end',
-            icon: icon,
-            title: message,
+            icon: normalizedIcon,
+            title: notificationTitle,
+            text: String(message || ''),
+            showCloseButton: true,
             showConfirmButton: false,
             timer: timer,
-            timerProgressBar: true
+            timerProgressBar: true,
+            customClass: {
+                popup: `custom-notification-toast is-${normalizedIcon}`,
+                title: 'notification-title',
+                htmlContainer: 'notification-message',
+            },
         });
         return;
     }
 
-    // Fallback: create a modern-alert inside .alert-container or body
+    // Fallback: create a styled modern-alert inside .alert-container or body.
     const container = document.querySelector('.alert-container') || document.body;
     const div = document.createElement('div');
-    div.className = 'modern-alert alert alert-info';
-    div.textContent = message;
+    const normalizedIcon = icon === 'danger' ? 'error' : icon;
+    const alertVariant = ['success', 'error', 'warning'].includes(normalizedIcon)
+        ? normalizedIcon
+        : 'info';
+    const alertTitle = {
+        success: 'Update complete',
+        error: 'Action needed',
+        warning: 'Please note',
+        info: 'Notification',
+    }[alertVariant];
+    const alertIcon = {
+        success: 'fa-circle-check',
+        error: 'fa-circle-exclamation',
+        warning: 'fa-triangle-exclamation',
+        info: 'fa-circle-info',
+    }[alertVariant];
+    div.className = `modern-alert alert alert-${alertVariant === 'error' ? 'danger' : alertVariant} admin-alert-card`;
+    div.setAttribute('role', 'status');
+
+    const iconBadge = document.createElement('span');
+    iconBadge.className = 'admin-alert-icon';
+    iconBadge.setAttribute('aria-hidden', 'true');
+    const iconElement = document.createElement('i');
+    iconElement.className = `fas ${alertIcon}`;
+    iconBadge.appendChild(iconElement);
+
+    const content = document.createElement('div');
+    content.className = 'admin-alert-content';
+    const title = document.createElement('strong');
+    title.className = 'admin-alert-title';
+    title.textContent = alertTitle;
+    const text = document.createElement('span');
+    text.className = 'admin-alert-text';
+    text.textContent = String(message || '');
+    content.append(title, text);
+
+    const closeButton = document.createElement('button');
+    closeButton.type = 'button';
+    closeButton.className = 'alert-dismiss';
+    closeButton.setAttribute('aria-label', 'Dismiss notification');
+    closeButton.textContent = '\u00d7';
+    div.append(iconBadge, content, closeButton);
     container.prepend(div);
     // let the initializeBaseJs observer pick it up and dismiss after timer
 }
+
+function clearStaleClientSessionNotifications() {
+    const shouldClearKey = (storage, key) => (
+        key === 'member-active-session-id'
+        || key === 'member-active-session-end-time'
+        || key === 'member-active-session-paused'
+        || key === 'member-active-session-confirmed-id'
+        || key.startsWith('member-session-ended:')
+        || key.startsWith('member-solo-last-state:')
+        || (key.startsWith('member-solo-event:') && key.endsWith(':ended'))
+        || (
+            key.startsWith('member-solo-pending-toast:')
+            && (() => {
+                try {
+                    const pending = JSON.parse(storage.getItem(key) || 'null');
+                    return typeof pending?.eventKey === 'string'
+                        && pending.eventKey.endsWith(':ended');
+                } catch (error) {
+                    return false;
+                }
+            })()
+        )
+        || /session[_-]ended|time[_-]expired/i.test(key)
+    );
+
+    try {
+        const keysToClear = [];
+        for (let index = 0; index < sessionStorage.length; index += 1) {
+            const key = sessionStorage.key(index);
+            if (key && shouldClearKey(sessionStorage, key)) keysToClear.push(key);
+        }
+        keysToClear.forEach(key => sessionStorage.removeItem(key));
+    } catch (error) {
+        console.error('Failed to clear stale client session notifications:', error);
+    }
+
+    try {
+        const keysToClear = [];
+        for (let index = 0; index < localStorage.length; index += 1) {
+            const key = localStorage.key(index);
+            if (key && shouldClearKey(localStorage, key)) keysToClear.push(key);
+        }
+        keysToClear.forEach(key => localStorage.removeItem(key));
+    } catch (error) {
+        console.error('Failed to clear stale client session notifications:', error);
+    }
+}
+
+window.clearStaleClientSessionNotifications = clearStaleClientSessionNotifications;
 
 function fetchSidebarNotifications() {
     fetch('/admin/api/admin/notifications-count')
@@ -216,7 +324,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-function showGlobalMemberToast(message, variant = 'success') {
+function showGlobalMemberToast(message, variant = 'success', titleOverride = '') {
     const container = document.getElementById('global-toast-container');
     if (!container) return;
 
@@ -229,24 +337,26 @@ function showGlobalMemberToast(message, variant = 'success') {
     const normalizedVariant = variantDetails[variant] ? variant : 'info';
     const messageText = String(message || '');
     const lowerMessage = messageText.toLowerCase();
-    let heading = variantDetails[normalizedVariant].fallback;
+    let heading = titleOverride ? String(titleOverride) : variantDetails[normalizedVariant].fallback;
 
-    if (lowerMessage.includes('solo plan') || lowerMessage.includes('membership')) {
-        heading = 'Membership update';
-    } else if (lowerMessage.includes('reservation')) {
-        heading = 'Reservation update';
-    } else if (lowerMessage.includes('extended')) {
-        heading = 'Time extended';
-    } else if (lowerMessage.includes('resumed') || lowerMessage.includes('welcome back')) {
-        heading = 'Session resumed';
-    } else if (lowerMessage.includes('paused')) {
-        heading = 'Session paused';
-    } else if (lowerMessage.includes('started')) {
-        heading = 'Session started';
-    } else if (lowerMessage.includes('ended') || lowerMessage.includes('expired')) {
-        heading = 'Session ended';
-    } else if (lowerMessage.includes('minutes left')) {
-        heading = 'Time reminder';
+    if (!titleOverride) {
+        if (lowerMessage.includes('solo plan') || lowerMessage.includes('membership')) {
+            heading = 'Membership update';
+        } else if (lowerMessage.includes('reservation')) {
+            heading = 'Reservation update';
+        } else if (lowerMessage.includes('extended')) {
+            heading = 'Time extended';
+        } else if (lowerMessage.includes('resumed') || lowerMessage.includes('welcome back')) {
+            heading = 'Session resumed';
+        } else if (lowerMessage.includes('paused')) {
+            heading = 'Session paused';
+        } else if (lowerMessage.includes('started')) {
+            heading = 'Session started';
+        } else if (lowerMessage.includes('ended') || lowerMessage.includes('expired')) {
+            heading = 'Session ended';
+        } else if (lowerMessage.includes('minutes left')) {
+            heading = 'Time reminder';
+        }
     }
 
     const toast = document.createElement('div');
@@ -312,7 +422,7 @@ function initializeAdminSocketNotifications() {
         if (!data || !data.title || !data.message) return;
 
         const variant = data.type === 'reservation' ? 'info' : 'success';
-        showGlobalMemberToast(`${data.title}: ${data.message}`, variant);
+        showGlobalMemberToast(data.message, variant, data.title);
         if (data.type === 'membership' && data.request) {
             window.dispatchEvent(new CustomEvent('newMembershipRequestReceived', {
                 detail: data.request,
@@ -367,6 +477,7 @@ function initializeMemberReservationNotifications() {
     const activeSessionKey = 'member-active-session-id';
     const activeSessionEndKey = 'member-active-session-end-time';
     const activeSessionPausedKey = 'member-active-session-paused';
+    const confirmedActiveSessionKey = 'member-active-session-confirmed-id';
     let requestInProgress = false;
     const emittedEvents = new Set();
 
@@ -403,6 +514,7 @@ function initializeMemberReservationNotifications() {
 
     let pendingSessionIds = readPendingSessionIds();
     let observedActiveSessionId = readStoredValue(activeSessionKey);
+    let confirmedActiveSessionId = readStoredValue(confirmedActiveSessionKey);
     let observedActiveSessionEnd = readStoredValue(activeSessionEndKey);
     let observedActiveSessionPaused = readStoredValue(activeSessionPausedKey) === 'true';
     let activeSessionEndTimer = null;
@@ -418,10 +530,14 @@ function initializeMemberReservationNotifications() {
     };
 
     const notifySessionEnded = reservationId => {
+        if (confirmedActiveSessionId !== String(reservationId)) return;
+
         const eventKey = `member-session-ended:${reservationId}`;
         if (hasEmittedEvent(eventKey)) return;
 
         rememberEmittedEvent(eventKey);
+        confirmedActiveSessionId = null;
+        writeStoredValue(confirmedActiveSessionKey, '');
         pendingSessionIds.add(String(reservationId));
         writeStoredValue(pendingSessionKey, JSON.stringify([...pendingSessionIds]));
         const scheduledEnd = parseReservationTime(observedActiveSessionEnd);
@@ -513,6 +629,8 @@ function initializeMemberReservationNotifications() {
                 writeStoredValue(activeSessionKey, '');
                 writeStoredValue(activeSessionEndKey, '');
                 writeStoredValue(activeSessionPausedKey, 'false');
+                confirmedActiveSessionId = null;
+                writeStoredValue(confirmedActiveSessionKey, '');
             }
 
             if (startedSessionId) {
@@ -571,6 +689,8 @@ function initializeMemberReservationNotifications() {
                 writeStoredValue(activeSessionKey, startedSessionId);
                 writeStoredValue(activeSessionEndKey, observedActiveSessionEnd || '');
                 writeStoredValue(activeSessionPausedKey, String(isPaused));
+                confirmedActiveSessionId = startedSessionId;
+                writeStoredValue(confirmedActiveSessionKey, startedSessionId);
 
                 const eventKey = `member-session-started:${startedSessionId}`;
                 if (!hasEmittedEvent(eventKey)) {
@@ -819,20 +939,15 @@ function initializeMemberSoloPlanNotifications() {
 
             const endedEvent = `session:${sessionKey}:ended`;
             if ((currentState.checkedOut || currentState.expired) && !isSeen(endedEvent)) {
-                const priorStateWasTerminal = priorState
+                const priorStateMatchesSession = priorState
+                    && String(priorState.sessionId) === String(currentState.sessionId);
+                const priorStateWasTerminal = priorStateMatchesSession
                     && (priorState.checkedOut || priorState.expired);
-                let pendingEndedToast = null;
-                try {
-                    pendingEndedToast = JSON.parse(readStorage(pendingToastKey) || 'null');
-                } catch (error) {
-                    pendingEndedToast = null;
-                }
 
-                if (priorState && !priorStateWasTerminal) {
+                if (priorStateMatchesSession && !priorStateWasTerminal) {
                     showLifecycleToast('Your session has ended.', 'danger', endedEvent);
-                } else if (!pendingEndedToast || pendingEndedToast.eventKey !== endedEvent) {
+                } else {
                     markSeen(endedEvent);
-                    showGlobalMemberToast('Your session has ended.', 'danger');
                 }
             }
 
@@ -965,5 +1080,3 @@ function confirmAction(titleOrText, textOrOptions, confirmText = 'Yes', cancelTe
     });
     
 }
-
-

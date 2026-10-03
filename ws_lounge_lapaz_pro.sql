@@ -277,11 +277,7 @@ INSERT INTO `rooms` (`id`, `name`, `base_rate`, `category`, `status`) VALUES
 (5, 'Conference Room', 250, 'conference', 'unavailable'),
 (6, 'Comfy Room', 150, 'comfy', 'available'),
 (7, 'Event Room 1', 300, 'event', 'available'),
-(8, 'Event Room 2', 300, 'event', 'available'),
-(37, 'Duplicate Room 322a', 50, 'standard', 'available'),
-(38, 'Duplicate Room 322a', 50, 'standard', 'available'),
-(39, 'Duplicate Room 78cd', 50, 'standard', 'available'),
-(40, 'Duplicate Room 78cd', 50, 'standard', 'available');
+(8, 'Event Room 2', 300, 'event', 'available');
 
 -- --------------------------------------------------------
 

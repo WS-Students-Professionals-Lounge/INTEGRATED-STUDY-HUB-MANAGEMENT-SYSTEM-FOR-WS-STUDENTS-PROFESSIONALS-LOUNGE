@@ -8,6 +8,15 @@ document.addEventListener('DOMContentLoaded', function() {
     const closeRegister = document.getElementById('closeRegister');
     const toRegister = document.getElementById('toRegister');
     const toLogin = document.getElementById('toLogin');
+    const loginForm = document.querySelector('#loginModal form[action*="/login"]');
+
+    if (loginForm) {
+        loginForm.addEventListener('submit', function() {
+            if (typeof window.clearStaleClientSessionNotifications === 'function') {
+                window.clearStaleClientSessionNotifications();
+            }
+        });
+    }
 
     function showModal(modal) {
         if (modal) {

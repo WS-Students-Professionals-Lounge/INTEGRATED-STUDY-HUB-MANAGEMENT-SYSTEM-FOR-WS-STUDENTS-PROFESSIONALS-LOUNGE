@@ -111,7 +111,7 @@ function toggleCheckInOut(membershipId, memberName, button) {
                     window.location.reload();
                 }, 800);
             } else {
-                alert(data.message || 'Error updating status');
+                showNotification('danger', data.message || 'Error updating status');
                 button.textContent = originalText;
                 button.disabled = false;
             }
@@ -268,13 +268,45 @@ function showNotification(type, message) {
     if (!container) return;
 
     const alertWrapper = document.createElement('div');
-    alertWrapper.className = `alert alert-${type} alert-dismissible fade show position-relative mt-2`;
+    const normalizedType = type === 'error' ? 'danger' : type;
+    const titleByType = {
+        success: 'Update complete',
+        danger: 'Action needed',
+        warning: 'Please note',
+        info: 'Notification',
+    };
+    const iconByType = {
+        success: 'fa-circle-check',
+        danger: 'fa-circle-exclamation',
+        warning: 'fa-triangle-exclamation',
+        info: 'fa-circle-info',
+    };
+    alertWrapper.className = `alert alert-${normalizedType} admin-alert-card alert-dismissible fade show position-relative mt-2`;
     alertWrapper.role = 'alert';
     alertWrapper.style.zIndex = '9999';
-    alertWrapper.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    `;
+    const iconBadge = document.createElement('span');
+    iconBadge.className = 'admin-alert-icon';
+    iconBadge.setAttribute('aria-hidden', 'true');
+    const icon = document.createElement('i');
+    icon.className = `fas ${iconByType[normalizedType] || iconByType.info}`;
+    iconBadge.appendChild(icon);
+
+    const content = document.createElement('div');
+    content.className = 'admin-alert-content';
+    const title = document.createElement('strong');
+    title.className = 'admin-alert-title';
+    title.textContent = titleByType[normalizedType] || titleByType.info;
+    const text = document.createElement('span');
+    text.className = 'admin-alert-text';
+    text.textContent = String(message || '');
+    content.append(title, text);
+
+    const closeButton = document.createElement('button');
+    closeButton.type = 'button';
+    closeButton.className = 'btn-close btn-close-sm';
+    closeButton.setAttribute('data-bs-dismiss', 'alert');
+    closeButton.setAttribute('aria-label', 'Close');
+    alertWrapper.append(iconBadge, content, closeButton);
 
     container.insertBefore(alertWrapper, container.firstElementChild);
 

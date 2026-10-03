@@ -110,8 +110,8 @@
                                                 {{ room.name }} (₱{{ room.base_rate }}/hr)
                                             </option>
                                         {% else %}
-                                            <option value="{{ room.id }}" data-rate="{{ room.base_rate }}" disabled style="color: #94a3b8; background-color: #f8fafc;">
-                                                {{ room.name }} (Full / Unavailable)
+                                            <option value="{{ room.id }}" data-rate="{{ room.base_rate }}">
+                                                {{ room.name }} (₱{{ room.base_rate }}/hr) - Currently Full / Unavailable
                                             </option>
                                         {% endif %}
 
@@ -122,8 +122,8 @@
                                                 {{ room.name }} (₱{{ room.base_rate }}/hr)
                                             </option>
                                         {% else %}
-                                            <option value="{{ room.id }}" data-rate="{{ room.base_rate }}" disabled style="color: #94a3b8; background-color: #f8fafc;">
-                                                {{ room.name }} (Unavailable)
+                                            <option value="{{ room.id }}" data-rate="{{ room.base_rate }}">
+                                                {{ room.name }} (₱{{ room.base_rate }}/hr) - Currently Occupied / Unavailable
                                             </option>
                                         {% endif %}
                                     {% endif %}
