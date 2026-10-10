@@ -158,11 +158,11 @@ document.addEventListener("input", function(e) {
     if (!registerModal) return; // Kun wala sa Register Modal, pabayaan lang
 
     // 2. Kuhanon ang duha ka Password input fields sa sulod sang Register Modal
-    const passInputs = registerModal.querySelectorAll("input[type='password']");
-    if (passInputs.length < 2) return;
+    const regPass = registerModal.querySelector("#reg_password");
+    const regConfirm = registerModal.querySelector("#reg_confirm_password");
+    if (!regPass || !regConfirm) return;
 
-    const regPass = passInputs[0];    // Primary Password
-    const regConfirm = passInputs[1]; // Confirm Password
+    if (e.target !== regPass && e.target !== regConfirm) return;
 
     const regBar = document.getElementById("reg-strength-bar");
     const regText = document.getElementById("reg-strength-text");
@@ -203,40 +203,33 @@ document.addEventListener("input", function(e) {
         }
     }
 
-    // --- LIVE MATCH CHECKER (IN-LINE LENGTH WAIT) ---
+    // Update the match indicator immediately as either password changes.
     if (regMatch) {
         const pVal = regPass.value;
         const cVal = regConfirm.value;
 
-        // Kun blanko pa
         if (!cVal) {
             regMatch.textContent = "";
+            regMatch.classList.remove("visible", "match-success", "match-danger");
             return;
         }
 
-        // 1. MATCH -> Green dayon
+        regMatch.classList.add("visible");
         if (pVal === cVal) {
-            regMatch.style.color = "#198754";
-            regMatch.innerHTML = '<i class="fa-solid fa-check-circle me-1"></i> Passwords match!';
-            return;
+            regMatch.textContent = "✓ Passwords match!";
+            regMatch.classList.add("match-success");
+            regMatch.classList.remove("match-danger");
+        } else {
+            regMatch.textContent = "✗ Passwords do not match";
+            regMatch.classList.add("match-danger");
+            regMatch.classList.remove("match-success");
         }
-
-        // 2. KULANG PA SA KATAS-ON (Naga-type pa lang) -> Hide anay ang Red text!
-        if (cVal.length < pVal.length) {
-            regMatch.textContent = "";
-            return;
-        }
-
-        // 3. MATAPOS NA ANG LENGTH NGA INDI PAREHO / O NALAPAWAN NA -> Red Text
-        regMatch.style.color = "#dc3545";
-        regMatch.innerHTML = '<i class="fa-solid fa-circle-xmark me-1"></i> Passwords do not match';
     }
 });
 
-  document.addEventListener("DOMContentLoaded", function () {
     // Function para mag-dismiss sang alerts gamit ang CSS class nga .fade-out
     function autoDismissAlerts() {
-      const alerts = document.querySelectorAll(".alert, .flash-message, [role='alert']");
+      const alerts = document.querySelectorAll(".alert, .flash-message, .modal-flash, [role='alert']");
 
       alerts.forEach(function (alert) {
         // Indi na i-process liwat kon naga-fade out na o na-process na sang una
@@ -248,10 +241,10 @@ document.addEventListener("input", function(e) {
           // I-apply ang smooth CSS transition class
           alert.classList.add("fade-out");
 
-          // Papanason sa DOM matapos ang animation (600ms)
+          // Papanason sa DOM matapos ang animation (500ms)
           setTimeout(function () {
             alert.remove();
-          }, 600);
+          }, 500);
         }, 3500); // 3.5 seconds
       });
     }
@@ -269,7 +262,16 @@ document.addEventListener("input", function(e) {
     });
 
     observer.observe(document.body, { childList: true, subtree: true });
-  });
+
+    document.addEventListener("click", function (event) {
+      const dismissButton = event.target instanceof Element
+        ? event.target.closest(".modal-flash-close")
+        : null;
+      if (dismissButton) {
+        const alert = dismissButton.closest(".modal-flash");
+        if (alert) alert.remove();
+      }
+    });
 
     // EYE SHOW/HIDE PASSWORD TOGGLE
     document.querySelectorAll('.toggle-password-btn').forEach(btn => {

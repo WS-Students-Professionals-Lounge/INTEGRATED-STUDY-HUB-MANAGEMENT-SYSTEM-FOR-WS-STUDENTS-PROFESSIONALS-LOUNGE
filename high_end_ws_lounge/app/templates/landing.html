@@ -126,6 +126,7 @@
                     <div class="modal-flash modal-flash-danger">
                         <i class="fa-solid fa-circle-exclamation alert-icon"></i>
                         <span>{{ message }}</span>
+                        <button type="button" class="modal-flash-close" aria-label="Dismiss notification">&times;</button>
                     </div>
                 {% endfor %}
             {% endif %}
@@ -192,6 +193,7 @@
                             <i class="fa-solid fa-circle-check alert-icon"></i>
                         {% endif %}
                         <span>{{ message }}</span>
+                        <button type="button" class="modal-flash-close" aria-label="Dismiss notification">&times;</button>
                     </div>
                 {% endfor %}
             {% endif %}
@@ -243,7 +245,7 @@
     </div>
     
     <!-- MATCH INDICATOR TEXT -->
-    <div id="reg-match-text" style="font-size: 0.75rem; font-weight: 600; margin-top: 4px;"></div>
+    <div id="reg-match-text" class="match-text-container" aria-live="polite"></div>
 </div>
             <button type="submit" class="btn-login-submit">Register</button>
         </form>

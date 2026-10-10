@@ -1879,14 +1879,8 @@ def admin_reservations_list():
         datetime.min.time(),
     )
     query = Reservation.query.filter(
-        func.lower(Reservation.status).in_(["confirmed", "pending"]),
-        or_(
-            Reservation.start_time >= tomorrow_start,
-            and_(
-                func.lower(Reservation.status) == "pending",
-                Reservation.user_id.is_(None),
-            ),
-        ),
+        func.lower(Reservation.status) == "confirmed",
+        Reservation.start_time >= tomorrow_start,
     )
 
     if search:
@@ -2396,8 +2390,13 @@ def delete_reservation(res_id):
         return redirect_response
 
     res = Reservation.query.get_or_404(res_id)
-    member_id = res.user_id if str(res.status or "").strip().lower() == "pending" else None
+    reservation_status = str(res.status or "").strip().lower()
+    member_id = res.user_id
     reservation_name = res.customer_name or "your reservation"
+    room_name = res.room.name if res.room else "Space"
+    reservation_date = (
+        res.start_time.strftime("%B %d, %Y") if res.start_time else "the scheduled date"
+    )
     # If reservation has associated walkin entries, delete them first to avoid FK constraint errors
     try:
         walkin_entries = WalkinReservation.query.filter_by(reservation_id=res.id).all()
@@ -2414,11 +2413,24 @@ def delete_reservation(res_id):
     next_url = request.form.get("next") or request.args.get("next") or request.referrer
     db.session.delete(res)
     db.session.commit()
-    if member_id:
+    if member_id and reservation_status == "pending":
         socketio.emit("member_request_rejected", {
             "type": "reservation",
             "title": "Reservation Request Rejected",
             "message": f"Your request for {reservation_name} was rejected by the admin.",
+        }, room=f"member_{member_id}")
+    elif member_id and reservation_status in {
+        "confirmed",
+        "in_progress",
+        "checked-in",
+        "paused",
+    }:
+        socketio.emit("reservation_cancelled_by_admin", {
+            "title": "Reservation Canceled",
+            "message": (
+                f"Your confirmed reservation for {room_name} on {reservation_date} "
+                "has been canceled by the admin."
+            ),
         }, room=f"member_{member_id}")
     flash(f"Reservation for {res.customer_name} has been permanently deleted.")
     return redirect(next_url or url_for("admin.dashboard"))

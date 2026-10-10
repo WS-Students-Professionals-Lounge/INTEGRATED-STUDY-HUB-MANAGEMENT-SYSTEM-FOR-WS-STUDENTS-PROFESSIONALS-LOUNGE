@@ -455,25 +455,21 @@ function calculateOpenTimeMinutesFee(minutes) {
     // PAX COUNT TOGGLE & VALIDATION LOGIC
     // ==========================================
 
-    // Function para mag Hide / Show sang Pax Count Input Field
+    // Show Pax Count only for Lecture Room and Event Rooms.
     function togglePaxField() {
         if (!roomSelector) return;
 
         const selectedOption = roomSelector.options[roomSelector.selectedIndex];
         const selectedText = selectedOption ? selectedOption.text.toLowerCase() : '';
+        const requiresPaxCount = selectedText.includes('lecture room') ||
+            selectedText.includes('event room');
 
-        const isCapacityRoom = !selectedText.includes('common area') && (
-            selectedText.includes('lecture room') ||
-            selectedText.includes('conference room') ||
-            selectedText.includes('event room')
-        );
-
-        if (isCapacityRoom) {
+        if (requiresPaxCount) {
             if (paxContainer) paxContainer.style.display = 'flex';
             if (paxInput && !paxInput.value) paxInput.value = 1;
         } else {
             if (paxContainer) paxContainer.style.display = 'none';
-            if (paxInput) paxInput.value = 1; // Reset sa 1 kon indi capacity-based room
+            if (paxInput) paxInput.value = 1;
         }
     }
 

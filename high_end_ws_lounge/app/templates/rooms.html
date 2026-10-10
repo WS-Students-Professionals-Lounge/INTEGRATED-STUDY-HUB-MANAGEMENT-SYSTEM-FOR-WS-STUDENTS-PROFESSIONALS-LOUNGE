@@ -79,11 +79,11 @@
                 <div class="form-grid">
                     <div class="input-group-modern">
                         {{ form.customer_name.label(class="form-label-modern") }}
-                        {{ form.customer_name(class="modern-input", placeholder="e.g Darwen Salcedo", required=True) }}
+                        {{ form.customer_name(class="modern-input", value=form.customer_name.data or '', placeholder="e.g Darwen Salcedo", required=True) }}
                     </div>
                     <div class="input-group-modern">
                         {{ form.contact_number.label(class="form-label-modern") }}
-                        {{ form.contact_number(class="modern-input", placeholder="e.g 09121234567", required=True) }}
+                        {{ form.contact_number(class="modern-input", value=form.contact_number.data or '', placeholder="e.g 09121234567", required=True) }}
                     </div>
                 </div>
 

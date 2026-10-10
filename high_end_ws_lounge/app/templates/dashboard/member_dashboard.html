@@ -168,13 +168,15 @@
                     {{ 'Fixed Time Session' if active_reservation and active_reservation.end_time else ('Open Time Session' if active_reservation else 'No Active Booking') }}
                 </p>
             </div>
-            <span class="membership-badge {% if is_reservation_paused %}badge bg-warning text-dark{% elif active_reservation and (active_reservation.status|lower == 'in_progress' or (active_reservation.check_in_time is defined and active_reservation.check_in_time is not none)) %}badge bg-success{% elif active_reservation %}badge bg-secondary{% else %}badge bg-secondary{% endif %}" id="reservationStatusBadge">
+            <span class="membership-badge {% if is_reservation_paused %}badge bg-warning text-dark{% elif active_reservation and (active_reservation.status|lower == 'in_progress' or (active_reservation.check_in_time is defined and active_reservation.check_in_time is not none)) %}badge bg-success{% elif active_reservation and active_reservation.status|lower == 'confirmed' %}badge bg-secondary{% elif active_reservation %}badge bg-warning text-dark{% else %}badge bg-secondary{% endif %}" id="reservationStatusBadge">
                 {% if is_reservation_paused %}
                     Session Paused
                 {% elif active_reservation and (active_reservation.status|lower == 'in_progress' or (active_reservation.check_in_time is defined and active_reservation.check_in_time is not none)) %}
                     ACTIVE SESSION
-                {% elif active_reservation %}
+                {% elif active_reservation and active_reservation.status|lower == 'confirmed' %}
                     UPCOMING
+                {% elif active_reservation %}
+                    PENDING
                 {% else %}
                     NO ACTIVE RESERVATION
                 {% endif %}
@@ -594,7 +596,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const active = !isPaused && (
             status === 'in_progress'
             || Boolean(data.check_in_time)
-            || (Number.isFinite(startMs) && Date.now() >= startMs && ['confirmed', 'pending', 'checked-in'].includes(status))
+            || (Number.isFinite(startMs) && Date.now() >= startMs && ['confirmed', 'checked-in'].includes(status))
         );
         const openTime = data.is_open_time || !data.end_time;
         title.textContent = data.room_name ? `${data.room_name} Reservation` : 'Reservation';
@@ -614,8 +616,9 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        badge.textContent = active ? 'ACTIVE SESSION' : 'UPCOMING';
-        badge.className = `membership-badge ${active ? 'badge bg-success' : 'badge bg-secondary'}`;
+        const confirmedUpcoming = status === 'confirmed' && !active;
+        badge.textContent = active ? 'ACTIVE SESSION' : (confirmedUpcoming ? 'UPCOMING' : 'PENDING');
+        badge.className = `membership-badge ${active ? 'badge bg-success' : (confirmedUpcoming ? 'badge bg-secondary' : 'badge bg-warning text-dark')}`;
         startLabel.textContent = active ? 'Started On' : 'Scheduled';
         startValue.textContent = formatDateTime(data.start_time);
         endValue.textContent = data.end_time ? formatDateTime(data.end_time) : (openTime ? 'Open Time (No Fixed End)' : '---');

@@ -463,7 +463,20 @@ function initializeMemberSocketNotifications() {
 
     socket.on('member_request_rejected', function(data) {
         if (!data || !data.message) return;
-        showGlobalMemberToast(data.message, 'danger');
+        showGlobalMemberToast(
+            data.message,
+            'danger',
+            data.title || 'Request Rejected'
+        );
+    });
+
+    socket.on('reservation_cancelled_by_admin', function(data) {
+        if (!data || !data.message) return;
+        showGlobalMemberToast(
+            data.message,
+            'danger',
+            data.title || 'Reservation Canceled'
+        );
     });
 }
 
@@ -577,6 +590,7 @@ function initializeMemberReservationNotifications() {
     };
 
     const reservationBadge = document.getElementById('member-reservation-notif-badge');
+    const isBookSpacePage = window.location.pathname.replace(/\/+$/, '') === '/rooms';
     const renderReservationBadge = count => {
         if (!reservationBadge) return;
         reservationBadge.textContent = String(count);
@@ -719,7 +733,7 @@ function initializeMemberReservationNotifications() {
             renderEventBadge(unreadIds.length);
             renderReservationBadge(unreadIds.length);
 
-            if (unreadIds.length > 0) {
+            if (isBookSpacePage && unreadIds.length > 0) {
                 const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
                     || document.querySelector('input[name="csrf_token"]')?.value;
                 const ackResponse = await fetch('/api/notifications/reservations/read', {

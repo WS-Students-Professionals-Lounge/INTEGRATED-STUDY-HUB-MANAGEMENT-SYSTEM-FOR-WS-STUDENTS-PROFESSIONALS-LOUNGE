@@ -335,7 +335,9 @@ def inject_member_notifications():
         # Confirmed room reservation notifications
         unread_reservation_notification_count = Reservation.query.filter(
             Reservation.user_id == current_user.id,
-            Reservation.status.ilike("confirmed"),
+            func.lower(Reservation.status).in_(
+                ["confirmed", "in_progress", "checked-in", "paused"]
+            ),
             Reservation.confirmation_notification_seen == False
         ).count()
 
@@ -814,6 +816,10 @@ def rooms():
     ph_tz = pytz.timezone("Asia/Manila")
 
     form = ReservationForm()
+    if request.method == "GET":
+        form.customer_name.data = current_user.name or ""
+        form.contact_number.data = current_user.phone or ""
+
     rooms = Room.query.filter(
         ~Room.name.ilike('Test Room%'),
         ~Room.name.ilike('%Duplicate%'),
@@ -919,6 +925,7 @@ def rooms():
         )
         .join(Room)
         .filter(
+            Reservation.user_id == current_user.id,
             Reservation.status == "Confirmed",
             ~Room.name.ilike('Test Room%'),
             or_(
