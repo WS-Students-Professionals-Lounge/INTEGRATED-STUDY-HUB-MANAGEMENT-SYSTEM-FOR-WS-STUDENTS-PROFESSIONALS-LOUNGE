@@ -585,3 +585,323 @@ html[data-theme="dark"] .discount-select option {
     background: var(--bg-card);
     color: var(--text-primary);
 }
+
+/* Reservation page responsive layout */
+.reservation-mobile-bar,
+.reservation-menu-toggle,
+.reservation-sidebar-backdrop {
+    display: none;
+}
+
+.reservation-page-admin-container1,
+.reservation-page-admin-thq-reservation-page-admin-elm,
+.reservation-page-admin-thq-group42-elm,
+.reservation-page-admin-thq-group41-elm {
+    min-width: 0;
+}
+
+.reservation-page-admin-thq-reservation-form-elm,
+.reservation-page-admin-thq-reservation-details-elm {
+    min-width: 0;
+}
+
+.reservation-page-admin-container1 .value-text {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 1320px) {
+    .reservation-page-admin-thq-group41-elm {
+        padding: 32px 24px;
+        gap: 20px;
+    }
+
+    .reservation-page-admin-thq-reservation-form-elm,
+    .reservation-page-admin-thq-reservation-details-elm {
+        width: min(100%, 770px);
+    }
+}
+
+@media (max-width: 767px) {
+    body:has(.reservation-page-admin-container1) {
+        display: block;
+        overflow-x: hidden;
+    }
+
+    body:has(.reservation-page-admin-container1).admin-reservation-menu-open {
+        overflow: hidden;
+    }
+
+    body:has(.reservation-page-admin-container1) .sidebar {
+        top: 56px;
+        width: min(320px, calc(100vw - 40px));
+        height: calc(100vh - 56px);
+        height: calc(100dvh - 56px);
+        z-index: 1100;
+        visibility: hidden;
+        opacity: 0;
+        transform: translateX(-105%);
+        transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease, visibility 0s linear 320ms;
+    }
+
+    body:has(.reservation-page-admin-container1) .sidebar.admin-reservation-drawer-open {
+        visibility: visible;
+        opacity: 1;
+        transform: translateX(0);
+        transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease, visibility 0s;
+    }
+
+    body:has(.reservation-page-admin-container1) .sidebar-header {
+        padding-top: 54px;
+    }
+
+    body:has(.reservation-page-admin-container1) .main-wrapper,
+    .sidebar-layout .main-wrapper {
+        width: 100% !important;
+        margin-left: 0 !important;
+        padding: 76px 16px 24px !important;
+    }
+
+    body:has(.reservation-page-admin-container1) .content-container {
+        max-width: none !important;
+    }
+
+    .reservation-page-admin-container1 {
+        display: block;
+        width: 100%;
+        min-height: calc(100vh - 100px);
+        overflow: visible;
+    }
+
+    .reservation-mobile-bar {
+        position: fixed;
+        z-index: 1110;
+        inset: 0 0 auto;
+        display: flex;
+        height: 56px;
+        align-items: center;
+        justify-content: space-between;
+        padding: 6px 14px;
+        border-bottom: 1px solid var(--color-border);
+        background: var(--color-white);
+    }
+
+    .reservation-mobile-logo {
+        display: block;
+        width: 42px;
+        height: 42px;
+        object-fit: contain;
+    }
+
+    .reservation-menu-toggle {
+        display: grid;
+        width: 44px;
+        height: 44px;
+        flex: 0 0 44px;
+        place-items: center;
+        border: 1px solid var(--color-border);
+        border-radius: 10px;
+        background: var(--color-white);
+        color: var(--color-dark-blue);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        font-size: 1.1rem;
+        cursor: pointer;
+    }
+
+    .reservation-menu-toggle:focus-visible,
+    .reservation-sidebar-backdrop:focus-visible {
+        outline: 3px solid var(--color-medium-blue);
+        outline-offset: 3px;
+    }
+
+    .reservation-sidebar-backdrop {
+        position: fixed;
+        z-index: 1090;
+        inset: 56px 0 0;
+        display: block;
+        visibility: hidden;
+        opacity: 0;
+        pointer-events: none;
+        border: 0;
+        background: rgba(15, 23, 42, 0.48);
+        transition: opacity 240ms ease, visibility 0s linear 240ms;
+    }
+
+    .reservation-sidebar-backdrop.is-visible {
+        visibility: visible;
+        opacity: 1;
+        pointer-events: auto;
+        transition: opacity 240ms ease, visibility 0s;
+    }
+
+    .reservation-page-admin-thq-reservation-page-admin-elm,
+    .reservation-page-admin-thq-group42-elm,
+    .reservation-page-admin-thq-group41-elm {
+        width: 100%;
+        min-height: 0;
+        overflow: visible;
+    }
+
+    .reservation-page-admin-thq-reservation-page-admin-elm {
+        display: block;
+        padding: 0 0 24px;
+    }
+
+    .reservation-page-admin-thq-group42-elm {
+        padding: 0 !important;
+    }
+
+    .reservation-page-admin-thq-group41-elm {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 16px;
+        padding: 0;
+    }
+
+    .reservation-page-admin-thq-reservation-form-elm,
+    .reservation-page-admin-thq-reservation-details-elm {
+        width: 100%;
+        max-width: none;
+        min-height: 0;
+        padding: 20px 16px;
+        border-radius: 12px;
+    }
+
+    .reservation-page-admin-thq-text-elm13,
+    .reservation-page-admin-thq-text-elm31 {
+        margin-bottom: 20px;
+        font-size: 1.1rem;
+    }
+
+    .form-grid,
+    .date-time-grid,
+    .reservation-page-admin-container1 .form-grid[style] {
+        grid-template-columns: minmax(0, 1fr) !important;
+        gap: 14px;
+        margin-bottom: 16px;
+    }
+
+    .input-group-modern,
+    .input-group,
+    .reservation-page-admin-thq-pax-input-elm2 {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .modern-input,
+    .modern-select,
+    .full-width-input,
+    .discount-select {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        min-height: 44px;
+        font-size: 16px;
+        box-sizing: border-box;
+    }
+
+    .reservation-page-admin-container1 select.modern-select,
+    .reservation-page-admin-container1 select.discount-select {
+        appearance: auto;
+        background-image: none;
+        padding-right: 12px;
+    }
+
+    .reservation-page-admin-container1 input[type="datetime-local"] {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        min-height: 44px;
+        padding-right: 8px;
+        font-size: 16px;
+        box-sizing: border-box;
+    }
+
+    .textarea-input,
+    #f-notes {
+        min-height: 88px;
+        resize: vertical;
+    }
+
+    .section-title-break {
+        margin: 24px 0 16px;
+        padding-top: 18px;
+        font-size: 0.85rem;
+        line-height: 1.4;
+    }
+
+    .reservation-page-admin-thq-group33-elm {
+        min-width: 0;
+    }
+
+    .summary-details-list > div {
+        align-items: flex-start;
+        gap: 12px;
+        padding: 11px 0;
+        font-size: 0.88rem;
+    }
+
+    .summary-details-list > div > span:last-child {
+        max-width: 58%;
+        text-align: right;
+        overflow-wrap: anywhere;
+    }
+
+    .reservation-page-admin-thq-group36-elm {
+        margin-top: 20px;
+        padding: 20px 14px;
+    }
+
+    .reservation-page-admin-thq-text-elm50 {
+        margin-bottom: 18px;
+        font-size: clamp(1.7rem, 8vw, 2.2rem);
+        overflow-wrap: anywhere;
+    }
+
+    .action-buttons-wrapper {
+        flex-direction: row;
+        gap: 10px;
+    }
+
+    .reservation-page-admin-thq-button-elm1,
+    .reservation-page-admin-thq-button-elm2 {
+        min-width: 0;
+        min-height: 46px;
+        padding: 10px 8px;
+        font-size: 0.85rem;
+    }
+}
+
+@media (max-width: 380px) {
+    body:has(.reservation-page-admin-container1) .main-wrapper,
+    .sidebar-layout .main-wrapper {
+        padding-right: 12px !important;
+        padding-left: 12px !important;
+    }
+
+    .reservation-page-admin-thq-reservation-form-elm,
+    .reservation-page-admin-thq-reservation-details-elm {
+        padding: 18px 13px;
+    }
+
+    .reservation-page-admin-thq-button-elm1,
+    .reservation-page-admin-thq-button-elm2 {
+        font-size: 0.76rem;
+    }
+}
+
+html[data-theme="dark"] .reservation-mobile-bar,
+html[data-theme="dark"] .reservation-menu-toggle {
+    border-color: var(--border-color);
+    background: var(--bg-card);
+    color: var(--text-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body:has(.reservation-page-admin-container1) .sidebar,
+    .reservation-sidebar-backdrop {
+        transition-duration: 0.01ms;
+        transition-delay: 0s;
+    }
+}

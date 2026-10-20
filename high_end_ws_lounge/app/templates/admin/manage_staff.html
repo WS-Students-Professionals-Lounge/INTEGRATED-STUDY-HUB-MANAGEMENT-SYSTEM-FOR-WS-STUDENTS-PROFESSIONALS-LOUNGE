@@ -2,12 +2,32 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/admin/members.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/admin/manage_staff_responsive.css') }}?v=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 {% endblock %}
 
 {% block content %}
-<div class="container mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
+<div class="container mt-4 admin-manage-staff-page">
+    <div class="staff-page-mobile-bar">
+        <button type="button"
+                id="manageStaffMenuToggle"
+                class="staff-page-menu-toggle"
+                aria-label="Open navigation menu"
+                aria-controls="manageStaffSidebar"
+                aria-expanded="false">
+            <i class="fas fa-bars" aria-hidden="true"></i>
+        </button>
+        <img src="{{ url_for('static', filename='img/main_logo.png') }}"
+             alt="WS Lounge"
+             class="staff-page-mobile-logo">
+    </div>
+    <button type="button"
+            id="manageStaffSidebarBackdrop"
+            class="staff-page-sidebar-backdrop"
+            aria-label="Close navigation menu"
+            tabindex="-1"></button>
+
+    <div class="staff-page-header d-flex justify-content-between align-items-center mb-4">
         <div>
             <h2 class="fw-bold text-dark">Manage Staff Accounts</h2>
             <p class="text-muted">Create new employee accounts and toggle active status without deleting audit history.</p>
@@ -24,9 +44,9 @@
         </div>
     {% endif %}
 
-    <div class="row g-4">
+    <div class="row g-4 staff-page-layout">
         <div class="col-lg-5">
-            <div class="card shadow-sm border-0">
+            <div class="card staff-page-card shadow-sm border-0">
                 <div class="card-body">
                     <h5 class="card-title mb-3">Create Staff / Admin Account</h5>
                     <form method="POST">
@@ -54,9 +74,12 @@
                                     minlength="8" 
                                     title="Password must be at least 8 characters long with letters and numbers only." 
                                     required>
-                                <span id="toggleStaffPassword" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #6c757d; z-index: 10;">
-                                    <i class="fa-solid fa-eye" id="staffEyeIcon"></i>
-                                </span>
+                                <button type="button"
+                                        id="toggleStaffPassword"
+                                        class="staff-password-toggle"
+                                        aria-label="Show password">
+                                    <i class="fa-solid fa-eye" id="staffEyeIcon" aria-hidden="true"></i>
+                                </button>
                             </div>
 
                             <!-- METER CONTAINER -->
@@ -81,11 +104,11 @@
             </div>
         </div>
         <div class="col-lg-7">
-            <div class="card shadow-sm border-0">
+            <div class="card staff-page-card shadow-sm border-0">
                 <div class="card-body">
                     <h5 class="card-title mb-3">Staff Directory</h5>
                     <div class="table-responsive">
-                        <table class="table table-hover align-middle mb-0">
+                        <table class="table table-hover align-middle mb-0 staff-directory-table">
                             <thead>
                                 <tr>
                                     <th>Name</th>
@@ -143,6 +166,7 @@ document.addEventListener('DOMContentLoaded', function() {
         toggleBtn.addEventListener('click', function() {
             const isPassword = passwordInput.getAttribute('type') === 'password';
             passwordInput.setAttribute('type', isPassword ? 'text' : 'password');
+            toggleBtn.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
             
             // Toggle FontAwesome Icon
             eyeIcon.classList.toggle('fa-eye');
@@ -218,4 +242,8 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 });
 </script>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/admin/manage_staff_responsive.js') }}?v=1"></script>
 {% endblock %}

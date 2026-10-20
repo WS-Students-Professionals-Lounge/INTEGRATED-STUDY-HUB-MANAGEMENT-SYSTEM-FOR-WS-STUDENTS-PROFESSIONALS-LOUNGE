@@ -1,0 +1,638 @@
+html[data-theme="dark"] body.admin-notification-theme {
+    color-scheme: dark;
+    background: #0f172a;
+    color: #e2e8f0;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .main-wrapper,
+html[data-theme="dark"] body.admin-notification-theme .content-container,
+html[data-theme="dark"] body.admin-notification-theme .container,
+html[data-theme="dark"] body.admin-notification-theme .container-fluid {
+    background-color: #0f172a;
+    color: #e2e8f0;
+}
+
+html[data-theme="dark"] body.admin-notification-theme :is(
+    .admin-dashboard-wrapper,
+    .reservation-page-admin-container1,
+    .admin-reservations-list-page,
+    .members-main-wrapper,
+    .payment-settings-page,
+    .admin-reports-page,
+    .admin-manage-staff-page
+) {
+    color: #e2e8f0;
+}
+
+html[data-theme="dark"] body.admin-notification-theme :is(
+    .card,
+    .card-body,
+    .card-header,
+    .card-footer,
+    .bg-white,
+    .bg-light,
+    .bg-body,
+    .list-group-item,
+    .dropdown-menu,
+    .accordion-item,
+    .popover,
+    .flatpickr-calendar,
+    .daterangepicker,
+    .datepicker,
+    .bootstrap-datetimepicker-widget,
+    .tooltip-inner,
+    .modal-content,
+    .modal-container,
+    .modal-form-side,
+    .modal-preview-side,
+    .receipt-modal-content,
+    .balance-payment-content,
+    .payment-modal-content,
+    .custom-modal .modal-content,
+    .swal2-popup,
+    .select2-dropdown,
+    .choices__list--dropdown,
+    .choices__list[aria-expanded]
+) {
+    border-color: #334155 !important;
+    background-color: #1e293b !important;
+    color: #e2e8f0 !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme :is(
+    h1, h2, h3, h4, h5, h6,
+    .text-dark,
+    .text-body,
+    .card-title,
+    .modal-title,
+    .swal2-title,
+    .section-heading,
+    .page-title,
+    .section-title,
+    .column-title,
+    .payment-settings-header h2,
+    .reports-page-header h2,
+    .staff-page-header h2,
+    .reservations-title,
+    .reservation-page-admin-thq-text-elm13,
+    .reservation-page-admin-thq-text-elm31
+) {
+    color: #f8fafc !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme :is(
+    p,
+    label,
+    .form-label,
+    .form-text,
+    .text-secondary,
+    .detail-text,
+    .section-subtext,
+    .section-description,
+    .member-sub-info,
+    .member-header-plan,
+    .current-date-display,
+    .swal2-html-container,
+    .modal-body,
+    .modal-footer,
+    .modal-header,
+    .card-body,
+    .card-footer
+) {
+    color: #cbd5e1;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .text-muted,
+html[data-theme="dark"] body.admin-notification-theme .text-body-secondary {
+    color: #94a3b8 !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme :is(
+    input:not([type="checkbox"]):not([type="radio"]),
+    select,
+    textarea,
+    .form-control,
+    .form-select,
+    .modern-input,
+    .modern-select,
+    .discount-select,
+    .search-input,
+    .filter-input,
+    .list-search-box input,
+    .search-box input,
+    .swal2-input,
+    .swal2-select,
+    .swal2-textarea,
+    .select2-selection,
+    .choices__inner
+) {
+    border-color: #475569 !important;
+    background-color: #0f172a !important;
+    color: #e2e8f0 !important;
+    color-scheme: dark;
+}
+
+html[data-theme="dark"] body.admin-notification-theme :is(
+    input, textarea, select,
+    .form-control, .form-select,
+    .modern-input, .modern-select,
+    .discount-select,
+    .swal2-input, .swal2-select, .swal2-textarea
+)::placeholder {
+    color: #94a3b8 !important;
+    opacity: 1;
+}
+
+html[data-theme="dark"] body.admin-notification-theme :is(
+    input, textarea, select,
+    .form-control, .form-select,
+    .modern-input, .modern-select,
+    .discount-select,
+    .swal2-input, .swal2-select, .swal2-textarea
+):focus {
+    border-color: #60a5fa !important;
+    background-color: #172033 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.18) !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme select option,
+html[data-theme="dark"] body.admin-notification-theme optgroup,
+html[data-theme="dark"] body.admin-notification-theme datalist option,
+html[data-theme="dark"] body.admin-notification-theme .dropdown-menu,
+html[data-theme="dark"] body.admin-notification-theme .dropdown-item,
+html[data-theme="dark"] body.admin-notification-theme .select2-results__option,
+html[data-theme="dark"] body.admin-notification-theme .choices__item {
+    background-color: #1e293b;
+    color: #e2e8f0;
+}
+
+html[data-theme="dark"] body.admin-notification-theme :is(
+    .dropdown-item:hover,
+    .dropdown-item:focus,
+    .select2-results__option--highlighted,
+    .choices__item--selectable.is-highlighted
+) {
+    background-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme :is(
+    .table,
+    .custom-table,
+    .staff-directory-table,
+    .spreadsheet-table,
+    .records-table,
+    .attendance-table
+) {
+    --bs-table-bg: #1e293b;
+    --bs-table-color: #e2e8f0;
+    --bs-table-border-color: #334155;
+    color: #e2e8f0;
+}
+
+html[data-theme="dark"] body.admin-notification-theme :is(
+    .table thead th,
+    .custom-table thead th,
+    .staff-directory-table thead th,
+    .spreadsheet-table thead th,
+    .records-table thead th,
+    .attendance-table thead th
+) {
+    border-color: #334155 !important;
+    background-color: #172033 !important;
+    color: #f8fafc !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme :is(
+    .table tbody td,
+    .custom-table tbody td,
+    .staff-directory-table tbody td,
+    .spreadsheet-table tbody td,
+    .records-table tbody td,
+    .attendance-table tbody td
+) {
+    border-color: #334155 !important;
+    background-color: #1e293b !important;
+    color: #cbd5e1;
+}
+
+html[data-theme="dark"] body.admin-notification-theme :is(
+    .table-hover tbody tr:hover > *,
+    .custom-table tbody tr:hover td,
+    .spreadsheet-table tbody tr:hover td
+) {
+    background-color: #26364d !important;
+    color: #f8fafc;
+}
+
+html[data-theme="dark"] body.admin-notification-theme :is(
+    hr,
+    .border,
+    .border-top,
+    .border-bottom,
+    .border-start,
+    .border-end,
+    .section-header,
+    .waiting-header,
+    .members-tabs-container,
+    .member-card-header,
+    .payment-settings-header
+) {
+    border-color: #334155 !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme :is(
+    .modal-overlay,
+    .receipt-modal-overlay,
+    .balance-payment-modal,
+    .swal2-container
+) {
+    background-color: rgba(2, 6, 23, 0.78) !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .btn-close {
+    filter: invert(1) grayscale(100%) brightness(200%);
+}
+
+html[data-theme="dark"] body.admin-notification-theme .payment-method-card img.bg-white {
+    background-color: #ffffff !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .input-group-text,
+html[data-theme="dark"] body.admin-notification-theme .page-link {
+    border-color: #475569;
+    background-color: #172033;
+    color: #cbd5e1;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .form-check-input {
+    border-color: #64748b;
+    background-color: #0f172a;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .form-check-input:checked {
+    border-color: #3b82f6;
+    background-color: #2563eb;
+}
+
+html[data-theme="dark"] body.admin-notification-theme :is(
+    .modal-header,
+    .modal-footer
+) {
+    border-color: #334155 !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .receipt-modal-close,
+html[data-theme="dark"] body.admin-notification-theme .balance-payment-close {
+    color: #cbd5e1;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .receipt-modal-title,
+html[data-theme="dark"] body.admin-notification-theme .balance-payment-content h3 {
+    color: #f8fafc;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .swal2-validation-message,
+html[data-theme="dark"] body.admin-notification-theme .swal2-timer-progress-bar {
+    background-color: #334155;
+    color: #cbd5e1;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .payment-settings-page .current-qr-section,
+html[data-theme="dark"] body.admin-notification-theme .admin-reports-page .empty-state,
+html[data-theme="dark"] body.admin-notification-theme .balance-payment-content > p:nth-of-type(2) {
+    border-color: #334155 !important;
+    background-color: #172033 !important;
+    color: #cbd5e1 !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .admin-members-page .deactivated-card {
+    border-color: #334155 !important;
+    background: #1e293b !important;
+    color: #e2e8f0 !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .admin-members-page .deactivated-card :is(
+    .member-name,
+    .stat-value,
+    .member-stats strong
+) {
+    color: #f8fafc !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .admin-members-page .deactivated-card :is(
+    .stat-label,
+    .member-sub-info,
+    .member-detail-note
+) {
+    color: #94a3b8 !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .members-mobile-bar,
+html[data-theme="dark"] body.admin-notification-theme .dashboard-mobile-bar,
+html[data-theme="dark"] body.admin-notification-theme .reservation-mobile-bar,
+html[data-theme="dark"] body.admin-notification-theme .reservations-mobile-bar,
+html[data-theme="dark"] body.admin-notification-theme .payment-settings-mobile-bar,
+html[data-theme="dark"] body.admin-notification-theme .reports-mobile-bar,
+html[data-theme="dark"] body.admin-notification-theme .staff-page-mobile-bar,
+html[data-theme="dark"] body.admin-notification-theme .admin-tablet-navigation {
+    border-color: #334155 !important;
+    background-color: #111827 !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme :is(
+    .members-menu-toggle,
+    .dashboard-menu-toggle,
+    .reservation-menu-toggle,
+    .reservations-menu-toggle,
+    .payment-settings-menu-toggle,
+    .reports-menu-toggle,
+    .staff-page-menu-toggle,
+    .admin-tablet-menu-toggle
+) {
+    border-color: #475569 !important;
+    background-color: #1e293b !important;
+    color: #e2e8f0 !important;
+}
+
+/* Keep admin dark mode on the same palette as the client dashboard. */
+html[data-theme="dark"] body.admin-notification-theme {
+    --primary: var(--accent-blue);
+    --primary-light: var(--accent-blue-hover);
+    --accent: #12355b;
+    --text-heading: var(--text-primary);
+    --text-body: var(--text-secondary);
+}
+
+html[data-theme="dark"] body.admin-notification-theme :is(
+    .admin-dashboard-wrapper,
+    .reservation-page-admin-container1,
+    .admin-reservations-list-page,
+    .admin-members-page,
+    .payment-settings-page,
+    .admin-reports-page,
+    .admin-manage-staff-page
+) {
+    --primary: var(--accent-blue);
+    --primary-light: var(--accent-blue-hover);
+    --accent: #12355b;
+    --text-heading: var(--text-primary);
+    --text-body: var(--text-secondary);
+    --text-muted: #94a3b8;
+    background-color: var(--bg-main);
+    color: var(--text-secondary);
+}
+
+html[data-theme="dark"] body.admin-notification-theme :is(
+    p,
+    .text-secondary,
+    .text-body,
+    .detail-text,
+    .info-value,
+    .member-sub-info,
+    .member-header-plan,
+    .held-reservation-details,
+    .held-reservation-details span,
+    .payment-settings-header p,
+    .staff-page-header p,
+    .reports-page-header p
+) {
+    color: var(--text-secondary) !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme :is(
+    .text-muted,
+    small,
+    .form-label,
+    .stat-label,
+    .info-label,
+    .stat-desc,
+    .section-subtext,
+    .section-description,
+    .detail-label,
+    .member-activity-logs-count,
+    .member-activity-log-time,
+    .member-activity-log-details,
+    .current-date-display
+) {
+    color: var(--text-muted) !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme :is(
+    .text-primary,
+    .text-blue,
+    a:not(.btn),
+    .reservation-page-admin-thq-text-elm16,
+    .reservation-page-admin-thq-text-elm18,
+    .reservation-page-admin-thq-text-elm20,
+    .reservation-page-admin-thq-text-elm22,
+    .reservation-page-admin-thq-text-elm23,
+    .reservation-page-admin-thq-text-elm25,
+    .reservation-page-admin-thq-text-elm27,
+    .reservation-page-admin-thq-text-elm28,
+    .reservation-page-admin-thq-text-elm29
+) {
+    color: var(--accent-blue) !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme :is(
+    .admin-tablet-navigation,
+    .members-mobile-bar,
+    .dashboard-mobile-bar,
+    .reservation-mobile-bar,
+    .reservations-mobile-bar,
+    .payment-settings-mobile-bar,
+    .reports-mobile-bar,
+    .staff-page-mobile-bar
+) {
+    background-color: var(--bg-card) !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme :is(
+    .btn-primary,
+    .btn-filter,
+    .btn-pdf,
+    .btn-primary-report,
+    .btn-approve,
+    .btn-walkin,
+    .btn-confirm-blue,
+    .btn-confirm-reservation,
+    .reservation-page-admin-thq-button-elm1,
+    .admin-dashboard-wrapper .btn-primary
+) {
+    border-color: var(--accent-blue) !important;
+    background: var(--accent-blue) !important;
+    color: var(--bg-main) !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .admin-dashboard-wrapper .dashboard-clock {
+    border-color: #075985 !important;
+    background: #075985 !important;
+    color: #f8fafc !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .admin-dashboard-wrapper .stat-icon {
+    color: var(--accent-blue) !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme :is(
+    .btn-primary:hover,
+    .btn-filter:hover,
+    .btn-pdf:hover,
+    .btn-primary-report:hover,
+    .btn-approve:hover,
+    .btn-walkin:hover,
+    .btn-confirm-blue:hover,
+    .btn-confirm-reservation:hover,
+    .reservation-page-admin-thq-button-elm1:hover,
+    .admin-dashboard-wrapper .btn-primary:hover
+) {
+    border-color: var(--accent-blue-hover) !important;
+    background: var(--accent-blue-hover) !important;
+    color: var(--bg-main) !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme :is(
+    .members-menu-toggle,
+    .dashboard-menu-toggle,
+    .reservation-menu-toggle,
+    .reservations-menu-toggle,
+    .payment-settings-menu-toggle,
+    .reports-menu-toggle,
+    .staff-page-menu-toggle,
+    .admin-tablet-menu-toggle
+) {
+    color: var(--accent-blue) !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme :is(
+    .form-control,
+    .form-select,
+    .modern-input,
+    .modern-select,
+    .discount-select,
+    .search-input,
+    .filter-input,
+    .list-search-box input
+)::placeholder {
+    color: #64748b !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme :is(
+    .tab-btn.active,
+    .member-tabs .nav-link.active
+) {
+    color: var(--accent-blue) !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme :is(
+    .custom-table tbody tr:hover td,
+    .spreadsheet-table tbody tr:hover td,
+    .table-hover tbody tr:hover > *
+) {
+    background-color: #26364d !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html[data-theme="dark"] body.admin-notification-theme *,
+    html[data-theme="dark"] body.admin-notification-theme *::before,
+    html[data-theme="dark"] body.admin-notification-theme *::after {
+        scroll-behavior: auto;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+html[data-theme="dark"] body.admin-notification-theme .reservation-page-admin-container1 :is(
+    .modern-input,
+    .modern-select,
+    .full-width-input,
+    .discount-select
+),
+html[data-theme="dark"] body.admin-notification-theme #walkinModal :is(
+    .modern-input,
+    .modern-select,
+    .discount-select
+) {
+    border: 1px solid #475569 !important;
+    border-radius: 8px !important;
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+    font-family: Inter, Roboto, system-ui, sans-serif;
+    font-size: 0.9rem;
+    font-weight: 500;
+    padding: 12px 16px;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .reservation-page-admin-container1 :is(
+    .modern-input,
+    .modern-select,
+    .full-width-input
+):focus,
+html[data-theme="dark"] body.admin-notification-theme #walkinModal :is(
+    .modern-input,
+    .modern-select,
+    .discount-select
+):focus {
+    border-color: #60a5fa !important;
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.18) !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .reservation-page-admin-container1 :is(
+    .modern-input,
+    .modern-select,
+    .full-width-input,
+    .discount-select
+)::placeholder,
+html[data-theme="dark"] body.admin-notification-theme #walkinModal :is(
+    .modern-input,
+    .modern-select,
+    .discount-select
+)::placeholder {
+    color: #94a3b8 !important;
+    opacity: 1;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .reservation-page-admin-container1 :is(
+    .form-label,
+    .form-label-modern
+),
+html[data-theme="dark"] body.admin-notification-theme #walkinModal .form-label {
+    color: #94a3b8 !important;
+    font-size: 0.85rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .reservation-page-admin-container1 select option,
+html[data-theme="dark"] body.admin-notification-theme #walkinModal select option {
+    background-color: #0f172a !important;
+    color: #cbd5e1 !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme #walkinModal .modal-container {
+    border: 1px solid #334155;
+    background: #1e293b;
+}
+
+html[data-theme="dark"] body.admin-notification-theme #walkinModal .modal-form-side {
+    border-right-color: #334155;
+}
+
+html[data-theme="dark"] body.admin-notification-theme #walkinModal .modal-preview-side,
+html[data-theme="dark"] body.admin-notification-theme #walkinModal .preview-border-box {
+    border-color: #334155;
+    background: #1e293b;
+    color: #cbd5e1;
+}
+
+html[data-theme="dark"] body.admin-notification-theme #walkinModal .preview-item {
+    border-bottom-color: #334155;
+}
+
+html[data-theme="dark"] body.admin-notification-theme #walkinModal .preview-label {
+    color: #94a3b8;
+}

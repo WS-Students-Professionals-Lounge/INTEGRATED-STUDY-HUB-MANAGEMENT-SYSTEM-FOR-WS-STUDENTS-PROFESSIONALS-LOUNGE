@@ -498,15 +498,22 @@ def dashboard():
     now_naive = now_ph.replace(second=0, microsecond=0, tzinfo=None)
 
     reservations = (
-        Reservation.query.filter_by(user_id=current_user.id)
+        Reservation.query.filter(
+            Reservation.user_id == current_user.id,
+            func.lower(Reservation.status).in_(
+                ["ended", "checked-out", "checked_out", "completed"]
+            ),
+        )
         .order_by(Reservation.created_at.desc())
         .limit(10)
         .all()
     )
+    total_reservations = Reservation.query.filter_by(user_id=current_user.id).count()
+    total_solo_plans = SoloPlan.query.filter_by(user_id=current_user.id).count()
     active_reservation = Reservation.query.filter(
         Reservation.user_id == current_user.id,
         func.lower(Reservation.status).in_(
-            ["in_progress", "paused", "confirmed", "pending", "checked-in"]
+            ["in_progress", "paused", "confirmed", "pending", "checked-in", "on hold"]
         ),
         Reservation.start_time >= now_naive,
     ).order_by(Reservation.start_time.asc()).first()
@@ -514,13 +521,14 @@ def dashboard():
         active_reservation = Reservation.query.filter(
             Reservation.user_id == current_user.id,
             func.lower(Reservation.status).in_(
-                ["in_progress", "paused", "confirmed", "pending", "checked-in"]
+                ["in_progress", "paused", "confirmed", "pending", "checked-in", "on hold"]
             ),
             Reservation.start_time <= now_naive,
             or_(
                 Reservation.end_time.is_(None),
                 Reservation.end_time >= now_naive,
                 Reservation.is_open_time.is_(True),
+                func.lower(Reservation.status) == "on hold",
             ),
         ).order_by(Reservation.start_time.desc()).first()
     latest_log = (
@@ -542,7 +550,6 @@ def dashboard():
     all_user_attendance_logs = AttendanceLog.query.join(Membership).filter(
         Membership.user_id == current_user.id
     ).all()
-    total_solo_plans = len(all_user_attendance_logs)
 
     if membership:
         _expire_membership_if_needed(membership)
@@ -682,6 +689,7 @@ def dashboard():
     return render_template(
         "dashboard/member_dashboard.html",
         reservations=reservations,
+        total_reservations=total_reservations,
         active_plan=active_session,
         active_session=active_session,
         active_reservation=active_reservation,
@@ -718,7 +726,7 @@ def user_active_reservation():
     reservation = Reservation.query.filter(
         Reservation.user_id == current_user.id,
         func.lower(Reservation.status).in_(
-            ["in_progress", "paused", "confirmed", "pending", "checked-in"]
+            ["in_progress", "paused", "confirmed", "pending", "checked-in", "on hold"]
         ),
         or_(
             Reservation.start_time >= now_naive,
@@ -728,6 +736,7 @@ def user_active_reservation():
                     Reservation.end_time.is_(None),
                     Reservation.end_time >= now_naive,
                     Reservation.is_open_time.is_(True),
+                    func.lower(Reservation.status) == "on hold",
                 ),
             ),
         ),
@@ -926,11 +935,14 @@ def rooms():
         .join(Room)
         .filter(
             Reservation.user_id == current_user.id,
-            Reservation.status == "Confirmed",
+            func.lower(Reservation.status).in_(
+                ["pending", "confirmed", "in_progress", "on hold"]
+            ),
             ~Room.name.ilike('Test Room%'),
             or_(
                 Reservation.end_time >= now_ph,
-                Reservation.is_open_time == True
+                Reservation.is_open_time == True,
+                func.lower(Reservation.status) == "on hold",
             )
         )
         .order_by(Reservation.start_time)
@@ -2001,6 +2013,24 @@ def checkout_solo_plan():
 
     for plan in user_plans:
         plan.status = "checked_out"
+
+    active_common_area_reservations = Reservation.query.join(Room).filter(
+        Reservation.user_id == current_user.id,
+        func.lower(func.trim(Room.name)) == "common area",
+        func.lower(Reservation.status).in_([
+            "confirmed",
+            "in_progress",
+            "checked-in",
+            "checked in",
+            "walk-in",
+            "active",
+            "occupied",
+        ]),
+        Reservation.start_time <= now_naive,
+    ).all()
+    for reservation in active_common_area_reservations:
+        reservation.status = "Ended"
+        reservation.end_time = now_naive
 
     db.session.commit()
     flash("Successfully checked out!", "success")

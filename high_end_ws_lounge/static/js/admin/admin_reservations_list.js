@@ -1,4 +1,47 @@
 document.addEventListener('DOMContentLoaded', function() {
+    const menuButton = document.getElementById('adminReservationsMenuToggle');
+    const menuBackdrop = document.getElementById('adminReservationsSidebarBackdrop');
+    const sidebar = document.querySelector('.sidebar');
+
+    if (menuButton && menuBackdrop && sidebar) {
+        sidebar.id = 'adminReservationsSidebar';
+        const menuIcon = menuButton.querySelector('i');
+
+        function setMenuOpen(isOpen) {
+            sidebar.classList.toggle('admin-reservations-drawer-open', isOpen);
+            menuBackdrop.classList.toggle('is-visible', isOpen);
+            menuButton.setAttribute('aria-expanded', String(isOpen));
+            menuButton.setAttribute('aria-label', isOpen ? 'Close navigation menu' : 'Open navigation menu');
+            document.body.classList.toggle('admin-reservations-menu-open', isOpen);
+
+            if (menuIcon) {
+                menuIcon.classList.toggle('fa-bars', !isOpen);
+                menuIcon.classList.toggle('fa-xmark', isOpen);
+            }
+        }
+
+        menuButton.addEventListener('click', function() {
+            setMenuOpen(menuButton.getAttribute('aria-expanded') !== 'true');
+        });
+        menuBackdrop.addEventListener('click', function() {
+            setMenuOpen(false);
+        });
+        sidebar.querySelectorAll('a').forEach(function(link) {
+            link.addEventListener('click', function() {
+                setMenuOpen(false);
+            });
+        });
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape' && menuButton.getAttribute('aria-expanded') === 'true') {
+                setMenuOpen(false);
+                menuButton.focus();
+            }
+        });
+        window.addEventListener('resize', function() {
+            if (window.innerWidth >= 768) setMenuOpen(false);
+        });
+    }
+
     const searchInput = document.getElementById('resSearch');
     const tableBody = document.getElementById('confirmReservationsBody');
 
@@ -20,15 +63,46 @@ document.addEventListener('DOMContentLoaded', function() {
     const receiptModal = document.getElementById('receipt-modal');
     const receiptModalImage = document.getElementById('receipt-modal-image');
     const receiptModalClose = document.getElementById('receipt-modal-close');
+    const balanceModal = document.getElementById('balance-payment-modal');
+    const balanceForm = document.getElementById('balance-payment-form');
+    const balanceCustomer = document.getElementById('balance-payment-customer');
+    const balanceAmount = document.getElementById('balance-payment-amount');
+    const balanceMessage = document.getElementById('balance-payment-message');
+    let activeBalanceButton = null;
+
+    const closeBalanceModal = () => {
+        if (balanceModal) balanceModal.classList.add('d-none');
+        activeBalanceButton = null;
+    };
 
     document.addEventListener('click', function(event) {
         const link = event.target.closest('.receipt-link');
-        if (!link) return;
-        event.preventDefault();
-        const imageSrc = link.dataset.img;
-        if (!imageSrc) return;
-        receiptModalImage.src = imageSrc;
-        receiptModal.classList.remove('d-none');
+        if (link) {
+            event.preventDefault();
+            const imageSrc = link.dataset.img;
+            if (imageSrc && receiptModal && receiptModalImage) {
+                receiptModalImage.src = imageSrc;
+                receiptModal.classList.remove('d-none');
+            }
+            return;
+        }
+
+        const balanceTrigger = event.target.closest('.pay-balance-trigger');
+        if (balanceTrigger && balanceModal) {
+            activeBalanceButton = balanceTrigger;
+            balanceCustomer.textContent = balanceTrigger.dataset.customerName || 'Guest';
+            balanceAmount.textContent = `₱${Number(balanceTrigger.dataset.balanceDue || 0).toFixed(2)}`;
+            balanceMessage.textContent = '';
+            balanceModal.classList.remove('d-none');
+            return;
+        }
+
+        if (
+            event.target.closest('.balance-payment-close, .balance-payment-cancel')
+            || event.target === balanceModal
+        ) {
+            closeBalanceModal();
+        }
     });
 
     if (receiptModalClose) {
@@ -41,6 +115,36 @@ document.addEventListener('DOMContentLoaded', function() {
         receiptModal.addEventListener('click', function(event) {
             if (event.target === receiptModal) {
                 receiptModal.classList.add('d-none');
+            }
+        });
+    }
+
+    if (balanceForm) {
+        balanceForm.addEventListener('submit', async function(event) {
+            event.preventDefault();
+            if (!activeBalanceButton) return;
+
+            const button = activeBalanceButton;
+            const submitButton = balanceForm.querySelector('[type="submit"]');
+            submitButton.disabled = true;
+            balanceMessage.textContent = 'Processing payment...';
+
+            try {
+                const response = await fetch(button.dataset.balancePaymentUrl, {
+                    method: 'POST',
+                    headers: { Accept: 'application/json' },
+                });
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    throw new Error(data.message || 'Unable to process the balance payment.');
+                }
+
+                window.location.reload();
+            } catch (error) {
+                console.error('Balance payment failed:', error);
+                balanceMessage.textContent = error.message || 'Unable to process the balance payment.';
+            } finally {
+                submitButton.disabled = false;
             }
         });
     }

@@ -1041,7 +1041,6 @@ html[data-theme="dark"] #plan-selection-modal .modal-close {
         font-size: 0;
     }
     body:has(.solo-page) .side-link i { width: auto; font-size: 1.1rem; }
-    body:has(.solo-page) .side-link .badge { display: none; }
     body:has(.solo-page) .main-wrapper {
         width: calc(100% - 76px);
         margin-left: 76px;

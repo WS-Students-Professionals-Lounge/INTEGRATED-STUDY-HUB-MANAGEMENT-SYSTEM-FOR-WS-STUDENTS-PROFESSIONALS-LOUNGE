@@ -114,6 +114,51 @@ mail = Mail()
 
 # ID Generator Helper Functions
 
+def _common_area_reservations_query(now):
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    tomorrow_start = today_start + timedelta(days=1)
+    active_member_user_ids = db.session.query(SoloPlan.user_id).filter(
+        func.lower(SoloPlan.status).in_(["approved", "active"]),
+        or_(
+            SoloPlan.expiry_date.is_(None),
+            SoloPlan.expiry_date >= now,
+        ),
+    )
+    query = Reservation.query.join(Room).filter(
+        Room.name.ilike("common area"),
+        func.lower(Reservation.status).in_([
+            "confirmed",
+            "in_progress",
+            "checked-in",
+            "checked in",
+            "walk-in",
+            "active",
+            "occupied",
+        ]),
+        or_(
+            Reservation.user_id.is_(None),
+            ~Reservation.user_id.in_(active_member_user_ids),
+        ),
+        or_(
+            and_(
+                Reservation.start_time >= today_start,
+                Reservation.start_time < tomorrow_start,
+            ),
+            and_(
+                Reservation.start_time <= now,
+                or_(
+                    Reservation.is_open_time == True,
+                    Reservation.end_time.is_(None),
+                    Reservation.end_time >= now,
+                ),
+            ),
+        ),
+    )
+    if hasattr(Reservation, "deleted_at"):
+        query = query.filter(Reservation.deleted_at.is_(None))
+    return query
+
+
 def generate_membership_id():
     """Generate WS-WLK-XXXX sequential ID for members."""
     max_seq = db.session.query(func.max(func.cast(func.replace(User.membership_id, 'WS-WLK-', ''), db.Integer)))\
@@ -129,28 +174,16 @@ def generate_customer_id(room_type="common"):
     - Other rooms and monthly passes: 100-999
     """
     if room_type.lower() == "common area":
-        active_statuses = [
-            "Confirmed", "Pending", "Walk-in", "IN_PROGRESS", "Checked-in",
-            "ACTIVE", "OCCUPIED", "WAITING",
-        ]
-        Reservation.query.filter(
-            Reservation.customer_id.between(1, 70),
-            or_(
-                Reservation.status.is_(None),
-                ~Reservation.status.in_(active_statuses),
-            ),
-        ).update(
-            {Reservation.customer_id: None},
-            synchronize_session=False,
-        )
-        existing_ids = set([
-            r.customer_id for r in Reservation.query.filter(
-                Reservation.customer_id.between(1, 70),
-                Reservation.status.in_(active_statuses),
-            ).all() if r.customer_id is not None
-        ])
+        active_reservations = _common_area_reservations_query(
+            datetime.now()
+        ).filter(Reservation.customer_id.between(1, 70))
+        existing_ids = {
+            reservation.customer_id
+            for reservation in active_reservations.all()
+            if reservation.customer_id
+        }
 
-        # Find the first available slot between 1 and 70.
+        # Find the first available ID between 1 and 70
         for i in range(1, 71):
             if i not in existing_ids:
                 return i
@@ -169,10 +202,16 @@ def generate_customer_id(room_type="common"):
 
 
 def get_common_area_count():
-    return Reservation.query.filter(
-        Reservation.customer_id.between(1, 50),
-        Reservation.status.in_(["Confirmed", "Pending", "Walk-in"])
+    now = datetime.now()
+    active_walkins_count = _common_area_reservations_query(now).count()
+    active_members_count = db.session.query(AttendanceLog.id).join(Membership).filter(
+        Membership.status == "active",
+        Membership.is_checked_in == True,
+        Membership.is_paused == False,
+        AttendanceLog.is_paused == False,
+        AttendanceLog.check_out_time.is_(None),
     ).count()
+    return active_walkins_count + active_members_count
 
 
 def get_user_by_email(email):
@@ -458,6 +497,23 @@ class Reservation(db.Model):
 
     def __repr__(self):
         return f"<Reservation {self.id}>"
+
+
+class ReservationBalancePayment(db.Model):
+    __tablename__ = "reservation_balance_payments"
+
+    id = db.Column(db.Integer, primary_key=True)
+    reservation_id = db.Column(
+        db.Integer,
+        db.ForeignKey("reservations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    amount = db.Column(db.Float, nullable=False)
+    paid_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=lambda: datetime.utcnow() + timedelta(hours=8),
+    )
 
 
 class PaymentInfo(db.Model):
@@ -1029,4 +1085,3 @@ class WalkinForm(FlaskForm):
     payment_method = SelectField("Payment Method", choices=[("Cash", "Cash"), ("GCash", "GCash"), ("Bank Transfer", "Bank Transfer")], default="Cash")
     total_price = HiddenField("Total Price")
     submit = SubmitField("Save Walk-in")
-

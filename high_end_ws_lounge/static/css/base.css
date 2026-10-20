@@ -559,6 +559,12 @@ textarea,
     color: #e63946;
 }
 
+.sidebar .side-link.logout-link,
+.sidebar .side-link.logout-link i,
+.sidebar .side-link.logout-link span {
+    color: #e63946 !important;
+}
+
 .logout-link:hover {
     background: #fff1f2;
 }
@@ -573,6 +579,130 @@ textarea,
 .content-container {
     max-width: 1100px;
     margin: 0 auto;
+}
+
+.admin-tablet-navigation,
+.admin-tablet-menu-toggle,
+.admin-tablet-sidebar-backdrop {
+    display: none;
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+    body.admin-responsive-layout {
+        display: block;
+        overflow-x: hidden;
+    }
+
+    body.admin-responsive-layout.admin-tablet-menu-open {
+        overflow: hidden;
+    }
+
+    body.admin-responsive-layout .sidebar {
+        position: fixed;
+        top: 56px;
+        left: 0;
+        width: min(320px, calc(100vw - 40px));
+        height: calc(100vh - 56px);
+        height: calc(100dvh - 56px);
+        z-index: 1100;
+        visibility: hidden;
+        opacity: 0;
+        transform: translateX(-105%);
+        transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease, visibility 0s linear 320ms;
+    }
+
+    body.admin-responsive-layout .sidebar.admin-tablet-drawer-open {
+        visibility: visible;
+        opacity: 1;
+        transform: translateX(0);
+        transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease, visibility 0s;
+    }
+
+    body.admin-responsive-layout .sidebar-header {
+        padding-top: 54px;
+    }
+
+    body.admin-responsive-layout .main-wrapper {
+        width: 100% !important;
+        margin-left: 0 !important;
+        padding: 76px 24px 28px !important;
+    }
+
+    body.admin-responsive-layout .content-container {
+        max-width: none;
+    }
+
+    .admin-tablet-navigation {
+        position: fixed;
+        z-index: 1110;
+        inset: 0 0 auto;
+        display: flex;
+        height: 56px;
+        align-items: center;
+        justify-content: space-between;
+        padding: 6px 18px;
+        border-bottom: 1px solid #d9e1ec;
+        background: #ffffff;
+    }
+
+    .admin-tablet-logo {
+        display: block;
+        width: 42px;
+        height: 42px;
+        object-fit: contain;
+    }
+
+    .admin-tablet-menu-toggle {
+        display: grid;
+        width: 44px;
+        height: 44px;
+        flex: 0 0 44px;
+        place-items: center;
+        border: 1px solid #d9e1ec;
+        border-radius: 10px;
+        background: #ffffff;
+        color: #1f4e79;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        font-size: 1.1rem;
+        cursor: pointer;
+    }
+
+    .admin-tablet-menu-toggle:focus-visible,
+    .admin-tablet-sidebar-backdrop:focus-visible {
+        outline: 3px solid #3a6ea5;
+        outline-offset: 3px;
+    }
+
+    .admin-tablet-sidebar-backdrop {
+        position: fixed;
+        z-index: 1090;
+        inset: 56px 0 0;
+        display: block;
+        visibility: hidden;
+        opacity: 0;
+        pointer-events: none;
+        border: 0;
+        background: rgba(15, 23, 42, 0.48);
+        transition: opacity 240ms ease, visibility 0s linear 240ms;
+    }
+
+    .admin-tablet-sidebar-backdrop.is-visible {
+        visibility: visible;
+        opacity: 1;
+        pointer-events: auto;
+        transition: opacity 240ms ease, visibility 0s;
+    }
+
+    body.admin-responsive-layout .admin-members-page .members-mobile-bar {
+        display: none !important;
+    }
+}
+
+html[data-theme="dark"] .admin-tablet-navigation,
+html[data-theme="dark"] .admin-tablet-menu-toggle {
+    border-color: var(--border-color);
+    background: var(--bg-card);
+    color: var(--text-primary);
 }
 
 .welcome-text {
@@ -888,6 +1018,27 @@ html[data-theme="dark"] .side-link.active {
     background: #1e293b;
     color: #93c5fd;
     border-color: #334155;
+}
+
+html[data-theme="dark"] .sidebar .side-link.logout-link,
+html[data-theme="dark"] .sidebar .logout-link i,
+html[data-theme="dark"] .sidebar .logout-link span {
+    color: #fca5a5 !important;
+}
+
+html[data-theme="dark"] .sidebar .side-link.logout-link:hover,
+html[data-theme="dark"] .sidebar .side-link.logout-link:focus-visible,
+html[data-theme="dark"] .sidebar .logout-link:hover i,
+html[data-theme="dark"] .sidebar .logout-link:focus-visible i,
+html[data-theme="dark"] .sidebar .logout-link:hover span,
+html[data-theme="dark"] .sidebar .logout-link:focus-visible span {
+    background: #7f1d1d;
+    color: #fee2e2 !important;
+    border-color: #991b1b;
+}
+
+html[data-theme="dark"] .sidebar .side-link.logout-link {
+    background: rgba(127, 29, 29, 0.2);
 }
 
 html[data-theme="dark"] .theme-toggle-btn {
@@ -1885,4 +2036,71 @@ html[data-theme="dark"] .profile-page-shell .profile-summary {
     background: var(--bg-card) !important;
     border-color: var(--border-color) !important;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22) !important;
+}
+
+@media (max-width: 1023px) {
+    .global-toast-container {
+        top: calc(env(safe-area-inset-top, 0px) + 64px);
+        left: 8px;
+        width: calc(100vw - 16px);
+        max-height: calc(100dvh - 80px);
+        overflow-y: auto;
+        transform: none;
+    }
+
+    .global-member-toast {
+        grid-template-columns: 32px minmax(0, 1fr) 28px;
+        gap: 8px;
+        width: 100%;
+        padding: 10px;
+    }
+
+    .global-member-toast-icon {
+        width: 32px;
+        height: 32px;
+        font-size: 15px;
+    }
+
+    .global-member-toast-content,
+    .global-member-toast-title,
+    .global-member-toast-message {
+        min-width: 0;
+        max-width: 100%;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+
+    .global-member-toast-title {
+        font-size: 0.8125rem;
+    }
+
+    .global-member-toast-message {
+        font-size: 0.75rem;
+    }
+
+    .swal2-container.swal2-top-end {
+        top: calc(env(safe-area-inset-top, 0px) + 64px) !important;
+        right: 8px !important;
+        bottom: auto !important;
+        left: 8px !important;
+        width: auto !important;
+        max-height: calc(100dvh - 80px);
+        overflow-y: auto;
+        padding: 0 !important;
+    }
+
+    .swal2-container.swal2-top-end .swal2-popup.swal2-toast {
+        width: min(460px, 100%) !important;
+        max-width: 100% !important;
+        margin: 0 0 0 auto !important;
+        box-sizing: border-box;
+    }
+
+    .swal2-container.swal2-top-end .swal2-title,
+    .swal2-container.swal2-top-end .swal2-html-container {
+        max-width: 100%;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
 }

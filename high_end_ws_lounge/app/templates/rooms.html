@@ -9,8 +9,14 @@
     <div class="rooms-mobile-bar">
         <img src="{{ url_for('static', filename='img/main_logo.png') }}" alt="WS Lounge" class="rooms-mobile-logo">
         <button type="button" class="rooms-menu-toggle" id="roomsMenuToggle"
-            aria-label="Open navigation menu" aria-controls="roomsMobileSidebar" aria-expanded="false">
+            aria-label="Open navigation menu" aria-controls="roomsMobileSidebar" aria-expanded="false"
+            style="position: relative;">
             <i class="fas fa-bars" aria-hidden="true"></i>
+            {% set menu_unread_count = unread_reservation_notification_count|default(0) %}
+            <span class="badge rounded-pill bg-danger position-absolute"
+                data-notification-badge-for="member-reservation-notif-badge"
+                aria-hidden="true"
+                style="top: -5px; right: -7px; min-width: 1.25rem; z-index: 2;{% if not menu_unread_count %} display: none;{% endif %}">{{ menu_unread_count }}</span>
         </button>
     </div>
     <button type="button" class="rooms-sidebar-backdrop" id="roomsSidebarBackdrop"
@@ -319,7 +325,8 @@
                 <tbody>
                     {% if bookings %}
                         {% for booking in bookings %}
-                        <tr class="booking-row" data-status="{{ booking[2] }}" data-date="{{ booking[0] }}">
+                        {% set booking_is_on_hold = booking[2]|lower == 'on hold' %}
+                        <tr class="booking-row" data-status="{{ 'Pending' if booking_is_on_hold else booking[2] }}" data-date="{{ booking[0] }}">
                             <!-- Room Name -->
                             <td>{{ booking[3] }}</td>
                             
@@ -347,9 +354,14 @@
 
                             <!-- Status -->
                             <td>
-                                <span class="booking-status status-{{ booking[2].lower() }}">
-                                    {{ booking[2] }}
-                                </span>
+                                {% if booking_is_on_hold %}
+                                    <span class="booking-status status-pending">Pending</span>
+                                    <div class="small text-muted mt-1">On hold - awaiting balance payment</div>
+                                {% else %}
+                                    <span class="booking-status status-{{ booking[2].lower() }}">
+                                        {{ booking[2] }}
+                                    </span>
+                                {% endif %}
                             </td>
                         </tr>
                         {% endfor %}

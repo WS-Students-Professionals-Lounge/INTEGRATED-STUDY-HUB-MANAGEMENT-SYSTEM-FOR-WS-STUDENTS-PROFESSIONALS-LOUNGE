@@ -458,7 +458,6 @@ html[data-theme="dark"] .timelog-wrapper .recent-logs-section {
         font-size: 0;
     }
     body:has(.timelog-wrapper) .side-link i { width: auto; font-size: 1.1rem; }
-    body:has(.timelog-wrapper) .side-link .badge { display: none; }
     body:has(.timelog-wrapper) .main-wrapper {
         width: calc(100% - 76px);
         margin-left: 76px;

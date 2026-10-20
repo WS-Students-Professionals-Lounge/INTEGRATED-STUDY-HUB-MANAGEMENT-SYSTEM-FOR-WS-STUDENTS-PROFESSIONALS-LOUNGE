@@ -2,12 +2,32 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/admin/admin_reservations_list.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/admin/payment_settings_responsive.css') }}?v=1">
 {% endblock %}
 
 {% block content %}
-<div class="container mt-4">
-    <div class="card p-4 shadow-sm">
-        <div class="d-flex justify-content-between align-items-center mb-4">
+<div class="container mt-4 payment-settings-page">
+    <div class="payment-settings-mobile-bar">
+        <button type="button"
+                id="paymentSettingsMenuToggle"
+                class="payment-settings-menu-toggle"
+                aria-label="Open navigation menu"
+                aria-controls="paymentSettingsSidebar"
+                aria-expanded="false">
+            <i class="fas fa-bars" aria-hidden="true"></i>
+        </button>
+        <img src="{{ url_for('static', filename='img/main_logo.png') }}"
+             alt="WS Lounge"
+             class="payment-settings-mobile-logo">
+    </div>
+    <button type="button"
+            id="paymentSettingsSidebarBackdrop"
+            class="payment-settings-sidebar-backdrop"
+            aria-label="Close navigation menu"
+            tabindex="-1"></button>
+
+    <div class="card payment-settings-panel p-4 shadow-sm">
+        <div class="payment-settings-header d-flex justify-content-between align-items-center mb-4">
             <div>
                 <h2 class="mb-1">Payment Settings</h2>
                 <p class="text-muted">Manage GCash and Maya account details for customer downpayments.</p>
@@ -32,11 +52,11 @@
         {% endif %}
         {% endwith %}
 
-        <div class="row g-4">
+        <div class="row g-4 payment-methods-grid">
             {% for method in ['GCash', 'Maya'] %}
             {% set info = payment_infos.get(method) %}
-            <div class="col-md-6">
-                <div class="card h-100 border-secondary">
+            <div class="col-md-6 payment-method-column">
+                <div class="card h-100 border-secondary payment-method-card">
                     <div class="card-body">
                         <h5 class="card-title">{{ method }}</h5>
                         <form method="POST" enctype="multipart/form-data">
@@ -59,14 +79,15 @@
                                 <input type="file" name="qr_image" class="form-control">
                             </div>
                             {% if info and info.qr_image %}
-                            <div class="mb-3">
+                            <div class="mb-3 current-qr-section">
                                 <p class="mb-1"><strong>Current QR</strong></p>
                                 <img src="{{ url_for('static', filename='uploads/payment/' + info.qr_image) }}" 
                                 alt="{{ method }} QR" 
                                 class="img-fluid rounded border p-1 bg-white shadow-sm" 
-                                style="width: 180px; height: 180px; object-fit: contain; display: block;">                            </div>
+                                style="width: 180px; height: 180px; object-fit: contain; display: block;">
+                            </div>
                             {% endif %}
-                            <button type="submit" class="btn btn-primary">Save {{ method }} Settings</button>
+                            <button type="submit" class="btn btn-primary payment-settings-save-button">Save {{ method }} Settings</button>
                         </form>
                     </div>
                 </div>
@@ -75,4 +96,8 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/admin/payment_settings.js') }}?v=1"></script>
 {% endblock %}

@@ -4,6 +4,109 @@ if (socket) window.adminNotificationSocket = socket;
 document.addEventListener('DOMContentLoaded', function() {
     console.log("Admin Dashboard Modern UI Active", socket ? "+ SocketIO" : "(no socket)");
 
+    const menuButton = document.getElementById('adminDashboardMenuToggle');
+    const menuBackdrop = document.getElementById('adminDashboardSidebarBackdrop');
+    const sidebar = document.querySelector('.sidebar');
+
+    if (menuButton && menuBackdrop && sidebar) {
+        sidebar.id = 'adminDashboardSidebar';
+        const menuIcon = menuButton.querySelector('i');
+
+        function setMenuOpen(isOpen) {
+            sidebar.classList.toggle('admin-dashboard-drawer-open', isOpen);
+            menuBackdrop.classList.toggle('is-visible', isOpen);
+            menuButton.setAttribute('aria-expanded', String(isOpen));
+            menuButton.setAttribute('aria-label', isOpen ? 'Close navigation menu' : 'Open navigation menu');
+            document.body.classList.toggle('admin-dashboard-menu-open', isOpen);
+
+            if (menuIcon) {
+                menuIcon.classList.toggle('fa-bars', !isOpen);
+                menuIcon.classList.toggle('fa-xmark', isOpen);
+            }
+        }
+
+        menuButton.addEventListener('click', function() {
+            setMenuOpen(menuButton.getAttribute('aria-expanded') !== 'true');
+        });
+        menuBackdrop.addEventListener('click', function() {
+            setMenuOpen(false);
+        });
+        sidebar.querySelectorAll('a').forEach(function(link) {
+            link.addEventListener('click', function() {
+                setMenuOpen(false);
+            });
+        });
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape' && menuButton.getAttribute('aria-expanded') === 'true') {
+                setMenuOpen(false);
+                menuButton.focus();
+            }
+        });
+        window.addEventListener('resize', function() {
+            if (window.innerWidth >= 768) setMenuOpen(false);
+        });
+    }
+
+    const balanceModal = document.getElementById('balance-payment-modal');
+    const balanceForm = document.getElementById('balance-payment-form');
+    const balanceCustomer = document.getElementById('balance-payment-customer');
+    const balanceAmount = document.getElementById('balance-payment-amount');
+    const balanceMessage = document.getElementById('balance-payment-message');
+    let activeBalanceButton = null;
+
+    function closeBalanceModal() {
+        if (balanceModal) balanceModal.classList.add('d-none');
+        activeBalanceButton = null;
+    }
+
+    document.addEventListener('click', function(event) {
+        const trigger = event.target.closest('.pay-balance-trigger');
+        if (trigger && balanceModal) {
+            activeBalanceButton = trigger;
+            balanceCustomer.textContent = trigger.dataset.customerName || 'Guest';
+            balanceAmount.textContent = `₱${Number(trigger.dataset.balanceDue || 0).toFixed(2)}`;
+            balanceMessage.textContent = '';
+            balanceModal.classList.remove('d-none');
+            return;
+        }
+        if (
+            event.target.closest('.balance-payment-close, .balance-payment-cancel')
+            || event.target === balanceModal
+        ) {
+            closeBalanceModal();
+        }
+    });
+
+    if (balanceForm) {
+        balanceForm.addEventListener('submit', async function(event) {
+            event.preventDefault();
+            if (!activeBalanceButton) return;
+
+            const button = activeBalanceButton;
+            const submitButton = balanceForm.querySelector('[type="submit"]');
+            submitButton.disabled = true;
+            balanceMessage.textContent = 'Processing payment...';
+
+            try {
+                const response = await fetch(button.dataset.balancePaymentUrl, {
+                    method: 'POST',
+                    headers: { Accept: 'application/json' },
+                });
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    throw new Error(data.message || 'Unable to process the balance payment.');
+                }
+
+                window.location.reload();
+            } catch (error) {
+                console.error('Balance payment failed:', error);
+                balanceMessage.textContent = error.message || 'Unable to process the balance payment.';
+            } finally {
+                submitButton.disabled = false;
+            }
+        });
+    }
+
     // Welcome typewriter effect (mirror of member dashboard)
     const adminNameSpan = document.getElementById('adminUserName');
     if (adminNameSpan) {
@@ -531,14 +634,17 @@ function loadTodayWaitingList() {
             const container = document.getElementById('today-waiting-list-container');
             const countBadge = document.getElementById('waiting-list-count-badge');
             if (!container) return;
-            if (countBadge) countBadge.textContent = data.count || 0;
+            const waitingList = Array.isArray(data.waiting_list)
+                ? data.waiting_list.filter(item => String(item.status || '').trim().toLowerCase() !== 'on hold')
+                : [];
+            if (countBadge) countBadge.textContent = waitingList.length;
 
-            if (!Array.isArray(data.waiting_list) || data.waiting_list.length === 0) {
+            if (waitingList.length === 0) {
                 container.innerHTML = '<p class="no-data">No upcoming reservations.</p>';
                 return;
             }
 
-            container.innerHTML = data.waiting_list.map(item => {
+            container.innerHTML = waitingList.map(item => {
                 const status = item.status || 'Pending';
                 const normalized = String(status).trim().toLowerCase();
                 const className = normalized === 'confirmed' ? 'status-confirmed' : normalized === 'waiting' ? 'status-waiting' : 'status-pending';
@@ -858,8 +964,54 @@ window.handleCheckout = function(resId) {
 
     confirmAction('End Session?', confirmMsg, 'End Session', 'Cancel').then(confirmed => {
         if (!confirmed) return;
-        // Redirect to the backend route to finalize the checkout
-        window.location.href = `/admin/walkin_checkout/${resId}?final_bill=${total}`;
+        btn.disabled = true;
+        fetch(`/admin/walkin_checkout/${resId}?final_bill=${encodeURIComponent(total)}`, {
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        })
+            .then(async response => {
+                const data = await response.json();
+                if (!response.ok || data.status !== 'success') {
+                    throw new Error(data.message || 'Unable to end this session.');
+                }
+                return data;
+            })
+            .then(data => {
+                const checkoutMessage = data.message || 'Session ended successfully.';
+                document.querySelectorAll('#common-area-active-cards-scroll .room-card[data-session-id]')
+                    .forEach(card => {
+                        if (card.dataset.sessionId === String(resId)) card.remove();
+                    });
+
+                const paymentMatch = checkoutMessage.match(/₱([\d,]+(?:\.\d{2})?)/);
+                const paymentAmount = paymentMatch
+                    ? Number(paymentMatch[1].replace(/,/g, ''))
+                    : NaN;
+                const earningsValue = document.getElementById('earnings-today-value');
+                const currentEarnings = earningsValue
+                    ? Number(earningsValue.textContent.replace(/[^\d.-]/g, ''))
+                    : NaN;
+                if (earningsValue && Number.isFinite(paymentAmount) && Number.isFinite(currentEarnings)) {
+                    earningsValue.textContent = `₱${(currentEarnings + paymentAmount).toLocaleString('en-PH', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                    })}`;
+                }
+
+                fetchCommonAreaOccupants();
+                loadTodayWaitingList();
+                fetchCommonAreaCardStats();
+                if (typeof window.showToast === 'function') window.showToast(checkoutMessage, 'success');
+            })
+            .catch(error => {
+                console.error('Session checkout failed:', error);
+                btn.disabled = false;
+                if (typeof window.showToast === 'function') {
+                    window.showToast(error.message || 'Unable to end this session.', 'error');
+                }
+            });
     });
 };
 

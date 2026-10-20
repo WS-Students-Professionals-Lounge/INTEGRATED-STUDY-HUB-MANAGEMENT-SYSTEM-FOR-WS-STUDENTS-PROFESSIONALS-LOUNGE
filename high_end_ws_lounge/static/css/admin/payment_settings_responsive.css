@@ -1,0 +1,306 @@
+.payment-settings-mobile-bar,
+.payment-settings-menu-toggle,
+.payment-settings-sidebar-backdrop {
+    display: none;
+}
+
+.payment-settings-page {
+    min-width: 0;
+    max-width: 1200px;
+}
+
+.payment-settings-panel,
+.payment-settings-card {
+    min-width: 0;
+}
+
+.payment-settings-header > div {
+    min-width: 0;
+}
+
+.payment-settings-header h2 {
+    color: #1f4e79;
+    font-size: clamp(1.35rem, 2.4vw, 1.9rem);
+    font-weight: 750;
+    overflow-wrap: anywhere;
+}
+
+.payment-settings-header p {
+    margin-bottom: 0;
+    overflow-wrap: anywhere;
+}
+
+.payment-method-column,
+.payment-method-card .card-body,
+.payment-method-card form {
+    min-width: 0;
+}
+
+.payment-method-card {
+    border-radius: 12px;
+}
+
+.payment-method-card .card-title {
+    margin-bottom: 1.25rem;
+    color: #1f4e79;
+    font-size: 1.2rem;
+    font-weight: 700;
+}
+
+.payment-method-card .form-control {
+    width: 100%;
+    min-width: 0;
+}
+
+.payment-method-card textarea {
+    min-height: 100px;
+    resize: vertical;
+}
+
+.payment-method-card input[type="file"] {
+    max-width: 100%;
+    padding: 0.65rem;
+}
+
+.current-qr-section img {
+    max-width: min(180px, 100%);
+    height: auto;
+}
+
+.payment-settings-save-button {
+    min-height: 44px;
+    white-space: normal;
+}
+
+@media (max-width: 767px) {
+    body:has(.payment-settings-page) {
+        display: block;
+        overflow-x: hidden;
+    }
+
+    body:has(.payment-settings-page).payment-settings-menu-open {
+        overflow: hidden;
+    }
+
+    body:has(.payment-settings-page) .sidebar {
+        top: 56px;
+        width: min(320px, calc(100vw - 40px));
+        height: calc(100vh - 56px);
+        height: calc(100dvh - 56px);
+        z-index: 1100;
+        visibility: hidden;
+        opacity: 0;
+        transform: translateX(-105%);
+        transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease, visibility 0s linear 320ms;
+    }
+
+    body:has(.payment-settings-page) .sidebar.payment-settings-drawer-open {
+        visibility: visible;
+        opacity: 1;
+        transform: translateX(0);
+        transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease, visibility 0s;
+    }
+
+    body:has(.payment-settings-page) .sidebar-header {
+        padding-top: 54px;
+    }
+
+    body:has(.payment-settings-page) .main-wrapper {
+        width: 100%;
+        margin-left: 0;
+        padding: 76px 14px 24px;
+    }
+
+    body:has(.payment-settings-page) .content-container {
+        max-width: none;
+    }
+
+    .payment-settings-page.container {
+        width: 100%;
+        max-width: none;
+        margin: 0 !important;
+        padding: 0;
+    }
+
+    .payment-settings-mobile-bar {
+        position: fixed;
+        z-index: 1110;
+        inset: 0 0 auto;
+        display: flex;
+        height: 56px;
+        align-items: center;
+        justify-content: space-between;
+        padding: 6px 14px;
+        border-bottom: 1px solid #d9e1ec;
+        background: #ffffff;
+    }
+
+    .payment-settings-mobile-logo {
+        display: block;
+        width: 42px;
+        height: 42px;
+        object-fit: contain;
+    }
+
+    .payment-settings-menu-toggle {
+        display: grid;
+        width: 44px;
+        height: 44px;
+        flex: 0 0 44px;
+        place-items: center;
+        border: 1px solid #d9e1ec;
+        border-radius: 10px;
+        background: #ffffff;
+        color: #1f4e79;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        font-size: 1.1rem;
+        cursor: pointer;
+    }
+
+    .payment-settings-menu-toggle:focus-visible,
+    .payment-settings-sidebar-backdrop:focus-visible {
+        outline: 3px solid #3a6ea5;
+        outline-offset: 3px;
+    }
+
+    .payment-settings-sidebar-backdrop {
+        position: fixed;
+        z-index: 1090;
+        inset: 56px 0 0;
+        display: block;
+        visibility: hidden;
+        opacity: 0;
+        pointer-events: none;
+        border: 0;
+        background: rgba(15, 23, 42, 0.48);
+        transition: opacity 240ms ease, visibility 0s linear 240ms;
+    }
+
+    .payment-settings-sidebar-backdrop.is-visible {
+        visibility: visible;
+        opacity: 1;
+        pointer-events: auto;
+        transition: opacity 240ms ease, visibility 0s;
+    }
+
+    .payment-settings-panel {
+        padding: 16px !important;
+        border: 0;
+        box-shadow: none !important;
+        background: transparent;
+    }
+
+    .payment-settings-header {
+        align-items: flex-start !important;
+        margin-bottom: 18px !important;
+    }
+
+    .payment-settings-header p {
+        font-size: 0.9rem;
+        line-height: 1.45;
+    }
+
+    .payment-methods-grid {
+        --bs-gutter-y: 1rem;
+        margin-right: 0;
+        margin-left: 0;
+    }
+
+    .payment-method-column {
+        padding-right: 0;
+        padding-left: 0;
+    }
+
+    .payment-method-card .card-body {
+        padding: 18px;
+    }
+
+    .payment-method-card .form-control {
+        min-height: 44px;
+        font-size: 16px;
+    }
+
+    .payment-method-card textarea.form-control {
+        min-height: 110px;
+    }
+
+    .payment-method-card input[type="file"] {
+        min-height: 48px;
+        font-size: 0.85rem;
+    }
+
+    .payment-settings-save-button {
+        width: 100%;
+    }
+}
+
+@media (max-width: 380px) {
+    body:has(.payment-settings-page) .main-wrapper {
+        padding-right: 10px;
+        padding-left: 10px;
+    }
+
+    .payment-settings-panel {
+        padding: 12px !important;
+    }
+
+    .payment-method-card .card-body {
+        padding: 14px;
+    }
+
+    .payment-method-card input[type="file"] {
+        padding: 0.5rem;
+        font-size: 0.78rem;
+    }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+    .payment-settings-page {
+        max-width: none;
+    }
+}
+
+html[data-theme="dark"] .payment-settings-header h2,
+html[data-theme="dark"] .payment-method-card .card-title {
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] .payment-settings-panel,
+html[data-theme="dark"] .payment-method-card {
+    background: var(--bg-card);
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] .payment-method-card {
+    border-color: var(--border-color) !important;
+}
+
+html[data-theme="dark"] .payment-method-card .form-control {
+    border-color: var(--border-color);
+    background-color: var(--bg-main);
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] .payment-method-card .form-control::placeholder {
+    color: var(--text-muted);
+}
+
+html[data-theme="dark"] .payment-method-card .form-control:focus {
+    border-color: var(--accent-blue);
+    background-color: var(--bg-card);
+}
+
+html[data-theme="dark"] .payment-settings-mobile-bar,
+html[data-theme="dark"] .payment-settings-menu-toggle {
+    border-color: var(--border-color);
+    background: var(--bg-card);
+    color: var(--text-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body:has(.payment-settings-page) .sidebar,
+    .payment-settings-sidebar-backdrop {
+        transition-duration: 0.01ms;
+        transition-delay: 0s;
+    }
+}

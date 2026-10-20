@@ -899,6 +899,46 @@ body:has(.dashboard-wrapper) .main-wrapper {
     min-width: 560px;
 }
 
+#reservationTable {
+    width: 100%;
+    min-width: 660px;
+    table-layout: fixed;
+}
+
+#reservationTable th:nth-child(1),
+#reservationTable td:nth-child(1) {
+    width: 8%;
+}
+
+#reservationTable th:nth-child(2),
+#reservationTable td:nth-child(2) {
+    width: 19%;
+}
+
+#reservationTable th:nth-child(3),
+#reservationTable td:nth-child(3),
+#reservationTable th:nth-child(4),
+#reservationTable td:nth-child(4) {
+    width: 25%;
+    white-space: nowrap;
+}
+
+#reservationTable th:nth-child(5),
+#reservationTable td:nth-child(5) {
+    width: 23%;
+}
+
+#reservationTable .status-badge {
+    display: inline-flex;
+    max-width: 100%;
+    align-items: center;
+    justify-content: center;
+    padding: 5px 8px;
+    font-size: 0.68rem;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
 .attendance-table {
     min-width: 620px;
 }
@@ -999,6 +1039,21 @@ body:has(.dashboard-wrapper) .main-wrapper {
 
     .dashboard-wrapper {
         padding: 0;
+    }
+
+    #reservationTable {
+        min-width: 620px;
+    }
+
+    #reservationTable th,
+    #reservationTable td {
+        padding: 9px 8px;
+        font-size: 0.78rem;
+    }
+
+    #reservationTable .status-badge {
+        padding: 4px 7px;
+        font-size: 0.64rem;
     }
 
     .dashboard-mobile-bar {

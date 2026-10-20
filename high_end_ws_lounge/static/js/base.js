@@ -3,6 +3,49 @@
  */
 
 function initializeBaseJs() {
+    const tabletMenuButton = document.getElementById('adminTabletMenuToggle');
+    const tabletMenuBackdrop = document.getElementById('adminTabletSidebarBackdrop');
+    const adminSidebar = document.querySelector('.admin-responsive-layout .sidebar');
+
+    if (tabletMenuButton && tabletMenuBackdrop && adminSidebar) {
+        const tabletMenuIcon = tabletMenuButton.querySelector('i');
+
+        function setTabletMenuOpen(isOpen) {
+            tabletMenuButton.setAttribute('aria-controls', adminSidebar.id || 'adminSidebar');
+            adminSidebar.classList.toggle('admin-tablet-drawer-open', isOpen);
+            tabletMenuBackdrop.classList.toggle('is-visible', isOpen);
+            tabletMenuButton.setAttribute('aria-expanded', String(isOpen));
+            tabletMenuButton.setAttribute('aria-label', isOpen ? 'Close navigation menu' : 'Open navigation menu');
+            document.body.classList.toggle('admin-tablet-menu-open', isOpen);
+
+            if (tabletMenuIcon) {
+                tabletMenuIcon.classList.toggle('fa-bars', !isOpen);
+                tabletMenuIcon.classList.toggle('fa-xmark', isOpen);
+            }
+        }
+
+        tabletMenuButton.addEventListener('click', function() {
+            setTabletMenuOpen(tabletMenuButton.getAttribute('aria-expanded') !== 'true');
+        });
+        tabletMenuBackdrop.addEventListener('click', function() {
+            setTabletMenuOpen(false);
+        });
+        adminSidebar.querySelectorAll('a').forEach(function(link) {
+            link.addEventListener('click', function() {
+                setTabletMenuOpen(false);
+            });
+        });
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape' && tabletMenuButton.getAttribute('aria-expanded') === 'true') {
+                setTabletMenuOpen(false);
+                tabletMenuButton.focus();
+            }
+        });
+        window.addEventListener('resize', function() {
+            if (window.innerWidth < 768 || window.innerWidth >= 1024) setTabletMenuOpen(false);
+        });
+    }
+
     /**
      * 1. Auto-dismiss Flask flash messages (modern-alert and alert classes)
      * - Fade out and hide after 5 seconds
@@ -261,11 +304,14 @@ function fetchSidebarNotifications() {
 
             // Helper function para sa pag-update sang badge display
             const updateBadge = (elementId, count) => {
-                const badge = document.getElementById(elementId);
-                if (badge) {
-                    const visibleCount = elementId === 'mem-notif-badge' && isOnMembersPage
-                        ? 0
-                        : Number(count || 0);
+                const badges = [
+                    document.getElementById(elementId),
+                    ...document.querySelectorAll(`[data-notification-badge-for="${elementId}"]`),
+                ].filter(Boolean);
+                const visibleCount = elementId === 'mem-notif-badge' && isOnMembersPage
+                    ? 0
+                    : Number(count || 0);
+                badges.forEach(badge => {
                     if (visibleCount > 0) {
                         badge.innerText = visibleCount;
                         badge.style.display = 'inline-flex';
@@ -275,7 +321,7 @@ function fetchSidebarNotifications() {
                         badge.style.display = 'none';
                         badge.classList.add('d-none');
                     }
-                }
+                });
             };
 
             // Update individual counts
@@ -478,6 +524,15 @@ function initializeMemberSocketNotifications() {
             data.title || 'Reservation Canceled'
         );
     });
+
+    socket.on('reservation_placed_on_hold', function(data) {
+        if (!data || !data.message) return;
+        showGlobalMemberToast(
+            data.message,
+            'warning',
+            data.title || 'Reservation On Hold'
+        );
+    });
 }
 
 document.addEventListener('DOMContentLoaded', initializeMemberSocketNotifications);
@@ -590,11 +645,16 @@ function initializeMemberReservationNotifications() {
     };
 
     const reservationBadge = document.getElementById('member-reservation-notif-badge');
+    const reservationMenuBadges = document.querySelectorAll(
+        '[data-notification-badge-for="member-reservation-notif-badge"]'
+    );
     const isBookSpacePage = window.location.pathname.replace(/\/+$/, '') === '/rooms';
     const renderReservationBadge = count => {
-        if (!reservationBadge) return;
-        reservationBadge.textContent = String(count);
-        reservationBadge.classList.toggle('d-none', count === 0);
+        [reservationBadge, ...reservationMenuBadges].filter(Boolean).forEach(badge => {
+            badge.textContent = String(count);
+            badge.classList.toggle('d-none', count === 0);
+            badge.style.display = count === 0 ? 'none' : 'inline-flex';
+        });
     };
 
     const dashboardLink = eventBadge.closest('a');

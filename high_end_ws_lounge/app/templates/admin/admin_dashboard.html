@@ -1,13 +1,32 @@
 {% extends "base.html" %}
 
 {% block extra_css %}
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin/admin_dashboard.css') }}?v=4">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin/admin_dashboard.css') }}?v=9">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/modals/admin_walkin_modal.css') }}?v=3">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/rooms.css') }}">
 {% endblock %}
 
 {% block content %}
-<div class="dashboard-wrapper">
+<div class="dashboard-wrapper admin-dashboard-wrapper">
+    <div class="dashboard-mobile-bar">
+        <button type="button"
+                id="adminDashboardMenuToggle"
+                class="dashboard-menu-toggle"
+                aria-label="Open navigation menu"
+                aria-controls="adminDashboardSidebar"
+                aria-expanded="false">
+            <i class="fas fa-bars" aria-hidden="true"></i>
+        </button>
+        <img src="{{ url_for('static', filename='img/main_logo.png') }}"
+             alt="WS Lounge"
+             class="dashboard-mobile-logo">
+    </div>
+    <button type="button"
+            id="adminDashboardSidebarBackdrop"
+            class="dashboard-sidebar-backdrop"
+            aria-label="Close navigation menu"
+            tabindex="-1"></button>
+
     <div class="dashboard-header">
         <div>
             <h1>Admin Dashboard</h1>
@@ -18,8 +37,8 @@
 
     <div class="stats-grid">
         <div class="stat-card">
-            <div class="stat-icon-wrapper">
-                <img src="https://img.icons8.com/ios/50/64748b/group-foreground-selected.png" alt="members">
+            <div class="stat-icon-wrapper" aria-hidden="true">
+                <i class="fas fa-users"></i>
             </div>
             <div class="stat-info">
                 <span class="stat-label">Total Members</span>
@@ -27,8 +46,8 @@
             </div>
         </div>
         <div class="stat-card">
-            <div class="stat-icon-wrapper">
-                <img src="https://img.icons8.com/ios/50/64748b/shield.png" alt="plans">
+            <div class="stat-icon-wrapper" aria-hidden="true">
+                <i class="fas fa-shield-alt"></i>
             </div>
             <div class="stat-info">
                 <span class="stat-label">Active Plans</span>
@@ -36,8 +55,8 @@
             </div>
         </div>
         <div class="stat-card">
-            <div class="stat-icon-wrapper">
-                <img src="https://img.icons8.com/ios/50/64748b/calendar.png" alt="res">
+            <div class="stat-icon-wrapper" aria-hidden="true">
+                <i class="fas fa-calendar-check"></i>
             </div>
             <div class="stat-info">
                 <span class="stat-label">Pending Reservations</span>
@@ -45,12 +64,12 @@
             </div>
         </div>
         <div class="stat-card">
-            <div class="stat-icon-wrapper">
-                <img src="https://img.icons8.com/ios/50/64748b/money-box.png" alt="earnings">
+            <div class="stat-icon-wrapper" aria-hidden="true">
+                <i class="fas fa-wallet"></i>
             </div>
             <div class="stat-info">
                 <span class="stat-label">Earnings Today</span>
-                <h2 class="stat-value">₱{{ "{:,.2f}".format(revenue_today) }}</h2>
+                <h2 class="stat-value" id="earnings-today-value">₱{{ "{:,.2f}".format(revenue_today) }}</h2>
             </div>
         </div>
     </div>
@@ -79,8 +98,12 @@
                 </div>
             </div>
 
-            <div id="common-area-active-cards-scroll" class="common-area-active-cards-scroll mb-4 pb-3" style="max-height: 420px; overflow-y: auto; overflow-x: hidden; border-radius: 10px;">
-                <div class="room-grid common-area-grid" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start;">
+            <div class="walkin-header">
+                <button type="button" id="openWalkinBtn" class="btn-walkin">Walk-in</button>
+            </div>
+
+            <div id="common-area-active-cards-scroll" class="common-area-active-cards-scroll mb-4 pb-3">
+                <div class="room-grid common-area-grid">
                 {% if common_area_reservations %}
                     {% for res in common_area_reservations %}
                     {% set is_expired = false %}
@@ -311,7 +334,7 @@
                             </div>
                         </div>
 
-                        <div class="room-card-footer">
+                        <div class="room-card-footer room-card-footer-grouped">
                             {% if active_res %}
                                 <div class="card-action-row room-action-buttons" style="display: flex; gap: 4px; align-items: center; justify-content: space-between; width: 100%; margin-top: 10px;">
                                     
@@ -389,8 +412,40 @@
         </div>
 
         <div class="right-section">
-            <div class="walkin-header">
-                <button type="button" id="openWalkinBtn" class="btn-walkin">Walk-in</button>
+            <div class="waiting-list-card held-reservations-card">
+                <div class="waiting-header held-reservations-header">
+                    <h3>Reservation On Hold Today</h3>
+                    <span class="waiting-count" id="held-count-badge">{{ held_reservations|length if held_reservations else 0 }}</span>
+                </div>
+                <div class="waiting-items held-reservations-list" id="held-reservations-list">
+                    {% for res in held_reservations %}
+                    {% set balance_due = ((res.total_amount or 0)|float) - ((res.amount_paid or 0)|float) %}
+                    <div class="waiting-item held-reservation-item" data-reservation-id="{{ res.id }}">
+                        <div class="held-reservation-details">
+                            <strong class="waiting-name">{{ res.customer_name or 'Guest' }}</strong>
+                            <span class="waiting-details">{{ res.room.name if res.room else 'Common Area' }} · {{ res.start_time.strftime('%b %d, %Y %I:%M %p') }}</span>
+                            <span class="waiting-status status-waiting status-on-hold">On Hold</span>
+                        </div>
+                        <div class="held-reservation-actions">
+                            {% if balance_due > 0 %}
+                            <button type="button"
+                                    class="btn-sm btn-warning pay-balance-trigger"
+                                    data-balance-payment-url="{{ url_for('admin.pay_reservation_balance', res_id=res.id) }}"
+                                    data-customer-name="{{ res.customer_name or 'Guest' }}"
+                                    data-balance-due="{{ '%.2f'|format(balance_due) }}">Pay Balance</button>
+                            {% endif %}
+                            <form method="post"
+                                  action="{{ url_for('admin.confirm_reservation', res_id=res.id) }}"
+                                  class="confirm-held-form"
+                                  {% if balance_due > 0 %}hidden{% endif %}>
+                                <button type="submit" class="btn-confirm-reservation">Confirm</button>
+                            </form>
+                        </div>
+                    </div>
+                    {% else %}
+                    <p class="no-data">No reservations currently on hold.</p>
+                    {% endfor %}
+                </div>
             </div>
 
             <div class="waiting-list-card">
@@ -400,7 +455,7 @@
                     <img src="https://img.icons8.com/ios/50/64748b/calendar.png" alt="calendar-icon" class="mini-calendar">
                 </div>
                 
-                <div class="waiting-items" id="today-waiting-list-container" style="max-height: 320px; overflow-y: auto; overflow-x: hidden; padding-right: 6px;">
+                <div class="waiting-items" id="today-waiting-list-container">
                     {% for res in pending_reservations %}
                     <div class="waiting-item">
                         <p class="waiting-name">Next: {{ res.customer_name }}</p>
@@ -608,11 +663,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const waitingListContainer = document.querySelector('#today-waiting-list-container');
             const waitingListBadge = document.querySelector('#waiting-list-count-badge');
+            const heldReservationsCard = document.querySelector('.held-reservations-card');
             const liveRoomContainer = document.querySelector('#common-area-active-cards-scroll');
             const roomGridContainer = document.querySelector('#roomGridContainer');
 
             const nextWaitingListContainer = doc.querySelector('#today-waiting-list-container');
             const nextWaitingListBadge = doc.querySelector('#waiting-list-count-badge');
+            const nextHeldReservationsCard = doc.querySelector('.held-reservations-card');
             const nextLiveRoomContainer = doc.querySelector('#common-area-active-cards-scroll');
             const nextRoomGridContainer = doc.querySelector('#roomGridContainer');
 
@@ -626,6 +683,9 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             if (waitingListBadge && nextWaitingListBadge) {
                 waitingListBadge.textContent = nextWaitingListBadge.textContent;
+            }
+            if (heldReservationsCard && nextHeldReservationsCard) {
+                heldReservationsCard.innerHTML = nextHeldReservationsCard.innerHTML;
             }
             if (liveRoomContainer && nextLiveRoomContainer) {
                 liveRoomContainer.innerHTML = nextLiveRoomContainer.innerHTML;
@@ -747,6 +807,19 @@ document.addEventListener('DOMContentLoaded', function () {
                 <p class="text-muted modal-helper-text mt-3 small">This updates the reservation end time and total bill immediately for the fixed session.</p>
             </div>
         </div>
+    </div>
+</div>
+<div id="balance-payment-modal" class="balance-payment-modal d-none" role="dialog" aria-modal="true" aria-labelledby="balance-payment-title">
+    <div class="balance-payment-content">
+        <button type="button" class="balance-payment-close" aria-label="Close">&times;</button>
+        <h3 id="balance-payment-title">Pay Reservation Balance</h3>
+        <p>Customer: <strong id="balance-payment-customer"></strong></p>
+        <p>Balance due: <strong id="balance-payment-amount"></strong></p>
+        <p id="balance-payment-message" class="balance-payment-message" role="status"></p>
+        <form id="balance-payment-form">
+            <button type="submit" class="btn-sm btn-success">Pay</button>
+            <button type="button" class="btn-sm btn-secondary balance-payment-cancel">Cancel</button>
+        </form>
     </div>
 </div>
 {% endblock %}

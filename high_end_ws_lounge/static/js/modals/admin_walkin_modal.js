@@ -30,15 +30,23 @@ document.addEventListener('DOMContentLoaded', function() {
                     body: new FormData(walkinForm),
                     headers: { 'X-Requested-With': 'XMLHttpRequest' }
                 });
-                const result = await response.json();
+                const responseText = await response.text();
+                let result;
+                try {
+                    result = JSON.parse(responseText);
+                } catch {
+                    throw new Error(
+                        `The server returned an unexpected response (HTTP ${response.status}).`
+                    );
+                }
                 if (!response.ok || !result.success) {
-                    showWalkinConflict(result.message);
+                    showWalkinConflict(result.message || 'Failed to process walk-in check-in.');
                     return;
                 }
                 location.reload();
             } catch (error) {
                 console.error('Walk-in error:', error);
-                showWalkinConflict('Unable to check in the walk-in. Please try again.');
+                showWalkinConflict(error.message || 'Unable to check in the walk-in. Please try again.');
             }
         });
     }

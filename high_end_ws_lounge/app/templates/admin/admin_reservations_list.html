@@ -1,18 +1,43 @@
 {% extends "base.html" %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/admin/admin_reservations_list.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/admin/admin_reservations_list.css') }}?v=2">
 {% endblock %}
 
 {% block content %}
-<div class="container mt-4">
+<div class="container mt-4 admin-reservations-list-page">
+    <div class="reservations-mobile-bar">
+        <button type="button"
+                id="adminReservationsMenuToggle"
+                class="reservations-menu-toggle"
+                aria-label="Open navigation menu"
+                aria-controls="adminReservationsSidebar"
+                aria-expanded="false"
+                style="position: relative;">
+            <i class="fas fa-bars" aria-hidden="true"></i>
+            {% set menu_pending_count = pending_reservations_count|default(0) %}
+            <span class="badge rounded-pill bg-danger position-absolute"
+                  data-notification-badge-for="res-notif-badge"
+                  aria-hidden="true"
+                  style="top: -5px; right: -7px; min-width: 1.25rem; z-index: 2;{% if not menu_pending_count %} display: none;{% endif %}">{{ menu_pending_count }}</span>
+        </button>
+        <img src="{{ url_for('static', filename='img/main_logo.png') }}"
+             alt="WS Lounge"
+             class="reservations-mobile-logo">
+    </div>
+    <button type="button"
+            id="adminReservationsSidebarBackdrop"
+            class="reservations-sidebar-backdrop"
+            aria-label="Close navigation menu"
+            tabindex="-1"></button>
+
     <div class="reservations-container">
-        <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <div class="reservations-page-header d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
             <div>
                 <h2 class="reservations-title">Reservations List</h2>
                 <p class="text-muted">Manage confirmed and pending reservations. Use the separate confirmation page for pending approvals.</p>
             </div>
-            <div class="d-flex gap-2 align-items-center">
+            <div class="reservations-page-controls d-flex gap-2 align-items-center">
                 <a href="{{ url_for('admin.admin_confirm_reservations') }}" class="btn btn-outline-primary">Confirm Reservation</a>
                 <input type="text" id="resSearch" class="form-control w-25" placeholder="Search customer or room...">
             </div>
@@ -37,6 +62,8 @@
                 <tbody>
                     {% for res in reservations %}
                     <tr>
+                        {% set status_lower = res.status|lower %}
+                        {% set balance_due = ((res.total_amount or 0)|float) - ((res.amount_paid or 0)|float) %}
                         <td><strong>#{{ res.customer_id or res.id }}</strong></td>
                         <td>
                             <div class="fw-bold">{{ res.customer_name }}</div>
@@ -48,16 +75,22 @@
                             <small class="text-muted">{{ res.start_time.strftime('%I:%M %p') }} - {{ res.end_time.strftime('%I:%M %p') if res.end_time else 'Open' }}</small>
                         </td>
                         <td>
-                            <span class="badge bg-{{ 'primary' if res.status|lower in ['in_progress', 'checked-in', 'checked_in'] else 'success' if res.status|lower in ['confirmed', 'approved'] else 'secondary' if res.status|lower in ['cancelled', 'completed', 'expired'] else 'warning' }}">
-                                {{ 'In Progress' if res.status|lower in ['in_progress', 'checked-in', 'checked_in'] else res.status }}
+                            <span class="badge {{ 'status-on-hold' if status_lower == 'on hold' else 'bg-primary' if status_lower in ['in_progress', 'checked-in', 'checked_in'] else 'bg-success' if status_lower in ['confirmed', 'approved'] else 'bg-secondary' if status_lower in ['cancelled', 'completed', 'expired'] else 'bg-warning' }}">
+                                {{ 'In Progress' if status_lower in ['in_progress', 'checked-in', 'checked_in'] else res.status }}
                             </span>
+                            {% if status_lower == 'on hold' and balance_due <= 0 %}
+                                <div class="text-success small fw-bold mt-1">Balance paid - confirm to start</div>
+                            {% endif %}
                         </td>
                         <td>
                             {% if res.payment_method %}
                                 <div>{{ res.payment_method }}</div>
                                 {% if res.payment_type == "Full Payment" %}
                                     <small class="text-muted">Full Payment</small>
-                                    <div class="text-success">₱{{ "%.2f"|format(res.total_amount) }}</div>
+                                    <div class="text-success">₱{{ "%.2f"|format(res.amount_paid or res.total_amount) }}</div>
+                                {% elif res.paid %}
+                                    <small class="text-muted">Paid in Full</small>
+                                    <div class="text-success">₱{{ "%.2f"|format(res.amount_paid or res.total_amount) }}</div>
                                 {% else %}
                                     <small class="text-muted">Downpayment (50%)</small>
                                     <div class="text-warning">₱{{ "%.2f"|format(res.amount_paid or 0) }}</div>
@@ -106,6 +139,21 @@
                                 </div>
 
                                 <div class="d-flex flex-wrap gap-1">
+                                    {% if status_lower == 'on hold' %}
+                                        {% if balance_due > 0 %}
+                                            <button type="button"
+                                                    class="btn-sm btn-warning pay-balance-trigger"
+                                                    data-balance-payment-url="{{ url_for('admin.pay_reservation_balance', res_id=res.id) }}"
+                                                    data-customer-name="{{ res.customer_name }}"
+                                                    data-balance-due="{{ '%.2f'|format(balance_due) }}">Pay Balance</button>
+                                        {% endif %}
+                                        <form method="post"
+                                              action="{{ url_for('admin.confirm_reservation', res_id=res.id) }}"
+                                              class="confirm-held-form"
+                                              {% if balance_due > 0 %}hidden{% endif %}>
+                                            <button type="submit" class="btn-confirm-reservation">Confirm</button>
+                                        </form>
+                                    {% endif %}
                                     <form method="post" action="{{ url_for('admin.delete_reservation', res_id=res.id) }}" data-confirm="Are you sure you want to permanently delete this?">
                                         <input type="hidden" name="next" value="{{ url_for('admin.admin_reservations_list') }}">
                                         <button type="submit" class="btn-sm btn-danger">Delete</button>
@@ -127,6 +175,20 @@
             <h3 class="receipt-modal-title">Receipt Preview</h3>
             <img id="receipt-modal-image" src="" alt="Receipt Image" class="receipt-modal-image">
             <p class="text-muted">If the receipt does not display, open it directly by right-clicking the link.</p>
+        </div>
+    </div>
+
+    <div id="balance-payment-modal" class="balance-payment-modal d-none" role="dialog" aria-modal="true" aria-labelledby="balance-payment-title">
+        <div class="balance-payment-content">
+            <button type="button" class="balance-payment-close" aria-label="Close">&times;</button>
+            <h3 id="balance-payment-title">Pay Reservation Balance</h3>
+            <p>Customer: <strong id="balance-payment-customer"></strong></p>
+            <p>Balance due: <strong id="balance-payment-amount"></strong></p>
+            <p id="balance-payment-message" class="balance-payment-message" role="status"></p>
+            <form id="balance-payment-form">
+                <button type="submit" class="btn-sm btn-success">Pay</button>
+                <button type="button" class="btn-sm btn-secondary balance-payment-cancel">Cancel</button>
+            </form>
         </div>
     </div>
 </div>

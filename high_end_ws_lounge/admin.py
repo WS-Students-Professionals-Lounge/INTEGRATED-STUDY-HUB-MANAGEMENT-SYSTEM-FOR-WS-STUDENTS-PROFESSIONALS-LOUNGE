@@ -15,8 +15,8 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from database_fixed import AdminReservationForm, AttendanceLog, DailyReport, Membership, PaymentInfo, Reservation, \
-    Room, SoloPlan, TimeLog, User, UserActivityLog, WalkinForm, WalkinReservation, db, generate_customer_id, \
-    get_common_area_count, mail, socketio
+    ReservationBalancePayment, Room, SoloPlan, TimeLog, User, UserActivityLog, WalkinForm, WalkinReservation, db, \
+    generate_customer_id, mail, socketio
 from flask_mail import Message
 from werkzeug.utils import secure_filename
 from flask_login import current_user, login_required
@@ -228,13 +228,23 @@ def auto_start_due_reservations(now=None):
     """Start due confirmed reservations once using existing attendance records."""
     now = now or (datetime.utcnow() + timedelta(hours=8))
     due_reservations = Reservation.query.filter(
-        Reservation.status.in_(["Confirmed", "APPROVED", "CONFIRMED"]),
+        func.lower(Reservation.status).in_(["confirmed", "approved", "in_progress"]),
         Reservation.start_time <= now,
     ).all()
     changed = False
 
     for reservation in due_reservations:
+        if (
+            not reservation.is_open_time
+            and reservation.end_time is not None
+            and reservation.end_time <= now
+        ):
+            reservation.status = "Ended"
+            changed = True
+            continue
         if not reservation.user_id:
+            reservation.status = "Checked-in"
+            changed = True
             continue
 
         active_plan = SoloPlan.query.filter(
@@ -252,6 +262,8 @@ def auto_start_due_reservations(now=None):
 
         membership = Membership.query.filter_by(user_id=reservation.user_id).first()
         if not membership:
+            reservation.status = "Checked-in"
+            changed = True
             continue
 
         existing_session = AttendanceLog.query.filter(
@@ -263,8 +275,12 @@ def auto_start_due_reservations(now=None):
             changed = True
             continue
 
-        end_time = reservation.end_time or (reservation.start_time + timedelta(hours=1))
-        duration_hours = max(0.0, (end_time - reservation.start_time).total_seconds() / 3600)
+        end_time = reservation.end_time or (now + timedelta(hours=1))
+        duration_hours = max(0.0, (end_time - now).total_seconds() / 3600)
+        if duration_hours <= 0:
+            reservation.status = "Ended"
+            changed = True
+            continue
         db.session.add(AttendanceLog(
             membership_id=membership.id,
             check_in_time=now,
@@ -673,7 +689,6 @@ def _get_today_waiting_reservations(now):
     tomorrow_start = today_start + timedelta(days=1)
     waiting_statuses = [
         "confirmed",
-        "pending",
         "waiting",
         "approved",
     ]
@@ -687,6 +702,32 @@ def _get_today_waiting_reservations(now):
         waiting_query = waiting_query.filter(Reservation.deleted_at.is_(None))
 
     return waiting_query.order_by(Reservation.start_time.asc()).all()
+
+
+def _get_dashboard_revenue(today_start, today_end):
+    checked_out_revenue = (
+        db.session.query(func.coalesce(func.sum(Reservation.total_amount), 0))
+        .filter(
+            Reservation.end_time >= today_start,
+            Reservation.end_time < today_end,
+            Reservation.paid == True,
+            func.lower(Reservation.status) == "checked-out",
+        )
+        .scalar()
+        or 0
+    )
+    balance_payment_revenue = (
+        db.session.query(func.coalesce(func.sum(ReservationBalancePayment.amount), 0))
+        .join(Reservation, ReservationBalancePayment.reservation_id == Reservation.id)
+        .filter(
+            ReservationBalancePayment.paid_at >= today_start,
+            ReservationBalancePayment.paid_at < today_end,
+            func.lower(Reservation.status) != "checked-out",
+        )
+        .scalar()
+        or 0
+    )
+    return float(checked_out_revenue + balance_payment_revenue)
 
 
 @admin_bp.route("/dashboard")
@@ -767,17 +808,7 @@ def dashboard():
         .count()
     )
 
-    revenue_today = (
-        db.session.query(func.coalesce(func.sum(Reservation.total_amount), 0))
-        .filter(
-            Reservation.end_time >= today_start,
-            Reservation.end_time < today_end,
-            Reservation.paid == True,
-            Reservation.status == "Checked-Out",
-        )
-        .scalar()
-        or 0
-    )
+    revenue_today = _get_dashboard_revenue(today_start, today_end)
 
     updated = False
 
@@ -793,6 +824,8 @@ def dashboard():
         func.lower(Reservation.status).in_(["confirmed", "waiting"]),
     ).all()
     for res in due_reservations:
+        if str(res.status or "").strip().lower() == "on hold":
+            continue
         if res.start_time and res.start_time <= now:
             res.status = "IN_PROGRESS"
             check_in_val = getattr(res, 'check_in_time', None) or getattr(res, 'start_time', None) or getattr(res, 'created_at', None)
@@ -803,13 +836,18 @@ def dashboard():
 
     expired_sessions = Reservation.query.filter(
         Reservation.end_time <= now,
-        Reservation.status.in_(["Confirmed", "Walk-in"]),
+        func.lower(Reservation.status).in_([
+            "confirmed",
+            "walk-in",
+            "in_progress",
+            "checked-in",
+            "checked in",
+            "active",
+        ]),
         Reservation.is_open_time == False,
         Reservation.is_paused == False
     ).all()
     for res in expired_sessions:
-        if res.room_id in common_area_room_ids:
-            continue
         res.status = "Ended"
         db.session.add(res)
         updated = True
@@ -854,6 +892,11 @@ def dashboard():
     active_reservations = sorted(all_res, key=lambda x: (x.status != "Ended", x.end_time if x.end_time else datetime.max))
 
     pending_reservations = _get_today_waiting_reservations(now)
+    held_reservations = Reservation.query.filter(
+        func.lower(Reservation.status) == "on hold",
+        Reservation.start_time >= today_start,
+        Reservation.start_time < today_end,
+    ).order_by(Reservation.start_time.asc()).all()
 
     live_occupied_reservations = [
         r
@@ -909,6 +952,7 @@ def dashboard():
         incomplete_count=incomplete_count,
         active_reservations=active_reservations,
         pending_reservations=pending_reservations,
+        held_reservations=held_reservations,
         active_walkins=active_walkins,
         common_area_reservations=common_area_reservations,
         common_area_occupancy=common_area_occupancy,
@@ -1322,6 +1366,19 @@ def toggle_staff_status(user_id):
 @admin_bp.route("/walkin_checkin", methods=["POST"])
 @login_required
 def walkin_checkin_modal():
+    try:
+        return _process_walkin_checkin()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("Walk-in check-in failed unexpectedly")
+        message = "Unable to complete the walk-in check-in. Please try again."
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return jsonify({"success": False, "message": message}), 500
+        flash(message, "danger")
+        return redirect(url_for("admin.dashboard"))
+
+
+def _process_walkin_checkin():
     form = WalkinForm()
     rooms = Room.query.filter(
         ~Room.name.ilike('Test Room%'),
@@ -1335,7 +1392,10 @@ def walkin_checkin_modal():
     if form.validate_on_submit():
         room = Room.query.get(form.room_id.data)
         if not room:
-            flash("Please select a valid room.")
+            message = "Please select a valid room."
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return jsonify({"success": False, "message": message}), 400
+            flash(message, "danger")
             return redirect(url_for("admin.dashboard"))
 
         now = datetime.now()
@@ -1388,9 +1448,11 @@ def walkin_checkin_modal():
                 flash(conflict_message, "danger")
                 return redirect(url_for("admin.dashboard"))
         else:
-            #UPDATED CODE
-            if get_common_area_count() >= 70:
-                flash("Common Area has reached maximum capacity of 70 people.")
+            if get_common_area_dashboard_counts(now)[2] >= 70:
+                message = "Common Area is currently at full capacity."
+                if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                    return jsonify({"success": False, "message": message}), 400
+                flash(message, "danger")
                 return redirect(url_for("admin.dashboard"))
 
         # Generate customer_id based on room type
@@ -1398,7 +1460,9 @@ def walkin_checkin_modal():
         try:
             customer_id = generate_customer_id(room_type)
         except ValueError as e:
-            flash(str(e))
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return jsonify({"success": False, "message": str(e)}), 400
+            flash(str(e), "danger")
             return redirect(url_for("admin.dashboard"))
 
         total_from_js = request.form.get("total_price")
@@ -1438,7 +1502,7 @@ def walkin_checkin_modal():
             room.status = "unavailable"
 
         db.session.add(new_walkin)
-        db.session.commit()
+        db.session.flush()
 
         walkin_entry = WalkinReservation(
             reservation_id=new_walkin.id,
@@ -1470,6 +1534,16 @@ def walkin_checkin_modal():
 
     current_app.logger.debug("WalkinForm validation failed: %s", form.errors)
     current_app.logger.debug("walkin_checkin request.form at failure: %s", request.form.to_dict())
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        messages = [
+            message
+            for errors in form.errors.values()
+            for message in errors
+        ]
+        return jsonify({
+            "success": False,
+            "message": " ".join(messages) or "Please check the walk-in details and try again.",
+        }), 400
     return redirect(url_for("admin.dashboard"))
 
 
@@ -1879,8 +1953,13 @@ def admin_reservations_list():
         datetime.min.time(),
     )
     query = Reservation.query.filter(
-        func.lower(Reservation.status) == "confirmed",
-        Reservation.start_time >= tomorrow_start,
+        or_(
+            and_(
+                func.lower(Reservation.status) == "confirmed",
+                Reservation.start_time >= tomorrow_start,
+            ),
+            func.lower(Reservation.status) == "on hold",
+        )
     )
 
     if search:
@@ -2311,23 +2390,17 @@ def confirm_reservation(res_id):
         return redirect_response
 
     res = Reservation.query.get_or_404(res_id)
-    now = datetime.now()
+    now = datetime.now(pytz.timezone("Asia/Manila")).replace(tzinfo=None)
 
-    # Confirming a reservation secures the slot without creating a live
-    # checked-in session unless the scheduled time has actually arrived.
+    if (
+        str(res.status or "").strip().lower() == "on hold"
+        and round(max((res.total_amount or 0) - (res.amount_paid or 0), 0), 2) > 0
+    ):
+        flash("The remaining balance must be paid before this reservation can start.", "warning")
+        return redirect(url_for("admin.admin_reservations_list"))
+
     res.status = "CONFIRMED"
     res.check_in_time = None
-
-    if res.start_time:
-        if (
-            res.start_time.date() > now.date()
-            or (res.start_time.date() == now.date() and res.start_time.time() > now.time())
-        ):
-            res.status = "CONFIRMED"
-        elif res.start_time.date() == now.date() and res.start_time.time() <= now.time():
-            res.status = "IN_PROGRESS"
-            if not res.check_in_time:
-                res.check_in_time = now
 
     res.confirmation_notification_seen = False
     res.approved_by_id = current_user.id
@@ -2335,6 +2408,7 @@ def confirm_reservation(res_id):
         if res.start_time and res.start_time <= now <= (res.end_time or now):
             res.room.status = "unavailable"
     db.session.commit()
+    auto_start_due_reservations(now)
 
     today_date = datetime.now(pytz.timezone("Asia/Manila")).date()
     if res.start_time and res.start_time.date() == today_date:
@@ -2361,8 +2435,70 @@ def hold_reservation(res_id):
     if res.room and res.room.name.strip().lower() != "common area":
         res.room.status = "available"
     db.session.commit()
+    if res.user_id:
+        room_name = res.room.name if res.room else "Space"
+        socketio.emit(
+            "reservation_placed_on_hold",
+            {
+                "title": "Reservation Placed On Hold",
+                "message": (
+                    f"Your reservation for {room_name} has been accepted but placed "
+                    "on hold pending balance payment."
+                ),
+            },
+            room=f"member_{res.user_id}",
+        )
     flash(f"Reservation for {res.customer_name} has been placed on hold.")
     return redirect(url_for("admin.admin_reservations_list"))
+
+
+@admin_bp.route("/pay_reservation_balance/<int:res_id>", methods=["POST"])
+@login_required
+def pay_reservation_balance(res_id):
+    redirect_response = require_admin_or_staff_json()
+    if redirect_response:
+        return redirect_response
+
+    res = Reservation.query.get_or_404(res_id)
+    if str(res.status or "").strip().lower() != "on hold":
+        return jsonify({
+            "success": False,
+            "message": "Only reservations on hold can have their balance paid here.",
+        }), 400
+
+    total_amount = round(max(res.total_amount or 0, 0), 2)
+    amount_paid = round(max(res.amount_paid or 0, 0), 2)
+    balance_due = round(max(total_amount - amount_paid, 0), 2)
+    now = datetime.now(pytz.timezone("Asia/Manila")).replace(tzinfo=None)
+    res.amount_paid = total_amount
+    res.paid = True
+    if balance_due:
+        db.session.add(ReservationBalancePayment(
+            reservation_id=res.id,
+            amount=balance_due,
+            paid_at=now,
+        ))
+    res.status = "CONFIRMED"
+    if (
+        res.room
+        and res.room.name.strip().lower() != "common area"
+        and res.start_time
+        and res.start_time <= now <= (res.end_time or now)
+    ):
+        res.room.status = "unavailable"
+    db.session.commit()
+    auto_start_due_reservations(now)
+
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    today_end = today_start + timedelta(days=1)
+    return jsonify({
+        "success": True,
+        "message": f"Balance of ₱{balance_due:.2f} paid. The reservation is fully paid and confirmed.",
+        "balance_paid": balance_due,
+        "balance_due": 0,
+        "reservation_status": res.status,
+        "revenue_today": _get_dashboard_revenue(today_start, today_end),
+    })
 
 
 @admin_bp.route("/cancel_reservation/<int:res_id>", methods=["POST"])
@@ -2421,6 +2557,7 @@ def delete_reservation(res_id):
         }, room=f"member_{member_id}")
     elif member_id and reservation_status in {
         "confirmed",
+        "on hold",
         "in_progress",
         "checked-in",
         "paused",
@@ -3217,6 +3354,25 @@ def membership_check_out(user_or_membership_id):
     for solo in active_solos:
         solo.status = "checked_out"
         solo.updated_at = now_ph
+
+    if membership:
+        common_area_reservations = Reservation.query.join(Room).filter(
+            Reservation.user_id == target_user_id,
+            func.lower(func.trim(Room.name)) == "common area",
+            func.lower(Reservation.status).in_([
+                "confirmed",
+                "in_progress",
+                "checked-in",
+                "checked in",
+                "walk-in",
+                "active",
+                "occupied",
+            ]),
+            Reservation.start_time <= now_ph,
+        ).all()
+        for reservation in common_area_reservations:
+            reservation.status = "Ended"
+            reservation.end_time = now_ph
 
     db.session.commit()
 
