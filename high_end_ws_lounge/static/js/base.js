@@ -533,6 +533,15 @@ function initializeMemberSocketNotifications() {
             data.title || 'Reservation On Hold'
         );
     });
+
+    socket.on('plan_checked_out_by_admin', function(data) {
+        if (!data || !data.message) return;
+        showGlobalMemberToast(
+            data.message,
+            'info',
+            data.title || 'Session Checked Out'
+        );
+    });
 }
 
 document.addEventListener('DOMContentLoaded', initializeMemberSocketNotifications);

@@ -72,15 +72,7 @@
             </div>
 
             <div class="row">
-                <div class="col-md-3 d-flex flex-column gap-2 border-end pe-3">
-                    <form action="{{ url_for('main.checkout_solo_plan') }}" method="POST">
-                        <button id="btn-customer-checkout" type="submit" class="btn btn-danger w-100 py-2 fw-bold" onclick="return confirm('Are you sure you want to check out now?');">
-                            <i class="fas fa-sign-out-alt me-1"></i> Check Out
-                        </button>
-                    </form>
-                </div>
-
-                <div class="col-md-9 ps-4">
+                <div class="col-12">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <h6 class="fw-bold text-uppercase text-secondary m-0">SESSION ACTIVITY</h6>
                         <small class="text-muted" id="customer-visit-count-label">Current session visits: 1</small>

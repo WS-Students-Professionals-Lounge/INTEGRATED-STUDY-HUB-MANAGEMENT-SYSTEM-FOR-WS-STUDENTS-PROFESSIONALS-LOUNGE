@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard/member_dashboard.css') }}?v=11">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard/member_dashboard.css') }}?v=12">
 {% endblock %}
 
 {% block content %}
@@ -24,7 +24,7 @@
     <div class="dashboard-header">
         <div>
             <h1 class="page-title">Member Dashboard</h1>
-            <h2 id="welcomeText" class="welcome-text" aria-live="polite">Welcome Back, <span id="userName">{{ current_user.name }}</span>!</h2>
+            <h2 id="welcomeText" class="welcome-text" aria-live="polite">Welcome Back, <span id="userName" data-name="{{ current_user.name }}">{{ current_user.name }}!</span></h2>
         </div>
         <div id="dashboardClock" class="dashboard-clock" role="timer" aria-label="Current Time">00:00:00</div>
     </div>
@@ -750,7 +750,7 @@ document.addEventListener('DOMContentLoaded', function () {
 {% endblock %}
 
 {% block extra_js %}
-<script src="{{ url_for('static', filename='js/dashboard/member_dashboard.js') }}"></script>
+<script src="{{ url_for('static', filename='js/dashboard/member_dashboard.js') }}?v=2"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const countdown = document.getElementById('membershipExpiryCountdown');

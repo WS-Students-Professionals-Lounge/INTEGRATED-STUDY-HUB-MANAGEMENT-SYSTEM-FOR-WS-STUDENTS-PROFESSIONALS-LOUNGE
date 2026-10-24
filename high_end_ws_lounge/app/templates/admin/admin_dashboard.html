@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block extra_css %}
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin/admin_dashboard.css') }}?v=9">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin/admin_dashboard.css') }}?v=11">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/modals/admin_walkin_modal.css') }}?v=3">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/rooms.css') }}">
 {% endblock %}
@@ -30,7 +30,7 @@
     <div class="dashboard-header">
         <div>
             <h1>Admin Dashboard</h1>
-            <h2 id="adminWelcome" class="welcome-text">Welcome Back, <span id="adminUserName">{{ current_user.name }}</span>!</h2>
+            <h2 id="adminWelcome" class="welcome-text">Welcome Back, <span id="adminUserName" data-name="{{ current_user.name }}">{{ current_user.name }}!</span></h2>
         </div>
         <div id="dashboardClock" class="dashboard-clock">00:00:00</div>
     </div>
@@ -176,12 +176,11 @@
                             </div>
                         </div>
 
-                        <div class="room-card-footer card-action-row" style="display: flex; gap: 4px; align-items: center; justify-content: space-between; width: 100%; margin-top: 10px;">
+                        <div class="room-card-footer card-action-row common-area-action-buttons">
     
                             <!-- 1. ADD TIME BUTTON (Flex: 1 para pareho kalapad) -->
                             {% if not res.is_open_time %}
                                 <button class="btn-end-session add-time-btn" type="button"
-                                        style="flex: 1; height: 34px; padding: 0 4px; font-size: 11px; font-weight: bold; background-color: #22c55e; color: #fff; border: none; border-radius: 4px; cursor: pointer; white-space: nowrap; margin: 0;"
                                         data-reservation-id="{{ res.id }}"
                                         data-customer-name="{{ res.customer_name }}"
                                         data-room-name="{{ res.room.name if res.room else 'Common Area' }}"
@@ -196,24 +195,23 @@
                             {% if res.is_paused %}
                                 <form method="post" 
                                     action="{{ url_for('admin.toggle_pause_reservation', reservation_id=res.id) }}" 
-                                    style="flex: 1; margin: 0; padding: 0; display: flex;"
+                                    class="room-action-form"
                                     onsubmit="return confirm('Are you sure you want to resume the session of {{ res.customer_name }}?');">
                                     {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>{% endif %}
-                                    <button type="submit" class="btn-end-session" style="width: 100%; height: 34px; padding: 0 4px; font-size: 11px; font-weight: bold; background-color: #ffc107; color: #000; border: none; border-radius: 4px; cursor: pointer; white-space: nowrap; margin: 0;" title="Resume Session">▶ Resume</button>
+                                    <button type="submit" class="btn-end-session resume-btn" title="Resume Session">▶ Resume</button>
                                 </form>
                             {% else %}
                                 <form method="post" 
                                     action="{{ url_for('admin.toggle_pause_reservation', reservation_id=res.id) }}" 
-                                    style="flex: 1; margin: 0; padding: 0; display: flex;"
+                                    class="room-action-form"
                                     onsubmit="handlePauseTransition(event, this)">
                                     {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>{% endif %}
-                                    <button type="submit" class="btn-end-session pause-btn" style="width: 100%; height: 34px; padding: 0 4px; font-size: 11px; font-weight: bold; background-color: #6c757d; color: #fff; border: none; border-radius: 4px; cursor: pointer; white-space: nowrap; margin: 0;" title="Pause Session">⏸ Pause</button>
+                                    <button type="submit" class="btn-end-session pause-btn" title="Pause Session">⏸ Pause</button>
                                 </form>
                             {% endif %}
 
                             <!-- 3. END SESSION BUTTON (Flex: 1) -->
                             <button class="btn-end-session end-session-btn" type="button"
-                                    style="flex: 1; height: 34px; padding: 0 4px; font-size: 11px; font-weight: bold; background-color: #1e3a8a; color: #fff; border: none; border-radius: 4px; cursor: pointer; white-space: nowrap; margin: 0;"
                                     data-reservation-id="{{ res.id }}"
                                     data-customer-name="{{ res.customer_name }}"
                                     data-room-name="{{ res.room.name if res.room else 'Common Area' }}"
@@ -226,17 +224,15 @@
                             
                             <form method="post" 
                                 action="{{ url_for('admin.delete_reservation', res_id=res.id) }}" 
-                                class="confirm-delete-form" 
                                 onsubmit="return confirm('Do you confirm to delete or cancel this session now?');"
-                                style="margin: 0; padding: 0; display: inline-block;">
+                                class="confirm-delete-form room-action-form">
                                 
                                 {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>{% endif %}
                                 
                                 <button type="submit" 
                                         class="btn-end-session btn-error custom-x-btn" 
-                                        style="width: 34px !important; height: 34px !important; min-width: 34px !important; background-color: #dc3545 !important; border: none; border-radius: 4px; cursor: pointer; margin: 0; padding: 0; display: flex; align-items: center; justify-content: center; position: relative;" 
                                         title="Delete Reservation">
-                                    <span style="color: #ffffff !important; font-size: 18px !important; font-weight: bold !important; line-height: 1 !important; text-indent: 0 !important; visibility: visible !important;">✕</span>
+                                    <span>✕</span>
                                 </button>
                             </form>
                         </div>
@@ -336,12 +332,11 @@
 
                         <div class="room-card-footer room-card-footer-grouped">
                             {% if active_res %}
-                                <div class="card-action-row room-action-buttons" style="display: flex; gap: 4px; align-items: center; justify-content: space-between; width: 100%; margin-top: 10px;">
+                                <div class="card-action-row room-action-buttons">
                                     
                                     <!-- 1. ADD TIME BUTTON (Flex: 1) -->
                                     {% if not active_res.is_open_time %}
                                         <button class="btn-end-session add-time-btn" type="button"
-                                                style="flex: 1; height: 34px; padding: 0 4px; font-size: 11px; font-weight: bold; background-color: #22c55e; color: #fff; border: none; border-radius: 4px; cursor: pointer; white-space: nowrap; margin: 0;"
                                                 data-reservation-id="{{ active_res.id }}"
                                                 data-customer-name="{{ active_res.customer_name }}"
                                                 data-room-name="{{ room.name }}"
@@ -358,25 +353,24 @@
                                         <!-- RESUME FORM -->
                                         <form method="post" 
                                             action="{{ url_for('admin.toggle_pause_reservation', reservation_id=active_res.id) }}" 
-                                            style="flex: 1; margin: 0; padding: 0; display: flex;"
+                                            class="room-action-form"
                                             onsubmit="return confirm('Are you sure you want to resume the session of {{ active_res.customer_name }}?');">
                                             {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>{% endif %}
-                                            <button type="submit" class="btn-end-session" style="width: 100%; height: 34px; padding: 0 4px; font-size: 11px; font-weight: bold; background-color: #ffc107; color: #000; border: none; border-radius: 4px; cursor: pointer; white-space: nowrap; margin: 0;" title="Resume Session">▶ Resume</button>
+                                            <button type="submit" class="btn-end-session resume-btn" title="Resume Session">▶ Resume</button>
                                         </form>
                                     {% else %}
                                         <!-- PAUSE FORM -->
                                         <form method="post" 
                                             action="{{ url_for('admin.toggle_pause_reservation', reservation_id=active_res.id) }}" 
-                                            style="flex: 1; margin: 0; padding: 0; display: flex;"
+                                            class="room-action-form"
                                             onsubmit="handlePauseTransition(event, this)">
                                             {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>{% endif %}
-                                            <button type="submit" class="btn-end-session pause-btn" style="width: 100%; height: 34px; padding: 0 4px; font-size: 11px; font-weight: bold; background-color: #6c757d; color: #fff; border: none; border-radius: 4px; cursor: pointer; white-space: nowrap; margin: 0;" title="Pause Session">⏸ Pause</button>
+                                            <button type="submit" class="btn-end-session pause-btn" title="Pause Session">⏸ Pause</button>
                                         </form>
                                     {% endif %}
 
                                     <!-- 3. END SESSION BUTTON (Flex: 1) -->
                                     <button class="btn-end-session end-session-btn" type="button"
-                                            style="flex: 1; height: 34px; padding: 0 4px; font-size: 11px; font-weight: bold; background-color: #1e3a8a; color: #fff; border: none; border-radius: 4px; cursor: pointer; white-space: nowrap; margin: 0;"
                                             data-reservation-id="{{ active_res.id }}"
                                             data-customer-name="{{ active_res.customer_name }}"
                                             data-room-name="{{ room.name }}"
@@ -388,17 +382,15 @@
                                     
                                     <form method="post" 
                                         action="{{ url_for('admin.delete_reservation', res_id=active_res.id) }}" 
-                                        class="confirm-delete-form" 
                                         onsubmit="return confirm('Do you confirm to delete or cancel this session now?');"
-                                        style="margin: 0; padding: 0; display: inline-block;">
+                                        class="confirm-delete-form room-action-form">
                                         
                                         {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>{% endif %}
                                         
                                         <button type="submit" 
                                                 class="btn-end-session btn-error custom-x-btn" 
-                                                style="width: 34px !important; height: 34px !important; min-width: 34px !important; background-color: #dc3545 !important; border: none; border-radius: 4px; cursor: pointer; margin: 0; padding: 0; display: flex; align-items: center; justify-content: center; position: relative;" 
                                                 title="Delete Reservation">
-                                            <span style="color: #ffffff !important; font-size: 18px !important; font-weight: bold !important; line-height: 1 !important; text-indent: 0 !important; visibility: visible !important;">✕</span>
+                                            <span>✕</span>
                                         </button>
                                     </form>
                                 </div>
@@ -825,6 +817,6 @@ document.addEventListener('DOMContentLoaded', function () {
 {% endblock %}
 
 {% block extra_js %}
-    <script src="{{ url_for('static', filename='js/admin/admin_dashboard.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/admin/admin_dashboard.js') }}?v=2"></script>
     <script src="{{ url_for('static', filename='js/modals/admin_walkin_modal.js') }}"></script>
 {% endblock %}

@@ -223,7 +223,7 @@
                                     {% if member.membership and member.membership.is_checked_in %}
                                         <button type="button" class="btn renew-btn" style="font-weight: bold; background-color: #153d70; color: white; opacity: 0.65; cursor: not-allowed;" disabled>Renew Membership</button>
                                     {% else %}
-                                        <button class="btn renew-btn btn-action" type="button" onclick="renewMember('{{ member.id }}')" data-user-id="{{ member.id }}" style="font-weight: bold; background-color: #153d70; color: white; cursor: pointer;">Renew Membership</button>
+                                        <button class="btn renew-btn btn-action" type="button" data-user-id="{{ member.id }}" style="font-weight: bold; background-color: #153d70; color: white; cursor: pointer;">Renew Membership</button>
                                     {% endif %}
 
                                     <button class="btn-deactivate" type="button" data-user-id="{{ member.id }}">Deactivate</button>
@@ -400,75 +400,6 @@
         });
     }
 
-    function renewMember(memberId) {
-        if (!memberId) return;
-
-        fetch('/admin/renew_member', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ user_id: memberId })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.status === 'success') {
-                showStaticFlashBanner(data.message, 'success');
-            } else {
-                showStaticFlashBanner(data.message || 'Renewal failed', 'danger');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            showStaticFlashBanner('An error occurred during renewal.', 'danger');
-        });
-    }
-
-    function showStaticFlashBanner(message, category) {
-        let container = document.getElementById('flash-message-container');
-        if (!container) {
-            container = document.createElement('div');
-            container.id = 'flash-message-container';
-            container.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 9999; max-width: 480px; width: 90%;';
-            document.body.appendChild(container);
-        }
-        container.innerHTML = '';
-
-        const isSuccess = category === 'success';
-        const alertBox = document.createElement('div');
-        alertBox.className = `admin-alert-card alert-${isSuccess ? 'success' : 'danger'}`;
-
-        const iconBadge = document.createElement('span');
-        iconBadge.className = 'admin-alert-icon';
-        iconBadge.setAttribute('aria-hidden', 'true');
-        const icon = document.createElement('i');
-        icon.className = `fas ${isSuccess ? 'fa-circle-check' : 'fa-circle-exclamation'}`;
-        iconBadge.appendChild(icon);
-
-        const content = document.createElement('div');
-        content.className = 'admin-alert-content';
-        const title = document.createElement('strong');
-        title.className = 'admin-alert-title';
-        title.textContent = isSuccess ? 'Update complete' : 'Action needed';
-        const text = document.createElement('span');
-        text.className = 'admin-alert-text';
-        text.textContent = String(message || '');
-        content.append(title, text);
-
-        const closeButton = document.createElement('button');
-        closeButton.type = 'button';
-        closeButton.className = 'admin-alert-close';
-        closeButton.setAttribute('aria-label', 'Close notification');
-        closeButton.textContent = '\u00d7';
-        closeButton.addEventListener('click', closeBannerAndRefresh);
-        alertBox.append(iconBadge, content, closeButton);
-
-        container.appendChild(alertBox);
-    }
-
-    function closeBannerAndRefresh() {
-        location.reload();
-    }
 </script>
 
 <!-- Receipt / Records Modals -->
@@ -493,6 +424,38 @@
         <div class="modal-body" id="recordsModalBody">
             <div class="records-empty-state">
                 <p>Select a member to view attendance history.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="renewMemberModal" tabindex="-1" aria-labelledby="renewMemberModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="renewMemberModalLabel">
+                    <i class="fas fa-sync-alt me-2" aria-hidden="true"></i>Renew Membership
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center py-3">
+                <p class="mb-1 text-muted">Member Name:</p>
+                <h6 id="renew-member-name" class="fw-bold mb-3">-</h6>
+
+                <p class="mb-1 text-muted">Plan to Renew:</p>
+                <h6 id="renew-plan-name" class="fw-bold text-primary mb-3">-</h6>
+
+                <div class="p-3 bg-light rounded mb-3">
+                    <span class="text-muted d-block small">Renewal Amount Due:</span>
+                    <span id="renew-plan-price" class="fs-4 fw-bold text-success">₱0.00</span>
+                </div>
+                <p class="small text-muted mb-0">Confirm only after receiving the in-person payment.</p>
+            </div>
+            <div class="modal-footer d-flex justify-content-between">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" id="confirm-renew-pay-btn" class="btn btn-success btn-sm" disabled>
+                    <i class="fas fa-check-circle me-1" aria-hidden="true"></i>Pay &amp; Confirm
+                </button>
             </div>
         </div>
     </div>

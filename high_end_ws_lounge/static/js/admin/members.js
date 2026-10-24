@@ -830,38 +830,91 @@ document.addEventListener('DOMContentLoaded', function() {
         return data;
     }
 
-        document.querySelectorAll('.btn-renew').forEach((btn) => {
+    const renewalModalElement = document.getElementById('renewMemberModal');
+    const renewalConfirmButton = document.getElementById('confirm-renew-pay-btn');
+    let renewalQuote = null;
+
+    document.querySelectorAll('.renew-btn:not(:disabled)').forEach((btn) => {
         btn.addEventListener('click', async () => {
             const userId = btn.getAttribute('data-user-id');
-            if (!userId) return;
+            if (!userId || !renewalModalElement || !renewalConfirmButton) return;
 
-            const prevText = btn.innerText;
+            const previousText = btn.textContent;
             btn.disabled = true;
-            btn.innerText = 'Renewing...';
+            btn.textContent = 'Loading...';
 
             try {
-                await postJson('/admin/renew_member', { user_id: Number(userId) });
-                showAlert('Membership renewed successfully.', 'success');
+                const response = await fetch(
+                    `/admin/renew_member_details/${encodeURIComponent(userId)}`
+                );
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || data.status !== 'success') {
+                    throw new Error(data.message || 'Unable to load renewal details.');
+                }
 
-                // 1. I-save sa localStorage para sa tab navigation script
-                localStorage.setItem("activeMemberTab", "list");
-
-                // 2. Tadtaron ang tab parameter para exact gid sa HTML ('list')
-                const currentUrl = new URL(window.location.href);
-                currentUrl.searchParams.set('tab', 'list');
-
-                // 3. Mag-hulat sang 500ms para mabasa sang user ang success toast/alert
-                setTimeout(() => {
-                    window.location.href = currentUrl.toString();
-                }, 500);
-
+                renewalQuote = {
+                    userId: Number(userId),
+                    amountCents: Math.round(Number(data.price) * 100),
+                    renewalToken: data.renewal_token,
+                };
+                document.getElementById('renew-member-name').textContent = data.member_name;
+                document.getElementById('renew-plan-name').textContent = data.plan_name;
+                document.getElementById('renew-plan-price').textContent =
+                    `₱${Number(data.price).toLocaleString('en-PH', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                    })}`;
+                renewalConfirmButton.disabled = false;
+                bootstrap.Modal.getOrCreateInstance(renewalModalElement).show();
             } catch (err) {
-                showAlert(err && err.message ? err.message : 'Renew failed.', 'error');
+                showAlert(err.message || 'Unable to load renewal details.', 'error');
+            } finally {
                 btn.disabled = false;
-                btn.innerText = prevText;
+                btn.textContent = previousText;
             }
         });
     });
+
+    if (renewalConfirmButton && renewalModalElement) {
+        renewalConfirmButton.addEventListener('click', async () => {
+            if (!renewalQuote) return;
+
+            renewalConfirmButton.disabled = true;
+            renewalConfirmButton.textContent = 'Processing...';
+            try {
+                const data = await postJson('/admin/renew_member', {
+                    user_id: renewalQuote.userId,
+                    paid: true,
+                    amount_cents: renewalQuote.amountCents,
+                    renewal_token: renewalQuote.renewalToken,
+                });
+                if (data.status !== 'success') {
+                    throw new Error(data.message || 'Renewal failed.');
+                }
+
+                bootstrap.Modal.getOrCreateInstance(renewalModalElement).hide();
+                showAlert(data.message || 'Membership renewed successfully.', 'success');
+                localStorage.setItem('activeMemberTab', 'list');
+                const currentUrl = new URL(window.location.href);
+                currentUrl.searchParams.set('tab', 'list');
+                setTimeout(() => {
+                    window.location.href = currentUrl.toString();
+                }, 500);
+            } catch (err) {
+                showAlert(err.message || 'Renewal failed.', 'error');
+                renewalConfirmButton.disabled = false;
+                renewalConfirmButton.innerHTML =
+                    '<i class="fas fa-check-circle me-1" aria-hidden="true"></i>Pay &amp; Confirm';
+            }
+        });
+
+        renewalModalElement.addEventListener('hidden.bs.modal', () => {
+            renewalQuote = null;
+            renewalConfirmButton.disabled = true;
+            renewalConfirmButton.innerHTML =
+                '<i class="fas fa-check-circle me-1" aria-hidden="true"></i>Pay &amp; Confirm';
+        });
+    }
 
     document.querySelectorAll('.btn-deactivate').forEach((btn) => {
         btn.addEventListener('click', async () => {

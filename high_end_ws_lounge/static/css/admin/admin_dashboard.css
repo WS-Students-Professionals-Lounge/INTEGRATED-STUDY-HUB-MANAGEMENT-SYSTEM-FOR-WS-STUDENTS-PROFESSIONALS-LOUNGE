@@ -1331,6 +1331,235 @@ html[data-theme="dark"] .occupant-item {
     border-left-color: #334155;
 }
 
+.admin-dashboard-wrapper {
+    --action-add-bg: #e7f0fb;
+    --action-add-hover: #d9e7f6;
+    --action-add-border: #c6d8eb;
+    --action-add-text: #234f7d;
+    --action-pause-bg: #f5edda;
+    --action-pause-hover: #eee2c3;
+    --action-pause-border: #e4d5ad;
+    --action-pause-text: #6f5316;
+    --action-end-bg: #f8e8e7;
+    --action-end-hover: #f0d8d6;
+    --action-end-border: #e8c9c6;
+    --action-end-text: #8f3532;
+}
+
+html[data-theme="dark"] .admin-dashboard-wrapper {
+    --action-add-bg: #20364d;
+    --action-add-hover: #29435e;
+    --action-add-border: #36536f;
+    --action-add-text: #c0daf3;
+    --action-pause-bg: #3a3221;
+    --action-pause-hover: #49402b;
+    --action-pause-border: #5a4c2c;
+    --action-pause-text: #e3d19b;
+    --action-end-bg: #39272d;
+    --action-end-hover: #493238;
+    --action-end-border: #624047;
+    --action-end-text: #e6b2b5;
+}
+
+.admin-dashboard-wrapper .status-pill {
+    border: 1px solid transparent;
+    font-size: 0.72rem;
+    font-weight: 650;
+    letter-spacing: 0.02em;
+}
+
+.admin-dashboard-wrapper .status-pill.occupied {
+    border-color: #f0d3d1;
+    background: #fbeceb;
+    color: #963f3b;
+}
+
+.admin-dashboard-wrapper .status-pill.available {
+    border-color: #d4e8da;
+    background: #eaf4ed;
+    color: #356849;
+}
+
+.admin-dashboard-wrapper .status-text.occupied {
+    color: #963f3b;
+}
+
+.admin-dashboard-wrapper .status-text.available {
+    color: #356849;
+}
+
+.admin-dashboard-wrapper .status-pill.pending {
+    border-color: #eadfbe;
+    background: #f6f0df;
+    color: #75602b;
+}
+
+html[data-theme="dark"] .admin-dashboard-wrapper .status-pill.occupied {
+    border-color: #624047;
+    background: #39272d;
+    color: #e6b2b5;
+}
+
+html[data-theme="dark"] .admin-dashboard-wrapper .status-pill.available {
+    border-color: #365344;
+    background: #22372d;
+    color: #add2b7;
+}
+
+html[data-theme="dark"] .admin-dashboard-wrapper .status-text.occupied {
+    color: #e6b2b5;
+}
+
+html[data-theme="dark"] .admin-dashboard-wrapper .status-text.available {
+    color: #add2b7;
+}
+
+html[data-theme="dark"] .admin-dashboard-wrapper .status-pill.pending {
+    border-color: #5a4c2c;
+    background: #3a3221;
+    color: #e3d19b;
+}
+
+.admin-dashboard-wrapper .common-area-action-buttons,
+.admin-dashboard-wrapper .room-action-buttons {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    align-items: stretch !important;
+    gap: 6px !important;
+    width: 100% !important;
+    margin-top: 10px !important;
+}
+
+.admin-dashboard-wrapper .common-area-action-buttons > form,
+.admin-dashboard-wrapper .room-action-buttons > form,
+.admin-dashboard-wrapper .room-action-form {
+    display: flex !important;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+}
+
+.admin-dashboard-wrapper .common-area-action-buttons > .btn-end-session,
+.admin-dashboard-wrapper .room-action-buttons > .btn-end-session,
+.admin-dashboard-wrapper .common-area-action-buttons > form > .btn-end-session,
+.admin-dashboard-wrapper .room-action-buttons > form > .btn-end-session {
+    display: inline-flex;
+    width: 100% !important;
+    min-width: 0;
+    min-height: 38px !important;
+    height: 38px !important;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 8px !important;
+    border: 1px solid transparent !important;
+    border-radius: 7px !important;
+    font-size: 0.72rem !important;
+    font-weight: 650 !important;
+    line-height: 1.15;
+    text-align: center;
+    text-decoration: none;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+    box-shadow: none;
+    transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+
+.admin-dashboard-wrapper .common-area-action-buttons > form > .btn-end-session:not(.custom-x-btn),
+.admin-dashboard-wrapper .room-action-buttons > form > .btn-end-session:not(.custom-x-btn) {
+    border-color: var(--action-pause-border) !important;
+    background: var(--action-pause-bg) !important;
+    color: var(--action-pause-text) !important;
+}
+
+.admin-dashboard-wrapper .common-area-action-buttons > .btn-end-session.add-time-btn,
+.admin-dashboard-wrapper .room-action-buttons > .btn-end-session.add-time-btn,
+.admin-dashboard-wrapper .common-area-action-buttons > form > .btn-end-session.add-time-btn,
+.admin-dashboard-wrapper .room-action-buttons > form > .btn-end-session.add-time-btn {
+    border-color: var(--action-add-border) !important;
+    background: var(--action-add-bg) !important;
+    color: var(--action-add-text) !important;
+}
+
+.admin-dashboard-wrapper .common-area-action-buttons > .btn-end-session.end-session-btn,
+.admin-dashboard-wrapper .room-action-buttons > .btn-end-session.end-session-btn,
+.admin-dashboard-wrapper .common-area-action-buttons > form > .btn-end-session.end-session-btn,
+.admin-dashboard-wrapper .room-action-buttons > form > .btn-end-session.end-session-btn {
+    border-color: var(--action-end-border) !important;
+    background: var(--action-end-bg) !important;
+    color: var(--action-end-text) !important;
+}
+
+.admin-dashboard-wrapper .common-area-action-buttons > form > .custom-x-btn,
+.admin-dashboard-wrapper .room-action-buttons > form > .custom-x-btn {
+    border-color: var(--action-end-border) !important;
+    background: var(--action-end-bg) !important;
+    color: var(--action-end-text) !important;
+    font-size: 1rem !important;
+}
+
+.admin-dashboard-wrapper .common-area-action-buttons > form > .custom-x-btn,
+.admin-dashboard-wrapper .room-action-buttons > form > .custom-x-btn {
+    min-height: 38px !important;
+    height: 38px !important;
+    padding: 6px 8px !important;
+}
+
+.admin-dashboard-wrapper .common-area-action-buttons > form > .custom-x-btn span,
+.admin-dashboard-wrapper .room-action-buttons > form > .custom-x-btn span {
+    color: inherit;
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.admin-dashboard-wrapper .common-area-action-buttons .add-time-btn:hover,
+.admin-dashboard-wrapper .room-action-buttons .add-time-btn:hover {
+    background: var(--action-add-hover) !important;
+}
+
+.admin-dashboard-wrapper .common-area-action-buttons > form > .btn-end-session:not(.custom-x-btn):hover,
+.admin-dashboard-wrapper .room-action-buttons > form > .btn-end-session:not(.custom-x-btn):hover {
+    background: var(--action-pause-hover) !important;
+}
+
+.admin-dashboard-wrapper .common-area-action-buttons .end-session-btn:hover,
+.admin-dashboard-wrapper .room-action-buttons .end-session-btn:hover {
+    background: var(--action-end-hover) !important;
+}
+
+.admin-dashboard-wrapper .common-area-action-buttons > form > .custom-x-btn:hover,
+.admin-dashboard-wrapper .room-action-buttons > form > .custom-x-btn:hover {
+    background: var(--action-end-hover) !important;
+}
+
+.admin-dashboard-wrapper .info-row:has(.timer-text) {
+    align-items: flex-start;
+    flex-wrap: wrap;
+}
+
+.admin-dashboard-wrapper .info-row:has(.timer-text) .timer-text {
+    min-width: 0;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: normal;
+    text-align: right;
+}
+
+@media (max-width: 767px) {
+    .admin-dashboard-wrapper .info-row:has(.timer-text) {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 3px;
+    }
+
+    .admin-dashboard-wrapper .info-row:has(.timer-text) .timer-text {
+        width: 100%;
+        text-align: left;
+    }
+}
+
 .waiting-items {
     max-height: 220px;
     overflow-y: auto;
@@ -1768,11 +1997,11 @@ html[data-theme="dark"] .admin-dashboard-wrapper .common-area-active-cards-scrol
         height: auto !important;
         padding: 5px 3px !important;
         flex: initial !important;
-        white-space: nowrap !important;
+        white-space: normal !important;
         font-size: 0.62rem !important;
         line-height: 1.15 !important;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        overflow-wrap: anywhere;
+        text-overflow: clip;
     }
 
     .admin-dashboard-wrapper .room-action-buttons > form,

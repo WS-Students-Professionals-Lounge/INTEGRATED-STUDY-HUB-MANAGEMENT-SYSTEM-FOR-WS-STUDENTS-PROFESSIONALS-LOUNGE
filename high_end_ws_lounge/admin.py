@@ -3,6 +3,7 @@ admin.py
 Contains the admin blueprint with all admin routes and daily report helpers.
 """
 import os
+import secrets
 from io import BytesIO
 from datetime import datetime, timezone, timedelta
 import pytz
@@ -491,6 +492,24 @@ def get_or_create_daily_report(report_date):
     return report
 
 
+def _sum_membership_renewal_revenue(start, end):
+    payment_logs = UserActivityLog.query.filter(
+        UserActivityLog.activity_time >= start,
+        UserActivityLog.activity_time < end,
+        UserActivityLog.activity_type.like("renewal:%"),
+    ).all()
+    total_cents = 0
+    for payment_log in payment_logs:
+        try:
+            total_cents += int(payment_log.activity_type.rsplit(":", 1)[1])
+        except (ValueError, IndexError):
+            current_app.logger.warning(
+                "Ignoring malformed membership renewal revenue log %s",
+                payment_log.id,
+            )
+    return total_cents / 100
+
+
 def ensure_address_column():
     try:
         inspector = inspect(db.engine)
@@ -539,7 +558,9 @@ def refresh_daily_report(report_date):
         or 0
     )
 
-    report.total_timelogged = total_revenue
+    report.total_timelogged = (
+        total_revenue + _sum_membership_renewal_revenue(start, end)
+    )
     ph_tz = ZoneInfo("Asia/Manila")
     report.generated_at = datetime.now(ph_tz)
 
@@ -727,7 +748,11 @@ def _get_dashboard_revenue(today_start, today_end):
         .scalar()
         or 0
     )
-    return float(checked_out_revenue + balance_payment_revenue)
+    return float(
+        checked_out_revenue
+        + balance_payment_revenue
+        + _sum_membership_renewal_revenue(today_start, today_end)
+    )
 
 
 @admin_bp.route("/dashboard")
@@ -2084,11 +2109,85 @@ def reject_membership(req_id):
     return redirect(url_for("admin.members", tab="requests"))
 
 
+_MEMBERSHIP_RENEWAL_PRICES = {
+    "INDIVIDUAL RATE": 35.00,
+    "INDIVIDUAL RATE (4HRS)": 100.00,
+    "DAY/NIGHT PASS": 200.00,
+    "WEEKLY PASS (DAY/NIGHT)": 800.00,
+    "WEEKLY PASS (24HRS)": 1000.00,
+    "MONTHLY PASS (DAY/NIGHT)": 1999.00,
+    "MONTHLY PASS (24HRS)": 2500.00,
+    "WORKSTATION (24HRS)": 3000.00,
+}
+
+
+def _get_member_renewal_details(user):
+    membership = Membership.query.filter_by(user_id=user.id).first()
+    latest_plan = (
+        SoloPlan.query.filter_by(user_id=user.id)
+        .order_by(SoloPlan.id.desc())
+        .first()
+    )
+    plan_name = (
+        (membership.plan_name if membership else None)
+        or (latest_plan.plan_name if latest_plan else None)
+        or "INDIVIDUAL RATE"
+    ).strip()
+    price = _MEMBERSHIP_RENEWAL_PRICES.get(plan_name.upper())
+    if price is None:
+        return membership, latest_plan, plan_name, None
+
+    plan = (
+        SoloPlan.query.filter(
+            SoloPlan.user_id == user.id,
+            func.lower(SoloPlan.plan_name) == plan_name.lower(),
+        )
+        .order_by(SoloPlan.id.desc())
+        .first()
+    )
+    return membership, plan, plan_name, price
+
+
+@admin_bp.route("/renew_member_details/<int:user_id>", methods=["GET"])
+@login_required
+def renew_member_details(user_id):
+    redirect_response = require_admin_or_staff_json()
+    if redirect_response:
+        return redirect_response
+
+    user = User.query.get_or_404(user_id)
+    membership, _, plan_name, price = _get_member_renewal_details(user)
+    if not membership:
+        return jsonify({"status": "error", "message": "No membership record found."}), 404
+    if membership.is_checked_in:
+        return jsonify({
+            "status": "error",
+            "message": "Cannot renew while customer is checked in. Please check out first.",
+        }), 400
+    if price is None:
+        return jsonify({
+            "status": "error",
+            "message": f"No renewal price is configured for {plan_name}.",
+        }), 400
+
+    return jsonify({
+        "status": "success",
+        "member_name": user.name or "Member",
+        "plan_name": plan_name,
+        "price": price,
+        "renewal_token": secrets.token_hex(8),
+    })
+
+
 @admin_bp.route("/renew_member", methods=["POST"])
 @admin_bp.route("/admin/renew_member", methods=["POST"])
 @login_required
 def renew_member():
     try:
+        redirect_response = require_admin_or_staff_json()
+        if redirect_response:
+            return redirect_response
+
         data = request.get_json(silent=True) or request.form or {}
         user_id = data.get("user_id")
 
@@ -2105,7 +2204,9 @@ def renew_member():
                 "message": "Member not found."
             }), 404
 
-        membership = Membership.query.filter_by(user_id=user.id).first()
+        membership, latest_plan, plan_name, renewal_price = (
+            _get_member_renewal_details(user)
+        )
 
         if not membership:
             return jsonify({
@@ -2119,12 +2220,53 @@ def renew_member():
                 "message": "Cannot renew while customer is checked in. Please check out first."
             }), 400
 
-        latest_plan = (
-            SoloPlan.query
-            .filter_by(user_id=user.id)
-            .order_by(SoloPlan.id.desc())
-            .first()
+        if renewal_price is None:
+            return jsonify({
+                "status": "error",
+                "message": f"No renewal price is configured for {plan_name}.",
+            }), 400
+
+        if data.get("paid") is not True:
+            return jsonify({
+                "status": "error",
+                "message": "Confirm in-person payment before renewing the membership.",
+            }), 400
+
+        try:
+            amount_cents = int(data.get("amount_cents"))
+        except (TypeError, ValueError):
+            return jsonify({
+                "status": "error",
+                "message": "A valid confirmed payment amount is required.",
+            }), 400
+
+        expected_amount_cents = int(round(renewal_price * 100))
+        if amount_cents != expected_amount_cents:
+            return jsonify({
+                "status": "error",
+                "message": "The confirmed payment amount does not match the plan price.",
+            }), 400
+
+        renewal_token = str(data.get("renewal_token") or "")
+        if (
+            len(renewal_token) != 16
+            or any(character not in "0123456789abcdef" for character in renewal_token)
+        ):
+            return jsonify({
+                "status": "error",
+                "message": "A valid renewal confirmation token is required.",
+            }), 400
+
+        activity_type = (
+            f"renewal:{renewal_token}:{user.id}:{expected_amount_cents}"
         )
+        if UserActivityLog.query.filter_by(activity_type=activity_type).first():
+            return jsonify({
+                "status": "success",
+                "success": True,
+                "message": "This renewal payment was already processed.",
+                "hours_left": membership.hours_left,
+            }), 200
 
         now_ph = datetime.utcnow() + timedelta(hours=8)
 
@@ -2140,12 +2282,9 @@ def renew_member():
             "ACTIVE PLAN": 720.0
         }
 
-        plan_name = membership.plan_name or "INDIVIDUAL RATE"
         fresh_hours = plan_hours_map.get(plan_name.strip().upper(), 1.0)
 
         if latest_plan:
-            plan_name = latest_plan.plan_name or plan_name
-
             extracted = (
                 getattr(latest_plan, "hours", None)
                 or getattr(latest_plan, "duration_hours", None)
@@ -2192,6 +2331,27 @@ def renew_member():
             latest_plan.renewed_at = now_ph
             latest_plan.renewal_notification_seen = False
             latest_plan.updated_at = now_ph
+        else:
+            latest_plan = SoloPlan(
+                user_id=user.id,
+                approved_by_id=current_user.id,
+                plan_name=plan_name,
+                status="approved",
+                approved_at=now_ph,
+                renewed_at=now_ph,
+                expiry_date=now_ph + timedelta(hours=fresh_hours),
+                is_paused=False,
+                accumulated_paused_seconds=0,
+                renewal_notification_seen=False,
+            )
+            db.session.add(latest_plan)
+
+        db.session.add(UserActivityLog(
+            user_id=user.id,
+            activity_type=activity_type,
+            activity_time=now_ph,
+            ip_address=request.remote_addr or "unknown",
+        ))
 
         if membership:
             AttendanceLog.query.filter_by(
@@ -2206,6 +2366,7 @@ def renew_member():
 
         return jsonify({
             "status": "success",
+            "success": True,
             "message": "Membership renewed successfully! Please click Check In to start.",
             "hours_left": fresh_hours
         }), 200
@@ -3294,6 +3455,7 @@ def membership_check_out(user_or_membership_id):
         SoloPlan.user_id == target_user_id,
         SoloPlan.status.ilike("approved")
     ).all()
+    had_ongoing_plan = bool(active_solos or (membership and membership.is_checked_in))
 
     now_ph = datetime.utcnow() + timedelta(hours=8)
 
@@ -3306,6 +3468,7 @@ def membership_check_out(user_or_membership_id):
         ).first()
 
         if current_log:
+            had_ongoing_plan = True
             # FIX: Store the exact termination timestamp before committing the session close.
             session_end_time = now_ph
             for field_name in ("ended_at", "actual_end_time", "check_out_time"):
@@ -3377,6 +3540,17 @@ def membership_check_out(user_or_membership_id):
     db.session.commit()
 
     user_name = membership.user.name if (membership and membership.user) else "User"
+    if target_user_id and had_ongoing_plan:
+        socketio.emit(
+            "plan_checked_out_by_admin",
+            {
+                "title": "Session Checked Out",
+                "message": (
+                    "Your active lounge session has been checked out by the admin."
+                ),
+            },
+            room=f"member_{target_user_id}",
+        )
 
     return jsonify({
         "status": "success",

@@ -110,7 +110,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Welcome typewriter effect (mirror of member dashboard)
     const adminNameSpan = document.getElementById('adminUserName');
     if (adminNameSpan) {
-        const fullText = adminNameSpan.textContent;
+        const fullText = `${adminNameSpan.dataset.name || adminNameSpan.textContent.replace(/!$/, '')}!`;
         adminNameSpan.textContent = '';
         let i = 0;
         let isDeleting = false;
@@ -351,7 +351,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     const totalValue = overtimeTotalRow.querySelector('.info-value');
                     if (totalValue) totalValue.textContent = `₱${(baseTotal + overtimeFee).toFixed(2)}`;
                 } else {
-                    statusPill.textContent = 'Occupied';
+                    const occupied = Boolean(card.dataset.sessionId);
+                    statusPill.textContent = occupied ? 'Occupied' : 'Available';
+                    statusPill.classList.toggle('occupied', occupied);
+                    statusPill.classList.toggle('available', !occupied);
                     statusPill.style.removeProperty('background');
                     statusPill.style.removeProperty('color');
                     statusPill.style.removeProperty('font-weight');

@@ -78,7 +78,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // 2. Typewriter Effect
     const nameSpan = document.getElementById('userName');
     if (nameSpan) {
-        const fullText = nameSpan.textContent; 
+        const fullText = `${nameSpan.dataset.name || nameSpan.textContent.replace(/!$/, '')}!`;
         nameSpan.textContent = '';
         let i = 0;
         let isDeleting = false;

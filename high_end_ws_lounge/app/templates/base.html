@@ -63,8 +63,8 @@
                     {% if current_user.role == 'member' %}
                         {% if unread_membership_notification_count > 0 or member_session_notification_active %}
                             <span id="member-dashboard-notif-badge"
-                                class="badge rounded-pill bg-danger ms-auto">
-                                data-member-id="{{ current_user.id }}"
+                                class="badge rounded-pill bg-danger ms-auto"
+                                data-member-id="{{ current_user.id }}">
                                 {{ unread_membership_notification_count + (1 if member_session_notification_active else 0) }}
                             </span>
                         {% else %}

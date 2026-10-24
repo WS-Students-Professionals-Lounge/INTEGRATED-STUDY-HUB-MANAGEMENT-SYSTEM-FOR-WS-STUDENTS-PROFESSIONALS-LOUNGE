@@ -1,4 +1,4 @@
-﻿/* =========================================
+/* =========================================
    MEMBER DASHBOARD - Figma Matched Design
    ========================================= */
 
@@ -672,6 +672,36 @@ body {
 
 .notification-close-btn:hover {
     color: #dc3545;
+}
+
+@media (max-width: 576px) {
+    #activeReservationCard {
+        box-sizing: border-box;
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    #activeReservationCard .membership-header {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    #activeReservationCard .membership-header > div {
+        flex: 1 1 160px;
+        min-width: 0;
+    }
+
+    #activeReservationCard .membership-badge {
+        flex: 0 1 auto;
+        max-width: 100%;
+        padding: 4px 8px;
+        font-size: 0.75rem;
+        white-space: nowrap;
+    }
 }
 
 @media (max-width: 767px) {
