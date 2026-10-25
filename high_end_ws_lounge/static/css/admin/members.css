@@ -1827,3 +1827,126 @@ html[data-theme="dark"] .member-history-layout h4 {
         transition: opacity 240ms ease, visibility 0s;
     }
 }
+
+html[data-theme="dark"] body.admin-notification-theme .admin-members-page .member-list-card {
+    border-color: #334155 !important;
+    background: #1e293b !important;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+    color: #cbd5e1 !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .admin-members-page .member-card-header {
+    border-bottom-color: #334155 !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .admin-members-page .member-name {
+    color: #f8fafc !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .admin-members-page :is(
+    .member-sub-info,
+    .member-contact-stack,
+    .member-contact-stack span,
+    .member-header-plan,
+    .member-header-plan > span,
+    .member-id-tag,
+    .stat-label,
+    .member-activity-log-details,
+    .member-activity-log-time,
+    .member-activity-log-empty
+) {
+    color: #cbd5e1 !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .admin-members-page .member-header-plan strong.status-checkin,
+html[data-theme="dark"] body.admin-notification-theme .admin-members-page .status-indicator-box.active {
+    color: #86efac !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .admin-members-page .member-header-plan strong.status-checkout {
+    color: #fca5a5 !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .admin-members-page .member-header-plan strong.status-ready {
+    color: #93c5fd !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .admin-members-page .member-header-plan .status-paused {
+    color: #fcd34d !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .admin-members-page .status-indicator-box {
+    border-color: #334155 !important;
+    background: #172033 !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .admin-members-page .remaining-time-badge {
+    border-color: #334155 !important;
+    background: #172033 !important;
+    color: #94a3b8 !important;
+    text-align: left;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .admin-members-page .remaining-time-badge strong {
+    color: #e2e8f0 !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .admin-members-page .list-search-box {
+    border: 1px solid #334155 !important;
+    background: #0f172a !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .admin-members-page .list-search-box input {
+    background: transparent !important;
+    color: #f8fafc !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .admin-members-page .list-search-box input::placeholder {
+    color: #94a3b8 !important;
+    opacity: 1;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .admin-members-page .member-activity-logs-container {
+    border-color: #334155 !important;
+    background: #172033 !important;
+    color: #e2e8f0 !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .admin-members-page .member-activity-logs-header {
+    color: #f8fafc !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .admin-members-page .member-activity-logs-count {
+    color: #94a3b8 !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .admin-members-page .member-activity-logs {
+    background: #0f172a !important;
+    color: #cbd5e1 !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .admin-members-page .member-activity-log {
+    border-bottom-color: #334155 !important;
+    background: transparent !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .admin-members-page .member-activity-log-event {
+    color: #86efac !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .admin-members-page .member-activity-log:first-child .member-activity-log-event {
+    color: #fcd34d !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .admin-members-page .member-activity-logs::-webkit-scrollbar-track {
+    background: #172033 !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .admin-members-page .member-activity-logs::-webkit-scrollbar-thumb {
+    background: #64748b !important;
+}
+
+html[data-theme="dark"] body.admin-notification-theme .admin-members-page .btn-check-in:disabled,
+html[data-theme="dark"] body.admin-notification-theme .admin-members-page .disabled-btn:disabled {
+    opacity: 0.85;
+}

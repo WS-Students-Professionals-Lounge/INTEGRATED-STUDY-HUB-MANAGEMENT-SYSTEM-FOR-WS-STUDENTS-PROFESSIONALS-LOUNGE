@@ -111,6 +111,21 @@
     height: 0;
 }
 
+.open-time-field {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.open-time-field .form-label {
+    margin: 0;
+}
+
+.open-time-field .switch {
+    flex: 0 0 auto;
+    margin: 0;
+}
+
 .slider {
     position: absolute;
     cursor: pointer;

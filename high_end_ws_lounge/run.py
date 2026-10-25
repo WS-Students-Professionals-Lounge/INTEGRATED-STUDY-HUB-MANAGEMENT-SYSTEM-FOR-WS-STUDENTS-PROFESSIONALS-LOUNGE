@@ -36,6 +36,9 @@ def create_app(config_class=Config):
         static_url_path="/static",
     )
     app.config.from_object(config_class)
+    app.config['SESSION_COOKIE_HTTPONLY'] = True
+    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+    app.config['SESSION_COOKIE_SECURE'] = True
     app.config['WTF_CSRF_ENABLED'] = False
     
     db.init_app(app)
@@ -359,4 +362,10 @@ with app.app_context():
         print(f"Migration script warning: {e}")
 
 if __name__ == "__main__":
-    socketio.run(app, debug=True)
+    debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
+    socketio.run(
+        app,
+        debug=debug_mode,
+        host='0.0.0.0',
+        port=int(os.environ.get('PORT', 5000)),
+    )

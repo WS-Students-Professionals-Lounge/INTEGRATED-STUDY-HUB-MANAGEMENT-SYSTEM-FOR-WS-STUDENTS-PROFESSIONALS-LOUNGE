@@ -2,7 +2,7 @@
 
 
 {% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/admin/members.css') }}?v=4">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/admin/members.css') }}?v=5">
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 {% endblock %}
 
@@ -175,9 +175,9 @@
                                         {% elif is_checked_in_val %}
                                             <strong id="status-text-{{ member.id }}" class="status-checkin">Checked In</strong>
                                         {% elif member.membership and member.membership.is_checked_out %}
-                                            <strong id="status-text-{{ member.id }}">Checked Out</strong>
+                                            <strong id="status-text-{{ member.id }}" class="status-checkout">Checked Out</strong>
                                         {% else %}
-                                            <strong id="status-text-{{ member.id }}">Ready to check in</strong>
+                                            <strong id="status-text-{{ member.id }}" class="status-ready">Ready to check in</strong>
                                         {% endif %}
                                     </span>
                                 </div>

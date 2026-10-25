@@ -2,7 +2,7 @@
 
 {% block extra_css %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/admin/admin_dashboard.css') }}?v=11">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/modals/admin_walkin_modal.css') }}?v=3">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modals/admin_walkin_modal.css') }}?v=4">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/rooms.css') }}">
 {% endblock %}
 
@@ -524,7 +524,7 @@
                         <input type="datetime-local" id="f-end-display" class="modern-input mt-2" readonly placeholder="Auto-calculated end time" style="height: 42px; width: 100%;">
                         <input type="hidden" id="f-end-time" name="end_time">
                     </div>
-                    <div class="input-group align-items-center">
+                    <div class="input-group align-items-center open-time-field">
                         <label class="form-label">Open Time</label>
                         <label class="switch">
                             <input type="checkbox" id="f-open-time" name="open_time">

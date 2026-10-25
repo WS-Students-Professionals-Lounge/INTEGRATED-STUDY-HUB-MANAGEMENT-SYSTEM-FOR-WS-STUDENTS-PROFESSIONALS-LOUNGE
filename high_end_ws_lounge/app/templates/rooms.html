@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/rooms_modern.css') }}?v=2">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/rooms_modern.css') }}?v=3">
 {% endblock %}
 
 {% block content %}
@@ -166,7 +166,7 @@
                         {{ form.end_time(type="hidden", id="end-time") }}
                     </div>
 
-                    <div class="input-group align-items-center">
+                    <div class="input-group align-items-center open-time-field">
                         <label class="form-label">Open Time</label>
                         <label class="switch">
                             <!-- INI ANG DAPAT DUGANGAN: name="is_open_time" -->
