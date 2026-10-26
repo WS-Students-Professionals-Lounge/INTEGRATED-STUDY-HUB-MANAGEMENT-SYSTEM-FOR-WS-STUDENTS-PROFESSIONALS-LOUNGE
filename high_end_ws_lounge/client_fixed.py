@@ -8,6 +8,7 @@ import logging
 from datetime import datetime, timedelta
 import pytz
 import stripe
+import resend
 
 from database_fixed import (
     db,
@@ -164,34 +165,67 @@ def forgot_password():
         user = get_user_by_email(email)
 
         if user:
-            serializer = URLSafeTimedSerializer(current_app.config["SECRET_KEY"])
-            token = serializer.dumps(user.email, salt="reset-password-salt")
-            reset_url = url_for("auth.reset_password", token=token, _external=True)
+            serializer = URLSafeTimedSerializer(
+                current_app.config["SECRET_KEY"]
+            )
+            token = serializer.dumps(
+                user.email,
+                salt="reset-password-salt"
+            )
+            reset_url = url_for(
+                "auth.reset_password",
+                token=token,
+                _external=True
+            )
 
             try:
-                msg = Message(
-                    subject="WS Lounge - Password Reset Request",
-                    recipients=[email],
-                    body=(
-                        f"Hello {user.name or 'Member'},\n\n"
-                        "A password reset was requested for your WS Lounge account.\n\n"
-                        "Please click the link below to reset your password. "
-                        "This link is valid for 30 minutes:\n\n"
-                        f"{reset_url}\n\n"
-                        "If you did not request a password reset, please ignore this email.\n\n"
-                        "WS Students & Professionals Lounge"
-                    ),
+                api_key = os.getenv("RESEND_API_KEY")
+                from_email = os.getenv("RESEND_FROM_EMAIL")
+
+                if not api_key or not from_email:
+                    raise RuntimeError(
+                        "Missing Resend API configuration."
+                    )
+
+                resend.api_key = api_key
+
+                email_body = (
+                    f"Hello {user.name or 'Member'},\n\n"
+                    "A password reset was requested for your "
+                    "WS Lounge account.\n\n"
+                    "Please click the link below to reset your "
+                    "password. This link is valid for 30 minutes:\n\n"
+                    f"{reset_url}\n\n"
+                    "If you did not request a password reset, "
+                    "please ignore this email.\n\n"
+                    "WS Students & Professionals Lounge"
                 )
-                mail.send(msg)
+
+                resend.Emails.send({
+                    "from": from_email,
+                    "to": [user.email],
+                    "subject": (
+                        "WS Lounge - Password Reset Request"
+                    ),
+                    "text": email_body,
+                })
 
                 flash(
-                    "A password reset link has been sent to your email. Please check your inbox or spam folder.",
+                    "A password reset link has been sent to "
+                    "your email. Please check your inbox or "
+                    "spam folder.",
                     "success"
                 )
 
             except Exception:
-                logging.exception("Password reset mail delivery failed for %s", email)
-                flash("Failed to send password reset email. Please try again later.", "danger")
+                logging.exception(
+                    "Password reset email delivery failed"
+                )
+                flash(
+                    "Failed to send password reset email. "
+                    "Please try again later.",
+                    "danger"
+                )
 
         else:
             flash(
