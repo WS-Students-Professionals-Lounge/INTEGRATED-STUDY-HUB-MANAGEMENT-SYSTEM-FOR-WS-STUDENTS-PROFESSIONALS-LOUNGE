@@ -3,7 +3,7 @@
 {% block title %}Solo Plans & Rates{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/solo_plans_modern.css') }}?v=3">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/solo_plans_modern.css') }}?v=4">
 {% endblock %}
 
 {% block content %}
@@ -191,7 +191,8 @@
 <!-- Plan Purchase Modal -->
 <div class="modal-backdrop d-none" id="plan-selection-modal" aria-hidden="true">
     <div class="modal-card">
-        <button type="button" class="modal-close" id="plan-modal-close">&times;</button>
+        <button type="button" class="modal-close" id="plan-modal-close"
+            aria-label="Close plan selection">&times;</button>
         <div class="modal-content-inner">
             <form id="solo-plan-form" method="POST" enctype="multipart/form-data">
                 {% if csrf_token is defined and csrf_token %}

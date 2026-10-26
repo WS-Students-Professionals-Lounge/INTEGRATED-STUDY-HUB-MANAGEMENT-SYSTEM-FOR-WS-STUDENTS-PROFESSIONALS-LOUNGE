@@ -9,6 +9,39 @@ document.addEventListener('DOMContentLoaded', function() {
     const toRegister = document.getElementById('toRegister');
     const toLogin = document.getElementById('toLogin');
     const loginForm = document.querySelector('#loginModal form[action*="/login"]');
+    const navToggle = document.getElementById('navToggle');
+    const primaryNavigation = document.getElementById('primaryNavigation');
+    let modalTrigger = null;
+
+    function setNavigationOpen(isOpen) {
+        if (!navToggle || !primaryNavigation) return;
+
+        primaryNavigation.classList.toggle('is-open', isOpen);
+        navToggle.setAttribute('aria-expanded', String(isOpen));
+        navToggle.setAttribute('aria-label', isOpen ? 'Close navigation menu' : 'Open navigation menu');
+    }
+
+    if (navToggle && primaryNavigation) {
+        navToggle.addEventListener('click', function() {
+            setNavigationOpen(navToggle.getAttribute('aria-expanded') !== 'true');
+        });
+
+        primaryNavigation.querySelectorAll('a').forEach(function(link) {
+            link.addEventListener('click', function() {
+                setNavigationOpen(false);
+            });
+        });
+
+        document.addEventListener('click', function(event) {
+            if (!primaryNavigation.contains(event.target) && !navToggle.contains(event.target)) {
+                setNavigationOpen(false);
+            }
+        });
+
+        window.addEventListener('resize', function() {
+            if (window.innerWidth > 768) setNavigationOpen(false);
+        });
+    }
 
     if (loginForm) {
         loginForm.addEventListener('submit', function() {
@@ -20,15 +53,24 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function showModal(modal) {
         if (modal) {
+            modalTrigger = document.activeElement;
+            modal.setAttribute('aria-hidden', 'false');
             modal.style.display = 'flex';
             document.body.style.overflow = 'hidden';
+            const firstInput = modal.querySelector('input:not([type="hidden"]), button, a[href]');
+            if (firstInput) firstInput.focus();
         }
     }
 
     function hideModal(modal) {
         if (modal) {
             modal.style.display = 'none';
+            modal.setAttribute('aria-hidden', 'true');
             document.body.style.overflow = '';
+            if (modalTrigger && typeof modalTrigger.focus === 'function') {
+                modalTrigger.focus();
+                modalTrigger = null;
+            }
         }
     }
 
@@ -94,22 +136,50 @@ document.addEventListener('DOMContentLoaded', function() {
     // Close modals on Escape key
     window.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
-            hideModal(loginModal);
-            hideModal(registerModal);
+            if (loginModal && loginModal.style.display === 'flex') {
+                hideModal(loginModal);
+            } else if (registerModal && registerModal.style.display === 'flex') {
+                hideModal(registerModal);
+            } else {
+                setNavigationOpen(false);
+            }
+            return;
+        }
+
+        const openModal = [loginModal, registerModal].find(modal => modal && modal.style.display === 'flex');
+        if (e.key === 'Tab' && openModal) {
+            const focusableElements = Array.from(openModal.querySelectorAll(
+                'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), [tabindex]:not([tabindex="-1"])'
+            ));
+            if (focusableElements.length === 0) return;
+
+            const firstElement = focusableElements[0];
+            const lastElement = focusableElements[focusableElements.length - 1];
+            if (e.shiftKey && document.activeElement === firstElement) {
+                e.preventDefault();
+                lastElement.focus();
+            } else if (!e.shiftKey && document.activeElement === lastElement) {
+                e.preventDefault();
+                firstElement.focus();
+            }
         }
     });
 
-    // Smooth scroll for anchor links
-    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+    // Keep section headings visible below the sticky header during navigation.
+    document.querySelectorAll('.nav-links a[href^="#"]').forEach(anchor => {
         anchor.addEventListener('click', function(e) {
             const href = this.getAttribute('href');
             if (href !== '#') {
                 e.preventDefault();
                 const target = document.querySelector(href);
                 if (target) {
-                    target.scrollIntoView({
-                        behavior: 'smooth',
-                        block: 'start'
+                    const headerHeight = document.querySelector('.header')?.getBoundingClientRect().height || 0;
+                    const targetTop = window.scrollY + target.getBoundingClientRect().top - headerHeight;
+                    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+                    window.scrollTo({
+                        top: Math.max(0, targetTop),
+                        behavior: prefersReducedMotion ? 'auto' : 'smooth'
                     });
                 }
             }

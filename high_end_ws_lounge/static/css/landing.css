@@ -11,6 +11,7 @@ body {
     background-color: #f8fafc;
     color: #1e293b;
     line-height: 1.6;
+    overflow-x: hidden;
 }
 
 .container {
@@ -30,9 +31,11 @@ body {
 }
 
 .header-flex {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 24px;
 }
 
 .logo-container {
@@ -77,6 +80,52 @@ body {
     display: flex;
     align-items: center;
     gap: 16px;
+    flex-shrink: 0;
+}
+
+.nav-toggle {
+    display: none;
+    width: 44px;
+    height: 44px;
+    padding: 10px;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+    border: 1px solid #d9e1ec;
+    border-radius: 10px;
+    background: #fff;
+    cursor: pointer;
+}
+
+.nav-toggle span {
+    display: block;
+    width: 100%;
+    height: 2px;
+    border-radius: 2px;
+    background: #1e293b;
+    transition: transform 180ms ease, opacity 180ms ease;
+}
+
+.nav-toggle[aria-expanded="true"] span:first-child {
+    transform: translateY(7px) rotate(45deg);
+}
+
+.nav-toggle[aria-expanded="true"] span:nth-child(2) {
+    opacity: 0;
+}
+
+.nav-toggle[aria-expanded="true"] span:last-child {
+    transform: translateY(-7px) rotate(-45deg);
+}
+
+.nav-toggle:focus-visible,
+.nav-item:focus-visible,
+.btn-primary:focus-visible,
+.close-modal:focus-visible,
+.forgot-text:focus-visible,
+.btn-login-submit:focus-visible {
+    outline: 3px solid #3651d1;
+    outline-offset: 3px;
 }
 
 .btn-primary {
@@ -332,14 +381,17 @@ body {
     justify-content: center;
     align-items: center;
     padding: 20px;
+    overflow-y: auto;
 }
 
 .modal-content {
     background: #ffffff;
     border-radius: 18px;
     padding: 36px 32px;
-    width: 100%;
+    width: min(100%, 440px);
     max-width: 440px;
+    max-height: calc(100dvh - 40px);
+    overflow-y: auto;
     position: relative;
     box-shadow: 0 20px 60px rgba(0,0,0,0.2);
     animation: modalSlideIn 0.3s ease;
@@ -365,6 +417,13 @@ body {
     cursor: pointer;
     transition: color 0.2s;
     line-height: 1;
+    display: grid;
+    width: 44px;
+    height: 44px;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    background: transparent;
 }
 
 .close-modal:hover {
@@ -407,6 +466,7 @@ body {
 .modal-form input[type="email"],
 .modal-form input[type="password"] {
     width: 100%;
+    min-height: 48px;
     padding: 12px 14px;
     border: 1.5px solid #e2e8f0;
     border-radius: 10px;
@@ -428,8 +488,11 @@ body {
 }
 
 .forgot-text {
-    font-size: 0.82rem;
-    color: #4361ee;
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    font-size: 0.9rem;
+    color: #3651d1;
     text-decoration: none;
     font-weight: 500;
 }
@@ -440,7 +503,8 @@ body {
 
 .btn-login-submit {
     width: 100%;
-    padding: 14px;
+    min-height: 48px;
+    padding: 12px 14px;
     background: #4361ee;
     color: #fff;
     border: none;
@@ -635,17 +699,82 @@ body {
 
 @media (max-width: 768px) {
     .header-flex {
-        flex-wrap: wrap;
-        gap: 12px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 44px auto;
+        gap: 10px;
+    }
+
+    .brand-name {
+        font-size: 0.95rem;
+        line-height: 1.25;
+    }
+
+    .logo-img {
+        width: 38px;
+        height: 38px;
+        flex: 0 0 38px;
+    }
+
+    .nav-toggle {
+        display: flex;
+        grid-column: 2;
+        grid-row: 1;
     }
 
     .nav-links {
-        order: 3;
-        width: 100%;
-        justify-content: center;
-        gap: 20px;
-        padding-top: 8px;
-        border-top: 1px solid #f1f5f9;
+        position: absolute;
+        z-index: 120;
+        top: calc(100% + 14px);
+        right: 0;
+        left: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 4px;
+        padding: 8px;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        background: #fff;
+        box-shadow: 0 16px 36px rgba(15, 23, 42, 0.16);
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transform: translateY(-8px);
+        transition: opacity 180ms ease, transform 180ms ease, visibility 180ms ease;
+    }
+
+    .nav-links.is-open {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+        transform: translateY(0);
+    }
+
+    .nav-item {
+        display: flex;
+        min-height: 44px;
+        align-items: center;
+        padding: 8px 12px;
+        border-radius: 8px;
+    }
+
+    .nav-links .nav-item:hover {
+        background: #f1f5ff;
+    }
+
+    .auth-buttons {
+        grid-column: 3;
+        grid-row: 1;
+        gap: 8px;
+    }
+
+    .auth-buttons .btn-nav {
+        min-height: 44px;
+        padding: 8px 14px;
+    }
+
+    .auth-buttons #loginNavBtn {
+        min-height: 44px;
     }
 
     .hero-content h1 {
@@ -663,9 +792,60 @@ body {
     .about-content h2 {
         font-size: 1.8rem;
     }
+
+    .about-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .about-grid > * {
+        min-width: 0;
+    }
+
+    .about-icons {
+        width: 100%;
+        justify-content: space-between;
+        gap: 12px;
+    }
+
+    .about-icon-item {
+        min-width: 0;
+        flex: 1 1 0;
+        font-size: 0.85rem;
+        text-align: center;
+    }
 }
 
 @media (max-width: 480px) {
+    .container {
+        padding-right: 16px;
+        padding-left: 16px;
+    }
+
+    .header {
+        padding: 10px 0;
+    }
+
+    .header-flex {
+        grid-template-columns: minmax(0, 1fr) 44px;
+        gap: 8px;
+    }
+
+    .auth-buttons {
+        grid-column: 1 / -1;
+        grid-row: 2;
+        justify-content: flex-end;
+        gap: 12px;
+    }
+
+    .nav-toggle {
+        grid-column: 2;
+        grid-row: 1;
+    }
+
+    .nav-links {
+        top: calc(100% + 8px);
+    }
+
     .hero {
         min-height: 70vh;
     }
@@ -679,6 +859,34 @@ body {
     }
 
     .modal-content {
-        padding: 28px 20px;
+        width: 100%;
+        max-height: calc(100dvh - 24px);
+        padding: 28px 20px 24px;
+    }
+
+    .modal-overlay {
+        align-items: flex-start;
+        padding: 12px;
+    }
+
+    .welcome-text {
+        margin-bottom: 18px;
+        font-size: 1.35rem;
+    }
+
+    .signup-redirect {
+        margin-bottom: 0;
+        font-size: 0.9rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        scroll-behavior: auto !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
     }
 }

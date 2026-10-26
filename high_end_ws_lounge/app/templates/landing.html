@@ -6,7 +6,7 @@
     <title>{% block title %}WS Lounge | Students & Professionals{% endblock %}</title>
     <link rel="icon" type="image/png" sizes="256x256" href="{{ url_for('static', filename='img/favicon.png') }}">    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/landing.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/landing.css') }}?v=5">
 </head>
 <body data-show-register="{{ 'true' if show_register else 'false' }}" data-show-login="{{ 'true' if show_login else 'false' }}">
 
@@ -16,7 +16,15 @@
                 <img src="{{ url_for('static', filename='img/main_logo.png') }}" alt="WS Logo" class="logo-img">
                 <span class="brand-name">WS Students & Professionals Lounge</span>
             </div>
-            <nav class="nav-links">
+            <button class="nav-toggle" type="button" id="navToggle"
+                    aria-label="Open navigation menu"
+                    aria-expanded="false"
+                    aria-controls="primaryNavigation">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+            <nav class="nav-links" id="primaryNavigation" aria-label="Main navigation">
                 <a href="#hero" class="nav-item">Home</a>
                 <a href="#pricing" class="nav-item">Pricing</a>
                 <a href="#about" class="nav-item">About Us</a>
@@ -111,13 +119,13 @@
     </section>
 
 <!-- LOGIN MODAL -->
-<div id="loginModal" class="modal-overlay">
+<div id="loginModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="loginTitle" aria-hidden="true">
     <div class="modal-content">
-        <span class="close-modal" id="closeLogin">&times;</span>
+        <button type="button" class="close-modal" id="closeLogin" aria-label="Close login dialog">&times;</button>
         <div class="modal-logo-container">
             <img src="{{ url_for('static', filename='img/main_logo.png') }}" alt="WS Logo" class="modal-logo">
         </div>
-        <h2 class="welcome-text">Welcome Back</h2>
+        <h2 class="welcome-text" id="loginTitle">Welcome Back</h2>
 
         <!-- ENHANCED ALERT BOX FOR LOGIN -->
         {% with messages = get_flashed_messages(category_filter=['danger']) %}
@@ -135,14 +143,14 @@
         <form method="POST" action="{{ url_for('auth.login') }}" class="modal-form">
             {{ login_form.hidden_tag() }}
             <div class="input-group">
-                <label>Email</label>
-                {{ login_form.email(placeholder="Enter your email") }}
+                <label for="login_email">Email</label>
+                {{ login_form.email(id="login_email", placeholder="Enter your email", autocomplete="email") }}
             </div>
 
             <div class="input-group">
-                <label>Password</label>
+                <label for="login_password">Password</label>
                 <div class="password-wrapper" style="position: relative; width: 100%;">
-                    {{ login_form.password(placeholder="Enter your password") }}
+                    {{ login_form.password(id="login_password", placeholder="Enter your password", autocomplete="current-password") }}
                     <span class="toggle-password-btn" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #6c757d; z-index: 10;">
                         <i class="fa-solid fa-eye"></i>
                     </span>
@@ -173,14 +181,14 @@
 {% endif %}
 
 <!-- REGISTER MODAL -->
-<div id="registerModal" class="modal-overlay">
+<div id="registerModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="registerTitle" aria-hidden="true">
     <div class="modal-content">
-        <span class="close-modal" id="closeRegister">&times;</span>
+        <button type="button" class="close-modal" id="closeRegister" aria-label="Close registration dialog">&times;</button>
         <div class="modal-logo-container">
             <img src="{{ url_for('static', filename='img/main_logo.png') }}" alt="WS Logo" class="modal-logo">
         </div>
         
-        <h2 class="welcome-text">Create Your Account</h2>
+        <h2 class="welcome-text" id="registerTitle">Create Your Account</h2>
 
         <!-- ENHANCED ALERT BOX FOR REGISTER -->
         {% with messages = get_flashed_messages(with_categories=true) %}
@@ -270,7 +278,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script src="{{ url_for('static', filename='js/base.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/landing.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/base.js') }}?v=4"></script>
+    <script src="{{ url_for('static', filename='js/landing.js') }}?v=4"></script>
 </body>
 </html>

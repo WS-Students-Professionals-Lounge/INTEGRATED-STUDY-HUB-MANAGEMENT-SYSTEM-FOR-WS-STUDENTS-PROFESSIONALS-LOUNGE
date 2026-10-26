@@ -11,7 +11,6 @@ function initializeBaseJs() {
         const tabletMenuIcon = tabletMenuButton.querySelector('i');
 
         function setTabletMenuOpen(isOpen) {
-            tabletMenuButton.setAttribute('aria-controls', adminSidebar.id || 'adminSidebar');
             adminSidebar.classList.toggle('admin-tablet-drawer-open', isOpen);
             tabletMenuBackdrop.classList.toggle('is-visible', isOpen);
             tabletMenuButton.setAttribute('aria-expanded', String(isOpen));
@@ -21,6 +20,13 @@ function initializeBaseJs() {
             if (tabletMenuIcon) {
                 tabletMenuIcon.classList.toggle('fa-bars', !isOpen);
                 tabletMenuIcon.classList.toggle('fa-xmark', isOpen);
+            }
+
+            if (isOpen) {
+                const firstLink = adminSidebar.querySelector('a[href]');
+                if (firstLink) firstLink.focus();
+            } else if (window.innerWidth < 1024 && document.activeElement !== tabletMenuButton) {
+                tabletMenuButton.focus();
             }
         }
 
@@ -39,10 +45,26 @@ function initializeBaseJs() {
             if (event.key === 'Escape' && tabletMenuButton.getAttribute('aria-expanded') === 'true') {
                 setTabletMenuOpen(false);
                 tabletMenuButton.focus();
+                return;
+            }
+
+            if (event.key === 'Tab' && tabletMenuButton.getAttribute('aria-expanded') === 'true') {
+                const focusableItems = Array.from(adminSidebar.querySelectorAll('a[href], button:not([disabled])'));
+                if (focusableItems.length === 0) return;
+
+                const firstItem = focusableItems[0];
+                const lastItem = focusableItems[focusableItems.length - 1];
+                if (event.shiftKey && (document.activeElement === firstItem || !adminSidebar.contains(document.activeElement))) {
+                    event.preventDefault();
+                    lastItem.focus();
+                } else if (!event.shiftKey && (document.activeElement === lastItem || !adminSidebar.contains(document.activeElement))) {
+                    event.preventDefault();
+                    firstItem.focus();
+                }
             }
         });
         window.addEventListener('resize', function() {
-            if (window.innerWidth < 768 || window.innerWidth >= 1024) setTabletMenuOpen(false);
+            if (window.innerWidth >= 1024) setTabletMenuOpen(false);
         });
     }
 

@@ -518,9 +518,9 @@ html[data-theme="dark"] .timelog-wrapper .recent-logs-section {
         position: relative;
         z-index: 1;
         display: grid;
-        width: 42px;
-        height: 42px;
-        flex: 0 0 42px;
+        width: 44px;
+        height: 44px;
+        flex: 0 0 44px;
         place-items: center;
         border: 1px solid #d9e1ec;
         border-radius: 10px;

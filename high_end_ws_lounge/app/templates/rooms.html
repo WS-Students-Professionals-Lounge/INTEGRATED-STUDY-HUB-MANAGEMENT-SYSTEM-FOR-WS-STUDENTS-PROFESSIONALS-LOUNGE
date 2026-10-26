@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/rooms_modern.css') }}?v=3">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/rooms_modern.css') }}?v=4">
 {% endblock %}
 
 {% block content %}
@@ -266,7 +266,8 @@
 
                     <div id="payment-modal" class="payment-modal-overlay d-none">
                         <div class="payment-modal-content">
-                            <button type="button" class="modal-close" id="payment-modal-close">&times;</button>
+                            <button type="button" class="modal-close" id="payment-modal-close"
+                                aria-label="Close payment details">&times;</button>
                             <h3 id="modal-payment-method" class="modal-title">Payment Details</h3>
                             <p><strong>Account:</strong> <span id="modal-account-info"></span></p>
                             <div class="modal-qr-row">

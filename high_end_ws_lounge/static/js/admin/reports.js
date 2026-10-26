@@ -5,7 +5,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (!menuButton || !menuBackdrop || !sidebar) return;
 
-    sidebar.id = 'adminReportsSidebar';
     const menuIcon = menuButton.querySelector('i');
 
     function setMenuOpen(isOpen) {

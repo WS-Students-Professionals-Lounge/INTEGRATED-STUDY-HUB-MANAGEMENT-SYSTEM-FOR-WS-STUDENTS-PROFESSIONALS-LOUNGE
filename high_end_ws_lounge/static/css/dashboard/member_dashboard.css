@@ -1015,6 +1015,68 @@ body:has(.dashboard-wrapper) .main-wrapper {
     display: none;
 }
 
+@media (min-width: 768px) and (max-width: 1023px) {
+    body:has(.dashboard-wrapper) .sidebar {
+        width: 76px;
+    }
+
+    body:has(.dashboard-wrapper) .sidebar-header {
+        padding: 18px 8px;
+    }
+
+    body:has(.dashboard-wrapper) .logo-container-circle {
+        width: 48px;
+        height: 48px;
+        margin: 0;
+        padding: 3px;
+    }
+
+    body:has(.dashboard-wrapper) .logo-text-group {
+        display: none;
+    }
+
+    body:has(.dashboard-wrapper) .theme-toggle-wrapper {
+        justify-content: center;
+        padding: 10px 0;
+    }
+
+    body:has(.dashboard-wrapper) .sidebar-links {
+        padding: 14px 7px;
+        gap: 8px;
+    }
+
+    body:has(.dashboard-wrapper) .side-link {
+        justify-content: center;
+        gap: 0;
+        padding: 12px 4px;
+        font-size: 0;
+    }
+
+    body:has(.dashboard-wrapper) .side-link i {
+        width: auto;
+        flex: 0 0 auto;
+        font-size: 1.1rem;
+    }
+
+    body:has(.dashboard-wrapper) .side-link .badge {
+        display: none;
+    }
+
+    body:has(.dashboard-wrapper) .main-wrapper {
+        width: calc(100% - 76px);
+        margin-left: 76px;
+        padding: 28px 24px;
+    }
+
+    body:has(.dashboard-wrapper) .content-container {
+        max-width: none;
+    }
+
+    .dashboard-wrapper {
+        max-width: none;
+    }
+}
+
 @media (max-width: 991px) {
     .member-stats-grid {
         grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1110,9 +1172,9 @@ body:has(.dashboard-wrapper) .main-wrapper {
     .dashboard-menu-toggle {
         position: static;
         display: grid;
-        width: 42px;
-        height: 42px;
-        flex: 0 0 42px;
+        width: 44px;
+        height: 44px;
+        flex: 0 0 44px;
         place-items: center;
         border: 1px solid var(--surface-border);
         border-radius: 10px;

@@ -758,9 +758,15 @@ input:checked + .slider::before {
     position: absolute;
     top: 14px;
     right: 14px;
+    display: grid;
+    width: 44px;
+    height: 44px;
+    place-items: center;
+    padding: 0;
     border: none;
     background: none;
     font-size: 1.8rem;
+    line-height: 1;
     cursor: pointer;
     color: var(--gray-600);
     transition: color 0.2s;
@@ -1271,9 +1277,9 @@ html[data-theme="dark"] .rooms-container .payment-modal-content strong {
         position: relative;
         z-index: 1;
         display: grid;
-        width: 42px;
-        height: 42px;
-        flex: 0 0 42px;
+        width: 44px;
+        height: 44px;
+        flex: 0 0 44px;
         place-items: center;
         border: 1px solid var(--gray-300);
         border-radius: 10px;
@@ -1403,7 +1409,7 @@ html[data-theme="dark"] .rooms-container .payment-modal-content strong {
         padding: 22px 16px 16px;
         border-radius: var(--radius-lg);
     }
-    .payment-modal-content .modal-close { top: 8px; right: 10px; padding: 6px; }
+    .payment-modal-content .modal-close { top: 8px; right: 10px; }
     .modal-qr-image { max-width: min(260px, 100%); }
 }
 

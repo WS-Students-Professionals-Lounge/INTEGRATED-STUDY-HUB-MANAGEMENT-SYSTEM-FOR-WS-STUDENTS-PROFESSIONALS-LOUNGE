@@ -541,6 +541,11 @@ body {
     position: absolute;
     top: 14px;
     right: 14px;
+    display: grid;
+    width: 44px;
+    height: 44px;
+    place-items: center;
+    padding: 0;
     border: none;
     background: none;
     font-size: 1.8rem;
@@ -1106,9 +1111,9 @@ html[data-theme="dark"] #plan-selection-modal .modal-close {
         position: relative;
         z-index: 1;
         display: grid;
-        width: 42px;
-        height: 42px;
-        flex: 0 0 42px;
+        width: 44px;
+        height: 44px;
+        flex: 0 0 44px;
         place-items: center;
         border: 1px solid var(--gray-300);
         border-radius: 10px;
