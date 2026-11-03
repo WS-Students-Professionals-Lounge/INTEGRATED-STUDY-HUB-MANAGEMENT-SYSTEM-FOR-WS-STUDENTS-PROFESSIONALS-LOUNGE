@@ -53,6 +53,17 @@ from itsdangerous import URLSafeTimedSerializer
 auth_bp = Blueprint("auth", __name__)
 main_bp = Blueprint('main', __name__, template_folder='templates')
 
+_SOLO_PLAN_PRICES = {
+    "INDIVIDUAL RATE": 35.0,
+    "INDIVIDUAL RATE (4HRS)": 100.0,
+    "DAY/NIGHT PASS": 200.0,
+    "WEEKLY PASS (DAY/NIGHT)": 800.0,
+    "WEEKLY PASS (24HRS)": 1000.0,
+    "MONTHLY PASS (DAY/NIGHT)": 1999.0,
+    "MONTHLY PASS (24HRS)": 2500.0,
+    "WORKSTATION (24HRS)": 3000.0,
+}
+
 
 def _customer_hidden_attendance_ids():
     return {
@@ -853,6 +864,138 @@ def profile():
     return render_template("profile.html", profile_form=profile_form, password_form=password_form)
 
 
+@main_bp.route("/api/check_availability", methods=["GET", "POST"])
+@login_required
+def check_room_availability():
+    values = request.values
+    try:
+        room_id = int(values.get("room_id", ""))
+    except (TypeError, ValueError):
+        return jsonify({"status": "error", "message": "Please select a valid room."}), 400
+
+    room = Room.query.filter_by(id=room_id).first()
+    if not room:
+        return jsonify({"status": "error", "message": "Selected room was not found."}), 404
+
+    date_value = values.get("booking_date") or values.get("date", "")
+    start_value = values.get("start_time") or values.get("start", "")
+    end_value = values.get("end_time") or values.get("end", "")
+    open_time = values.get("open_time", "false").lower() in {"1", "true", "yes"}
+
+    try:
+        if "T" in start_value:
+            start_time = datetime.strptime(start_value, "%Y-%m-%dT%H:%M")
+        elif date_value and start_value:
+            start_date = datetime.strptime(date_value, "%Y-%m-%d").date()
+            start_time = datetime.combine(
+                start_date, datetime.strptime(start_value, "%H:%M").time()
+            )
+        else:
+            raise ValueError("Choose a booking date and start time.")
+
+        if open_time:
+            end_time = None
+        elif "T" in end_value:
+            end_time = datetime.strptime(end_value, "%Y-%m-%dT%H:%M")
+            if end_time <= start_time:
+                raise ValueError("End time must be after the start time.")
+        elif end_value:
+            end_date = (
+                datetime.strptime(date_value, "%Y-%m-%d").date()
+                if date_value
+                else start_time.date()
+            )
+            end_time = datetime.combine(
+                end_date, datetime.strptime(end_value, "%H:%M").time()
+            )
+            if end_time <= start_time:
+                end_time += timedelta(days=1)
+        else:
+            raise ValueError("Choose an end time or enable Open Time.")
+    except ValueError as error:
+        return jsonify({"status": "error", "message": str(error)}), 400
+
+    active_statuses = [
+        "confirmed",
+        "approved",
+        "pending",
+        "walk-in",
+        "checked-in",
+        "in_progress",
+        "active",
+        "occupied",
+    ]
+    reservations = Reservation.query.filter(
+        Reservation.room_id == room.id,
+        func.lower(Reservation.status).in_(active_statuses),
+    )
+    if "common area" not in room.name.lower():
+        reservations = reservations.filter(or_(
+            Reservation.end_time.is_(None),
+            Reservation.end_time > Reservation.start_time,
+        ))
+    if hasattr(Reservation, "deleted_at") and "common area" in room.name.lower():
+        reservations = reservations.filter(Reservation.deleted_at.is_(None))
+
+    if end_time is None:
+        overlaps = or_(
+            Reservation.end_time.is_(None),
+            Reservation.end_time > start_time,
+            Reservation.is_open_time.is_(True),
+        )
+    else:
+        overlaps = or_(
+            and_(
+                Reservation.start_time < end_time,
+                or_(
+                    Reservation.end_time.is_(None),
+                    Reservation.end_time > start_time,
+                ),
+            ),
+            and_(
+                Reservation.is_open_time.is_(True),
+                Reservation.start_time < end_time,
+            ),
+        )
+
+    if "common area" in room.name.lower():
+        try:
+            requested_pax = max(1, int(values.get("pax_count", "1")))
+        except (TypeError, ValueError):
+            return jsonify({
+                "status": "error",
+                "message": "Enter a valid number of persons.",
+            }), 400
+
+        overlapping_reservations = reservations.filter(overlaps).all()
+        booked_pax = sum(
+            reservation.pax_count or 1
+            for reservation in overlapping_reservations
+        )
+        capacity = getattr(room, "capacity", 70) or 70
+        if booked_pax + requested_pax > capacity:
+            return jsonify({
+                "status": "conflict",
+                "message": "Common Area is at capacity for the selected time.",
+            })
+        return jsonify({"status": "ok", "message": ""})
+
+    conflict = reservations.filter(overlaps).order_by(Reservation.start_time.asc()).first()
+    if conflict:
+        reserved_start = conflict.start_time.strftime("%I:%M %p")
+        reserved_end = (
+            conflict.end_time.strftime("%I:%M %p")
+            if conflict.end_time
+            else "Open Time"
+        )
+        return jsonify({
+            "status": "conflict",
+            "message": f"Room is already reserved from {reserved_start} to {reserved_end}.",
+        })
+
+    return jsonify({"status": "ok", "message": ""})
+
+
 @main_bp.route("/rooms", methods=["GET", "POST"])
 @login_required
 def rooms():
@@ -983,6 +1126,50 @@ def rooms():
         .all()
     )
 
+    blocking_reservation_statuses = [
+        "pending",
+        "confirmed",
+        "approved",
+        "on hold",
+        "on-hold",
+        "in_progress",
+        "checked-in",
+        "checked in",
+        "walk-in",
+        "active",
+        "occupied",
+    ]
+    has_blocking_reservation = (
+        Reservation.query.filter_by(user_id=current_user.id)
+        .filter(
+            func.lower(func.trim(Reservation.status)).in_(
+                blocking_reservation_statuses
+            )
+        )
+        .first()
+        is not None
+    )
+
+    if (
+        request.method == "POST"
+        and current_user.role == "member"
+        and has_blocking_reservation
+    ):
+        flash(
+            "You already have an active or pending reservation request. Please complete or settle your existing reservation before booking another space.",
+            "warning",
+        )
+        return render_template(
+            "rooms.html",
+            rooms=rooms,
+            bookings=bookings,
+            form=form,
+            payment_info=payment_info,
+            occupied_room_ids=occupied_room_ids,
+            room_pax_count=room_pax_count,
+            has_blocking_reservation=has_blocking_reservation,
+        )
+
     if form.validate_on_submit() and current_user.role == "member":
         payment_method = request.form.get("payment_method", "")
         receipt_file = request.files.get("receipt_image")
@@ -1072,7 +1259,21 @@ def rooms():
         if not is_common_area:
             reservation_conflict_query = Reservation.query.filter(
                 Reservation.room_id == room.id,
-                Reservation.status.in_(["Confirmed", "APPROVED", "Pending", "Walk-in", "Checked-in"]),
+                func.lower(Reservation.status).in_([
+                    "confirmed",
+                    "approved",
+                    "pending",
+                    "walk-in",
+                    "checked-in",
+                    "in_progress",
+                    "active",
+                    "occupied",
+                ]),
+                or_(
+                    Reservation.end_time.is_(None),
+                    Reservation.end_time > Reservation.start_time,
+                    Reservation.is_open_time.is_(True),
+                ),
             )
             if end_time is None:
                 reservation_conflict_query = reservation_conflict_query.filter(
@@ -1197,6 +1398,7 @@ def rooms():
         file_path = os.path.join(upload_folder, filename)
         receipt_file.save(file_path)
 
+        payment_recorded_at = datetime.now(ph_tz).replace(tzinfo=None)
         # Clean Reservation Creation
         reservation = Reservation(
             user_id=current_user.id,
@@ -1214,6 +1416,9 @@ def rooms():
             extra_fee=extra_fee_total,
             total_amount=total,
             amount_paid=amount_paid,
+            downpayment_date=(
+                payment_recorded_at if amount_paid > 0 else None
+            ),
             payment_method=payment_method,
             payment_type=form.payment_type.data,
             receipt_image=filename,
@@ -1273,6 +1478,7 @@ def rooms():
         payment_info=payment_info,
         occupied_room_ids=occupied_room_ids,
         room_pax_count=room_pax_count,
+        has_blocking_reservation=has_blocking_reservation,
         unread_confirmed_reservations=unread_confirmed_reservations
 
     )
@@ -1739,8 +1945,28 @@ def solo_rates():
         },
     ]
 
+    solo_plan_status = func.lower(func.trim(SoloPlan.status))
+    has_blocking_solo_plan = (
+        SoloPlan.query.filter(
+            SoloPlan.user_id == current_user.id,
+            or_(
+                solo_plan_status == "pending",
+                and_(
+                    solo_plan_status.in_(["approved", "active"]),
+                    or_(
+                        SoloPlan.expiry_date.is_(None),
+                        SoloPlan.expiry_date >= now_naive,
+                    ),
+                ),
+            ),
+        ).first()
+        is not None
+    )
     has_pending = (
-        SoloPlan.query.filter_by(user_id=current_user.id, status="pending").first()
+        SoloPlan.query.filter(
+            SoloPlan.user_id == current_user.id,
+            solo_plan_status == "pending",
+        ).first()
         is not None
     )
     latest_solo_plan = SoloPlan.query.filter_by(
@@ -1748,10 +1974,18 @@ def solo_rates():
     ).order_by(SoloPlan.created_at.desc(), SoloPlan.id.desc()).first()
 
     message = None
-    if request.method == "POST":
-        selected_plan = request.form.get("plan_name")
+    if request.method == "POST" and has_blocking_solo_plan:
+        flash(
+            "You currently have an active or pending SoloPlan membership request. You cannot purchase another plan until your current plan is completed or processed.",
+            "warning",
+        )
+    elif request.method == "POST":
+        selected_plan = (request.form.get("plan_name") or "").strip()
         if selected_plan:
-            if active_plan or active_solo_plan:
+            selected_plan_price = _SOLO_PLAN_PRICES.get(selected_plan.upper())
+            if selected_plan_price is None:
+                flash("Please select a valid solo plan.", "danger")
+            elif active_plan or active_solo_plan:
                 flash(
                     "You currently have an active plan. Please wait for it to expire before purchasing a new one.",
                     "warning",
@@ -1774,6 +2008,8 @@ def solo_rates():
                     plan_name=selected_plan,
                     status="pending",
                     created_at=now_naive,
+                    amount=selected_plan_price,
+                    purchase_date=now_naive,
                 )
                 db.session.add(solo_plan)
                 db.session.commit()
@@ -1814,6 +2050,7 @@ def solo_rates():
         message=message,
         active_solo_plan=active_solo_plan,
         has_pending=has_pending,
+        has_blocking_solo_plan=has_blocking_solo_plan,
         latest_solo_plan=latest_solo_plan,
     )
 
@@ -1881,13 +2118,42 @@ def submit_solo_payment():
     """Handle GCash/Maya Receipt Uploads for Solo Plans"""
     ph_tz = pytz.timezone("Asia/Manila")
     now_ph = datetime.now(ph_tz)
+    now_naive = now_ph.replace(tzinfo=None)
+
+    solo_plan_status = func.lower(func.trim(SoloPlan.status))
+    has_blocking_solo_plan = (
+        SoloPlan.query.filter(
+            SoloPlan.user_id == current_user.id,
+            or_(
+                solo_plan_status == "pending",
+                and_(
+                    solo_plan_status.in_(["approved", "active"]),
+                    or_(
+                        SoloPlan.expiry_date.is_(None),
+                        SoloPlan.expiry_date >= now_naive,
+                    ),
+                ),
+            ),
+        ).first()
+        is not None
+    )
+    if has_blocking_solo_plan:
+        return jsonify({
+            "success": False,
+            "message": "You currently have an active or pending SoloPlan membership request. You cannot purchase another plan until your current plan is completed or processed.",
+        }), 409
 
     plan_name = request.form.get('plan_name')
     payment_method = request.form.get('payment_method')
     receipt_file = request.files.get('receipt_image')
+    selected_plan_price = _SOLO_PLAN_PRICES.get(
+        (plan_name or "").strip().upper()
+    )
 
     if not receipt_file or not plan_name:
         return jsonify({'success': False, 'message': 'Missing data or receipt.'}), 400
+    if selected_plan_price is None:
+        return jsonify({'success': False, 'message': 'Invalid solo plan.'}), 400
 
     allowed_ext = ['.png', '.jpg', '.jpeg', '.jpe', '.webp', '.gif', '.pdf']
     original_name = receipt_file.filename or ''
@@ -1931,7 +2197,9 @@ def submit_solo_payment():
             status="pending",
             receipt_image=filename, 
             payment_method=payment_method,
-            created_at=now_ph
+            created_at=now_ph,
+            amount=selected_plan_price,
+            purchase_date=now_ph.replace(tzinfo=None),
         )
         
         db.session.add(new_plan)

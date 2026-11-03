@@ -226,7 +226,7 @@ document.addEventListener('DOMContentLoaded', function() {
             pauseButton.onclick = () => window.handlePauseClick(pauseButton);
 
             const checkoutButton = document.createElement('button');
-            checkoutButton.className = 'btn-deactivate';
+            checkoutButton.className = 'btn-checkout-session';
             checkoutButton.type = 'button';
             checkoutButton.textContent = 'Check-Out Customer';
             checkoutButton.onclick = () => window.handleCheckout(userId);
@@ -239,13 +239,6 @@ document.addEventListener('DOMContentLoaded', function() {
             status.textContent = 'Checked In';
             status.classList.remove('status-paused');
             status.classList.add('status-checkin');
-        }
-
-        const renewButton = card.querySelector('.renew-btn');
-        if (renewButton) {
-            renewButton.disabled = true;
-            renewButton.style.opacity = '0.65';
-            renewButton.style.cursor = 'not-allowed';
         }
 
         const logs = card.querySelector('.member-activity-logs');
@@ -291,7 +284,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 sessionGroup.replaceChildren();
                 const checkedOutButton = document.createElement('button');
                 checkedOutButton.type = 'button';
-                checkedOutButton.className = 'btn-deactivate';
+                checkedOutButton.className = 'btn-checkout-session';
                 checkedOutButton.disabled = true;
                 checkedOutButton.textContent = 'Checked Out';
                 sessionGroup.appendChild(checkedOutButton);
@@ -307,13 +300,6 @@ document.addEventListener('DOMContentLoaded', function() {
             if (logs) logs.replaceChildren();
             updateRemainingTimeBadge(card, Number(data.hours_left || 0) * 3600, false, false);
 
-            const renewButton = card.querySelector('.renew-btn');
-            if (renewButton) {
-                renewButton.disabled = false;
-                renewButton.style.opacity = '';
-                renewButton.style.cursor = 'pointer';
-            }
-
             await Swal.fire({
                 title: 'Success!',
                 text: data.message,
@@ -321,6 +307,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 timer: 1500,
                 showConfirmButton: false
             });
+            const currentUrl = new URL(window.location.href);
+            currentUrl.searchParams.set('tab', 'history');
+            window.location.href = currentUrl.toString();
         } catch (error) {
             console.error('Checkout error:', error);
             await Swal.fire('Error!', 'Something went wrong.', 'error');
@@ -795,6 +784,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 const card = btn.closest('.member-list-card');
                 const userId = btn.dataset.userId || '';
                 updateCheckedInCard(card, membershipId, userId, result);
+                if (card?.closest('#history')) {
+                    const currentUrl = new URL(window.location.href);
+                    currentUrl.searchParams.set('tab', 'list');
+                    window.location.href = currentUrl.toString();
+                    return;
+                }
                 await refreshMemberActivityLogs(membershipId, card);
             } catch (err) {
                 showAlert(err.message || 'Membership action failed.', 'error');
@@ -893,9 +888,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 bootstrap.Modal.getOrCreateInstance(renewalModalElement).hide();
                 showAlert(data.message || 'Membership renewed successfully.', 'success');
-                localStorage.setItem('activeMemberTab', 'list');
+                localStorage.setItem('activeMemberTab', 'history');
                 const currentUrl = new URL(window.location.href);
-                currentUrl.searchParams.set('tab', 'list');
+                currentUrl.searchParams.set('tab', 'history');
                 setTimeout(() => {
                     window.location.href = currentUrl.toString();
                 }, 500);
@@ -931,7 +926,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 await postJson('/admin/deactivate_member', { user_id: Number(userId) });
                 showAlert('Account deactivated successfully.', 'success');
                 const currentUrl = new URL(window.location.href);
-                currentUrl.searchParams.set('tab', 'member_list');
+                currentUrl.searchParams.set('tab', 'deactivated');
                 window.location.href = currentUrl.toString();
             } catch (err) {
                 showAlert(err && err.message ? err.message : 'Deactivation failed.', 'error');
@@ -1119,6 +1114,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // === 7. SEARCH & FILTER LOGIC ===
     const searchInput = document.getElementById('memberListSearch');
     const memberCards = document.querySelectorAll('#list .member-list-card');
+    const historySearchInput = document.getElementById('historyListSearch');
+    const historyCards = document.querySelectorAll('#history .member-list-card');
     const deactivatedSearchInput = document.getElementById('deactivatedListSearch');
     const deactivatedFilterDate = document.getElementById('deactivatedDateFilter');
     const deactivatedCards = document.querySelectorAll('#deactivated .member-list-card');
@@ -1134,6 +1131,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                     card.style.display = 'none';
                 }
+            });
+        });
+    }
+
+    if (historySearchInput) {
+        historySearchInput.addEventListener('keyup', function() {
+            const searchTerm = historySearchInput.value.toLowerCase();
+
+            historyCards.forEach(card => {
+                const cardText = card.getAttribute('data-searchable') || '';
+                card.style.display = cardText.toLowerCase().includes(searchTerm) ? 'grid' : 'none';
             });
         });
     }

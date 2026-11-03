@@ -462,6 +462,13 @@ input:checked + .slider:before {
     transform: translateY(1px);
 }
 
+.reservation-page-admin-thq-button-elm1:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+}
+
 .reservation-page-admin-thq-button-elm2 {
     flex: 0.7;
     background: var(--color-light-blue);

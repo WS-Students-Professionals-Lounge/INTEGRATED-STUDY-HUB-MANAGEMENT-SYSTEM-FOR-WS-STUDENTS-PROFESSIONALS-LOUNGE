@@ -112,6 +112,8 @@ def ensure_payment_columns():
             db.session.execute(text("ALTER TABLE reservations ADD COLUMN payment_type VARCHAR(20) DEFAULT 'Downpayment'"))
         if "amount_paid" not in columns:
             db.session.execute(text("ALTER TABLE reservations ADD COLUMN amount_paid FLOAT DEFAULT 0.0"))
+        if "downpayment_date" not in columns:
+            db.session.execute(text("ALTER TABLE reservations ADD COLUMN downpayment_date DATETIME"))
         if "receipt_image" not in columns:
             db.session.execute(text("ALTER TABLE reservations ADD COLUMN receipt_image VARCHAR(255)"))
         if "approved_by_id" not in columns:
@@ -139,6 +141,10 @@ def ensure_payment_columns():
                 db.session.execute(text("ALTER TABLE solo_plans ADD COLUMN payment_method VARCHAR(50)"))
             if "receipt_image" not in solo_columns:
                 db.session.execute(text("ALTER TABLE solo_plans ADD COLUMN receipt_image VARCHAR(255)"))
+            if "amount" not in solo_columns:
+                db.session.execute(text("ALTER TABLE solo_plans ADD COLUMN amount FLOAT DEFAULT 0.0"))
+            if "purchase_date" not in solo_columns:
+                db.session.execute(text("ALTER TABLE solo_plans ADD COLUMN purchase_date DATETIME"))
 
         if inspector.has_table("users"):
             user_columns = {column["name"] for column in inspector.get_columns("users")}

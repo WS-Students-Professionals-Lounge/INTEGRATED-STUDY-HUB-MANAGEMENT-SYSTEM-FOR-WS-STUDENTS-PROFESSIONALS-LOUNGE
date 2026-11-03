@@ -90,6 +90,123 @@ document.addEventListener('DOMContentLoaded', function() {
     const receiptAmountLabel = document.getElementById('receipt-amount-label');
     const paymentTypeRadios = document.querySelectorAll('input[name="payment_type"]');
 
+    const conflictWarningBanner = document.getElementById('conflict-warning-banner');
+    const availabilitySubmitButton = document.getElementById('submit-booking');
+    const submitButtonInitiallyDisabled = availabilitySubmitButton?.disabled || false;
+    let availabilityRequestId = 0;
+    let availabilityCheckPending = false;
+
+    function formatConflictMessage(message) {
+        const conflictMatch = String(message || '').trim().match(
+            /^(?:Time Conflict:\s*)?Reserved until\s+(.+)$/i
+        );
+        if (!conflictMatch || !startTimeInput?.value) return message;
+
+        const startDate = new Date(startTimeInput.value);
+        if (Number.isNaN(startDate.getTime())) return message;
+
+        const reservedStart = startDate.toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+        });
+        return `Room is already reserved from ${reservedStart} to ${conflictMatch[1]}.`;
+    }
+
+    function setAvailabilityWarning(message, isUnavailable = false) {
+        if (!conflictWarningBanner) return;
+        const messageElement = conflictWarningBanner.querySelector('.admin-alert-text');
+        if (messageElement) messageElement.textContent = formatConflictMessage(message);
+        conflictWarningBanner.classList.toggle('d-none', !message);
+        if (availabilitySubmitButton) {
+            availabilitySubmitButton.disabled = submitButtonInitiallyDisabled
+                || isUnavailable
+                || availabilityCheckPending;
+        }
+    }
+
+    document.querySelectorAll('.alert-container .alert').forEach(alert => {
+        const message = alert.textContent.trim();
+        if (!/^(?:Time Conflict:\s*)?Reserved until\s+/i.test(message)) return;
+
+        alert.className = 'alert alert-danger admin-alert-card room-conflict-alert';
+        alert.setAttribute('role', 'alert');
+        alert.setAttribute('aria-live', 'polite');
+        const icon = document.createElement('span');
+        icon.className = 'admin-alert-icon';
+        icon.setAttribute('aria-hidden', 'true');
+        const iconGlyph = document.createElement('i');
+        iconGlyph.className = 'fas fa-triangle-exclamation';
+        icon.appendChild(iconGlyph);
+
+        const content = document.createElement('span');
+        content.className = 'admin-alert-content';
+        const title = document.createElement('strong');
+        title.className = 'admin-alert-title';
+        title.textContent = 'Schedule conflict';
+        const text = document.createElement('span');
+        text.className = 'admin-alert-text';
+        text.textContent = formatConflictMessage(message);
+        content.append(title, text);
+        alert.replaceChildren(icon, content);
+    });
+
+    async function checkRoomAvailability() {
+        const requestId = ++availabilityRequestId;
+        calculateTotal();
+
+        const roomId = roomSelector?.value;
+        const start = startTimeInput?.value;
+        const end = endTimeInput?.value;
+        if (!roomId || !start || (!end && !openTimeToggle?.checked)) {
+            availabilityCheckPending = false;
+            setAvailabilityWarning('', false);
+            return;
+        }
+
+        availabilityCheckPending = true;
+        setAvailabilityWarning('', false);
+        const query = new URLSearchParams({
+            room_id: roomId,
+            start_time: start,
+            end_time: end || '',
+            open_time: String(Boolean(openTimeToggle?.checked)),
+            pax_count: paxInput?.value || '1',
+        });
+
+        try {
+            const response = await fetch(`/api/check_availability?${query}`, {
+                headers: { 'Cache-Control': 'no-cache' },
+            });
+            const data = await response.json();
+            if (requestId !== availabilityRequestId) return;
+            availabilityCheckPending = false;
+            if (!response.ok) {
+                console.error('Room availability check returned an error:', data.message);
+                setAvailabilityWarning(
+                    data.message || 'Unable to verify this booking time. Please check the selected values.',
+                    false
+                );
+                return;
+            }
+            const isUnavailable = data.status === 'conflict';
+            setAvailabilityWarning(isUnavailable
+                ? data.message || 'The selected room is already reserved for this time slot.'
+                : '', isUnavailable);
+        } catch (error) {
+            if (requestId !== availabilityRequestId) return;
+            console.error('Room availability check failed:', error);
+            availabilityCheckPending = false;
+            setAvailabilityWarning('Unable to check room availability. Please try again.', false);
+        }
+    }
+
+    [roomSelector, startTimeInput, endTimeInput, durationSelect, openTimeToggle, paxInput].forEach(element => {
+        if (!element) return;
+        element.addEventListener('change', checkRoomAvailability);
+        element.addEventListener('input', checkRoomAvailability);
+    });
+
     // Open Time Switch Handler (Option A: Safe Default Value without triggering Required Error)
 if (openTimeToggle) {
     openTimeToggle.addEventListener('change', function() {
@@ -527,6 +644,7 @@ function calculateOpenTimeMinutesFee(minutes) {
     // Initial Run pag-load sang page
     togglePaxField();
     calculateTotal();
+    checkRoomAvailability();
 
     // 4. Table Filtering Logic (New Upgrade)
     const filterDate = document.getElementById('filter-date');
@@ -587,6 +705,18 @@ const submitBtn = document.getElementById('submit-booking');
 if (submitBtn && bookingForm) {
     submitBtn.addEventListener('click', function(e) {
         e.preventDefault();
+
+        if (bookingForm.dataset.accountBookingBlocked === 'true') {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Existing Reservation',
+                    text: 'You already have a pending or active reservation.',
+                    confirmButtonColor: '#82cae8'
+                });
+            }
+            return;
+        }
 
         // Prevent non-members from reserving on client-side
         if (currentUserRole && currentUserRole !== 'member') {
@@ -683,6 +813,12 @@ if (submitBtn && bookingForm) {
                     HTMLFormElement.prototype.submit.call(bookingForm);
                 }
             });
+    });
+
+    bookingForm.addEventListener('submit', function(e) {
+        if (bookingForm.dataset.accountBookingBlocked === 'true') {
+            e.preventDefault();
+        }
     });
 }
 

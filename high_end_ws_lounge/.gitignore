@@ -17,5 +17,8 @@ __pycache__/
 app.db
 **/app.db
 
+# User-uploaded files
+static/uploads/
+
 # VS Code settings
 .vscode/
