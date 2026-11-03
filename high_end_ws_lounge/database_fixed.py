@@ -3,6 +3,7 @@ Fixed database.py - clean imports for membership features
 """
 
 import os
+import logging
 import sqlite3
 from datetime import datetime, timedelta
 
@@ -15,6 +16,7 @@ from flask_socketio import SocketIO
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin
 from sqlalchemy import and_, create_engine, func, inspect, or_, text
+from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.security import check_password_hash, generate_password_hash
 from wtforms import (
     DateTimeLocalField,
@@ -46,6 +48,7 @@ load_dotenv()
 # Config
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+logger = logging.getLogger(__name__)
 
 
 def resolve_database_uri():
@@ -218,7 +221,16 @@ def get_user_by_email(email):
     if not normalized_email:
         return None
 
-    user = User.query.filter(func.lower(User.email) == normalized_email).first()
+    try:
+        user = User.query.filter(func.lower(User.email) == normalized_email).first()
+    except SQLAlchemyError:
+        logger.exception("Could not look up a user in the configured database")
+        try:
+            db.session.rollback()
+        except SQLAlchemyError:
+            logger.exception("Could not roll back the failed user lookup")
+        return None
+
     if user:
         return user
 
@@ -228,28 +240,40 @@ def get_user_by_email(email):
 
     try:
         active_db_name = getattr(db.engine.url, "database", None)
-    except Exception:
+    except SQLAlchemyError:
         active_db_name = None
 
     if active_db_name and os.path.abspath(sqlite_db_path) == os.path.abspath(active_db_name):
         return None
 
     try:
-        conn = sqlite3.connect(sqlite_db_path)
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT name, email, phone, password, role, is_active FROM users WHERE lower(email)=?",
-            (normalized_email,),
-        )
-        row = cur.fetchone()
-        conn.close()
-    except Exception:
+        with sqlite3.connect(sqlite_db_path) as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT name, email, phone, password, role, is_active "
+                "FROM users WHERE lower(email)=?",
+                (normalized_email,),
+            )
+            row = cur.fetchone()
+    except sqlite3.Error:
+        logger.exception("Could not look up the user in the local SQLite fallback")
         return None
 
     if not row:
         return None
 
-    fallback_user = User.query.filter(func.lower(User.email) == normalized_email).first()
+    try:
+        fallback_user = User.query.filter(
+            func.lower(User.email) == normalized_email
+        ).first()
+    except SQLAlchemyError:
+        logger.exception("Could not verify the local user in the configured database")
+        try:
+            db.session.rollback()
+        except SQLAlchemyError:
+            logger.exception("Could not roll back the failed local user verification")
+        return None
+
     if fallback_user:
         return fallback_user
 
@@ -261,8 +285,17 @@ def get_user_by_email(email):
         role=row[4] or "member",
         is_active=(row[5] if row[5] is not None else True),
     )
-    db.session.add(imported_user)
-    db.session.commit()
+    try:
+        db.session.add(imported_user)
+        db.session.commit()
+    except SQLAlchemyError:
+        logger.exception("Could not import the local user into the configured database")
+        try:
+            db.session.rollback()
+        except SQLAlchemyError:
+            logger.exception("Could not roll back the failed user import")
+        return None
+
     return imported_user
 
 

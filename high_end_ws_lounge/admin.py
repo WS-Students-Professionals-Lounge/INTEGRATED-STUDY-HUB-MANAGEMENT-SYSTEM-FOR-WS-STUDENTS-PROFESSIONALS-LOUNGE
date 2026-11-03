@@ -4,6 +4,7 @@ Contains the admin blueprint with all admin routes and daily report helpers.
 """
 import os
 import secrets
+from functools import wraps
 from io import BytesIO
 from datetime import date, datetime, timezone, timedelta
 import pytz
@@ -23,10 +24,41 @@ from werkzeug.utils import secure_filename
 from flask_login import current_user, login_required
 from flask_socketio import join_room
 from sqlalchemy import String, and_, cast, func, inspect, or_, text
+from sqlalchemy.exc import SQLAlchemyError
 from time_utils import format_checkin_time, format_checkout_time, format_date, decimal_hours_to_readable
 from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, send_file, session, url_for
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
+
+_DATABASE_FALLBACK_ERRORS = (
+    SQLAlchemyError,
+    AttributeError,
+    TypeError,
+    ValueError,
+    OverflowError,
+)
+
+
+def _with_database_fallback(fallback_factory):
+    def decorate(view):
+        @wraps(view)
+        def wrapped(*args, **kwargs):
+            try:
+                return view(*args, **kwargs)
+            except _DATABASE_FALLBACK_ERRORS:
+                current_app.logger.exception(
+                    "Database-backed route %s failed; returning its safe fallback",
+                    view.__name__,
+                )
+                try:
+                    db.session.rollback()
+                except SQLAlchemyError:
+                    current_app.logger.exception(
+                        "Could not roll back the failed database session"
+                    )
+                return fallback_factory()
+        return wrapped
+    return decorate
 
 
 @socketio.on("join_admin_room")
@@ -792,6 +824,7 @@ def _get_dashboard_revenue(today_start, today_end):
 
 @admin_bp.route("/dashboard")
 @login_required
+@_with_database_fallback(lambda: _admin_dashboard_fallback())
 def dashboard():
     redirect_response = require_admin_or_staff()
     if redirect_response:
@@ -1021,8 +1054,44 @@ def dashboard():
     )
 
 
+def _admin_dashboard_fallback():
+    flash(
+        "Some dashboard data is temporarily unavailable. Please try again shortly.",
+        "warning",
+    )
+    form = WalkinForm()
+    form.room_id.choices = []
+    now = datetime.now(pytz.timezone("Asia/Manila")).replace(tzinfo=None)
+    return render_template(
+        "admin/admin_dashboard.html",
+        form=form,
+        total_members=0,
+        active_plans=0,
+        reservations_today=0,
+        revenue_today=0,
+        rooms=[],
+        room_reservations={},
+        recent_members=[],
+        incomplete_count=0,
+        active_reservations=[],
+        pending_reservations=[],
+        held_reservations=[],
+        active_walkins=[],
+        common_area_reservations=[],
+        common_area_occupancy=0,
+        common_area_available_slots=70,
+        now=now,
+    )
+
+
 @admin_bp.route("/api/dashboard/room-status", methods=["GET"])
 @login_required
+@_with_database_fallback(
+    lambda: (
+        jsonify({"status": "error", "message": "Room status is temporarily unavailable."}),
+        503,
+    )
+)
 def dashboard_room_status():
     redirect_response = require_admin_or_staff_json()
     if redirect_response:
@@ -1071,6 +1140,12 @@ def dashboard_room_status():
 
 @admin_bp.route("/api/dashboard/today-waiting-list", methods=["GET"])
 @login_required
+@_with_database_fallback(
+    lambda: (
+        jsonify({"status": "error", "message": "Waiting list is temporarily unavailable."}),
+        503,
+    )
+)
 def dashboard_today_waiting_list():
     redirect_response = require_admin_or_staff_json()
     if redirect_response:
@@ -1182,44 +1257,59 @@ def _admin_notification_counts():
     except (TypeError, ValueError):
         reservations_seen_at = None
 
-    pending_reservations_query = Reservation.query.filter_by(status="Pending")
-    if reservations_seen_at:
-        pending_reservations_query = pending_reservations_query.filter(
-            Reservation.created_at > reservations_seen_at
+    try:
+        pending_reservations_query = Reservation.query.filter_by(status="Pending")
+        if reservations_seen_at:
+            pending_reservations_query = pending_reservations_query.filter(
+                Reservation.created_at > reservations_seen_at
+            )
+
+        pending_plans_query = SoloPlan.query.filter_by(status="pending")
+        if requests_seen_at:
+            pending_plans_query = pending_plans_query.filter(SoloPlan.created_at > requests_seen_at)
+
+        new_members_query = Membership.query.filter_by(
+            status="active",
+            member_list_notification_seen=False
         )
+        if members_seen_at:
+            new_members_query = new_members_query.filter(Membership.updated_at > members_seen_at)
 
-    pending_plans_query = SoloPlan.query.filter_by(status="pending")
-    if requests_seen_at:
-        pending_plans_query = pending_plans_query.filter(SoloPlan.created_at > requests_seen_at)
-
-    new_members_query = Membership.query.filter_by(
-        status="active",
-        member_list_notification_seen=False
-    )
-    if members_seen_at:
-        new_members_query = new_members_query.filter(Membership.updated_at > members_seen_at)
-
-    return (
-        pending_reservations_query.count(),
-        pending_plans_query.count(),
-        new_members_query.count(),
-    )
+        return (
+            pending_reservations_query.count(),
+            pending_plans_query.count(),
+            new_members_query.count(),
+            True,
+        )
+    except _DATABASE_FALLBACK_ERRORS:
+        current_app.logger.exception(
+            "Could not load admin notification counts; using empty counts"
+        )
+        try:
+            db.session.rollback()
+        except SQLAlchemyError:
+            current_app.logger.exception(
+                "Could not roll back the failed admin notification query"
+            )
+        return 0, 0, 0, False
 
 @admin_bp.app_context_processor
 def inject_sidebar_notifications():
     if current_user.is_authenticated and getattr(current_user, 'role', '') in ['admin', 'staff']:
-        p_res, p_plans, p_new_members = _admin_notification_counts()
+        p_res, p_plans, p_new_members, notifications_available = _admin_notification_counts()
 
         return dict(
             pending_reservations_count=p_res,
             pending_solo_plans_count=p_plans,
-            new_members_count=p_new_members
+            new_members_count=p_new_members,
+            notifications_available=notifications_available,
         )
 
     return dict(
         pending_reservations_count=0,
         pending_solo_plans_count=0,
-        new_members_count=0
+        new_members_count=0,
+        notifications_available=True,
     )
 
 # API Endpoint para sa JS Polling
@@ -1229,7 +1319,7 @@ def get_admin_notifications_count():
     if current_user.role not in ['admin', 'staff']:
         return jsonify({'error': 'Unauthorized'}), 403
 
-    p_res, p_plans, p_new_members = _admin_notification_counts()
+    p_res, p_plans, p_new_members, notifications_available = _admin_notification_counts()
 
     return jsonify({
         'pending_reservations': p_res,
@@ -1237,7 +1327,8 @@ def get_admin_notifications_count():
         'new_members_count': p_new_members,
         'members_notifications': p_plans + p_new_members,
         'dashboard_notifications': p_res,
-        'total_notifications': p_res + p_plans + p_new_members
+        'total_notifications': p_res + p_plans + p_new_members,
+        'data_available': notifications_available,
     })
 
 
@@ -2902,6 +2993,7 @@ def _report_timestamp_filter(column, query_start, query_end, year):
 
 @admin_bp.route("/reports", methods=["GET", "POST"])
 @login_required
+@_with_database_fallback(lambda: _admin_reports_fallback())
 def reports():
     redirect_response = require_super_admin()
     if redirect_response:
@@ -2981,6 +3073,21 @@ def reports():
         end_date=end_date,
         rooms=rooms,
         selected_room_id=room_id,
+    )
+
+
+def _admin_reports_fallback():
+    flash("Reports are temporarily unavailable. Please try again shortly.", "warning")
+    today = datetime.utcnow().date()
+    return render_template(
+        "admin/reports.html",
+        daily_reports=[],
+        customer_sessions=[],
+        grand_total=0,
+        start_date=today,
+        end_date=today,
+        rooms=[],
+        selected_room_id="",
     )
 
 
@@ -3399,7 +3506,17 @@ def reports_data_api():
     })
 
 
-reports_data_api = login_required(reports_data_api)
+reports_data_api = login_required(
+    _with_database_fallback(
+        lambda: (
+            jsonify({
+                "status": "error",
+                "message": "Report data is temporarily unavailable.",
+            }),
+            503,
+        )
+    )(reports_data_api)
+)
 
 
 @admin_bp.record_once
@@ -3414,6 +3531,15 @@ def register_reports_data_api(state):
 
 @admin_bp.route("/api/admin/reports-analytics", methods=["GET"])
 @login_required
+@_with_database_fallback(
+    lambda: (
+        jsonify({
+            "status": "error",
+            "message": "Report analytics are temporarily unavailable.",
+        }),
+        503,
+    )
+)
 def reports_analytics_api():
     access_response = require_super_admin_json()
     if access_response:
@@ -4521,6 +4647,15 @@ def membership_check_out(user_or_membership_id):
 
 @admin_bp.route("/api/member/<int:membership_id>/attendance", methods=["GET"])
 @login_required
+@_with_database_fallback(
+    lambda: (
+        jsonify({
+            "status": "error",
+            "message": "Attendance history is temporarily unavailable.",
+        }),
+        503,
+    )
+)
 def member_attendance_history(membership_id):
     """Get attendance history using direct raw database formatting."""
     redirect_response = require_admin_or_staff_json()
@@ -4646,6 +4781,15 @@ def member_attendance_history(membership_id):
 
 @admin_bp.route("/api/dashboard/common-area-occupants", methods=["GET"])
 @login_required
+@_with_database_fallback(
+    lambda: (
+        jsonify({
+            "status": "error",
+            "message": "Occupant data is temporarily unavailable.",
+        }),
+        503,
+    )
+)
 def common_area_occupants():
     """Get list of members currently checked in (for Common Area display on dashboard)."""
     redirect_response = require_admin_or_staff_json()
