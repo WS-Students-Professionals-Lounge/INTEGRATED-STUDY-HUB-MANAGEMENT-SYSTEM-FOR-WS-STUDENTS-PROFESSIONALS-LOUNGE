@@ -16,7 +16,6 @@ from database_fixed import (
     TimeLog,
     User,
     db,
-    ensure_database_schema,
     login_manager,
     mail,
     socketio,
@@ -57,7 +56,6 @@ def create_app(config_class=Config):
 
     with app.app_context():
         db.create_all()
-        ensure_database_schema()
 
     return app
 
