@@ -15,6 +15,7 @@ from flask_socketio import SocketIO
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin
 from sqlalchemy import and_, create_engine, func, inspect, or_, text
+from sqlalchemy.exc import DBAPIError
 from werkzeug.security import check_password_hash, generate_password_hash
 from wtforms import (
     DateTimeLocalField,
@@ -228,7 +229,7 @@ def get_user_by_email(email):
 
     try:
         active_db_name = getattr(db.engine.url, "database", None)
-    except Exception:
+    except DBAPIError:
         active_db_name = None
 
     if active_db_name and os.path.abspath(sqlite_db_path) == os.path.abspath(active_db_name):
@@ -988,6 +989,63 @@ class WalkinAddOn(db.Model):
             'unit_price': float(self.unit_price),
             'subtotal': float(self.subtotal),
         }
+
+
+def sync_database_schema():
+    """Create missing model tables and add missing columns to existing tables."""
+    db.create_all()
+
+    engine = db.engine
+    preparer = engine.dialect.identifier_preparer
+
+    for model_table in db.metadata.sorted_tables:
+        table_name = model_table.name
+        schema = model_table.schema
+        inspector = inspect(engine)
+
+        if not inspector.has_table(table_name, schema=schema):
+            raise RuntimeError(
+                f"Database schema synchronization could not create table "
+                f"{table_name!r}."
+            )
+
+        existing_columns = {
+            column["name"]
+            for column in inspector.get_columns(table_name, schema=schema)
+        }
+        table_identifier = preparer.quote(table_name)
+        if schema:
+            table_identifier = (
+                f"{preparer.quote_schema(schema)}.{table_identifier}"
+            )
+
+        for model_column in model_table.columns:
+            if model_column.name in existing_columns:
+                continue
+
+            column_identifier = preparer.quote(model_column.name)
+            column_type = model_column.type.compile(dialect=engine.dialect)
+            statement = text(
+                f"ALTER TABLE {table_identifier} "
+                f"ADD COLUMN {column_identifier} {column_type}"
+            )
+            try:
+                with engine.begin() as connection:
+                    connection.execute(statement)
+            except Exception:
+                # Another app process may have added this column after inspection.
+                refreshed_inspector = inspect(engine)
+                refreshed_columns = {
+                    column["name"]
+                    for column in refreshed_inspector.get_columns(
+                        table_name,
+                        schema=schema,
+                    )
+                }
+                if model_column.name not in refreshed_columns:
+                    raise
+
+            existing_columns.add(model_column.name)
 
 
 # Forms

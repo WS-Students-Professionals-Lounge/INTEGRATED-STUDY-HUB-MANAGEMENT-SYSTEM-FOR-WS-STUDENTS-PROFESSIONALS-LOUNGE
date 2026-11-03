@@ -19,6 +19,7 @@ from database_fixed import (
     login_manager,
     mail,
     socketio,
+    sync_database_schema,
 )
 from flask import Flask
 from itsdangerous import URLSafeTimedSerializer
@@ -55,7 +56,7 @@ def create_app(config_class=Config):
     app.jinja_env.filters['format_hours'] = decimal_hours_to_readable
 
     with app.app_context():
-        db.create_all()
+        sync_database_schema()
 
     return app
 
