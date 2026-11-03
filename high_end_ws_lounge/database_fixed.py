@@ -170,25 +170,23 @@ def generate_membership_id():
 def generate_customer_id(room_type="common"):
     """
     Generate a customer-facing ID based on the type.
-    - Common Area: 1-70
+    - Common Area: starts at 1, using an unused reservation ID
     - Other rooms and monthly passes: 100-999
     """
     if room_type.lower() == "common area":
-        active_reservations = _common_area_reservations_query(
-            datetime.now()
-        ).filter(Reservation.customer_id.between(1, 70))
         existing_ids = {
-            reservation.customer_id
-            for reservation in active_reservations.all()
-            if reservation.customer_id
+            customer_id
+            for (customer_id,) in db.session.query(Reservation.customer_id)
+            .filter(Reservation.customer_id.isnot(None))
+            .all()
         }
 
-        # Find the first available ID between 1 and 70
-        for i in range(1, 71):
-            if i not in existing_ids:
-                return i
-
-        raise ValueError("Common Area capacity reached")
+        # Reservation customer IDs are unique in the production database.
+        # Completed and pending reservations still occupy their IDs.
+        customer_id = 1
+        while customer_id in existing_ids:
+            customer_id += 1
+        return customer_id
     else:
         existing_ids = set([
             u.customer_id for u in User.query.filter(User.customer_id.between(100, 999)).all() if u.customer_id
@@ -399,7 +397,7 @@ class Reservation(db.Model):
     __tablename__ = "reservations"
 
     id = db.Column(db.Integer, primary_key=True)
-    customer_id = db.Column(db.Integer, nullable=True)
+    customer_id = db.Column(db.Integer, unique=True, nullable=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     room_id = db.Column(db.Integer, db.ForeignKey("rooms.id"), nullable=False)
     customer_name = db.Column(db.String(64))
@@ -407,8 +405,8 @@ class Reservation(db.Model):
     address = db.Column(db.String(128))
     pax_count = db.Column(db.Integer, default=1)
 
-    start_time = db.Column(db.DateTime, nullable=False)
-    end_time = db.Column(db.DateTime, nullable=True)
+    start_time = db.Column(db.DateTime(timezone=False), nullable=False)
+    end_time = db.Column(db.DateTime(timezone=False), nullable=True)
 
     is_paused = db.Column(db.Boolean, default=False)
     paused_at = db.Column(db.DateTime, nullable=True)
@@ -419,6 +417,7 @@ class Reservation(db.Model):
     total_amount = db.Column(db.Float, default=0.0)
     
     amount_paid = db.Column(db.Float, default=0.0)
+    downpayment_date = db.Column(db.DateTime(timezone=False), nullable=True)
     payment_method = db.Column(db.String(50))
     payment_type = db.Column(db.String(20), default="Downpayment")
     receipt_image = db.Column(db.String(255))
@@ -435,7 +434,10 @@ class Reservation(db.Model):
     addon_subtotal = db.Column(db.Float, default=0.0)
     discount_rate = db.Column(db.Float, default=0.0)
     
-    created_at = db.Column(db.DateTime, default=lambda: datetime.utcnow() + timedelta(hours=8))
+    created_at = db.Column(
+        db.DateTime(timezone=False),
+        default=lambda: datetime.utcnow() + timedelta(hours=8),
+    )
 
     reservation_addons = db.relationship(
         "ReservationAddOn",
@@ -464,7 +466,20 @@ class Reservation(db.Model):
 
         query = Reservation.query.filter(
             Reservation.room_id == room_id,
-            Reservation.status.in_(["Confirmed", "Pending", "Walk-in", "Checked-in"]),
+            func.lower(Reservation.status).in_([
+                "confirmed",
+                "approved",
+                "pending",
+                "walk-in",
+                "checked-in",
+                "in_progress",
+                "active",
+                "occupied",
+            ]),
+            or_(
+                Reservation.end_time.is_(None),
+                Reservation.end_time > Reservation.start_time,
+            ),
         )
 
         if exclude_id:
@@ -510,7 +525,7 @@ class ReservationBalancePayment(db.Model):
     )
     amount = db.Column(db.Float, nullable=False)
     paid_at = db.Column(
-        db.DateTime,
+        db.DateTime(timezone=False),
         nullable=False,
         default=lambda: datetime.utcnow() + timedelta(hours=8),
     )
@@ -582,6 +597,8 @@ class SoloPlan(db.Model):
     plan_name = db.Column(db.String(64), nullable=False)
     status = db.Column(db.String(20), default="Pending")
     payment_method = db.Column(db.String(50))
+    amount = db.Column(db.Float, nullable=True, default=0.0)
+    purchase_date = db.Column(db.DateTime, nullable=True)
     receipt_image = db.Column(db.String(255))
     created_at = db.Column(db.DateTime, default=lambda: datetime.utcnow() + timedelta(hours=8))
     approved_at = db.Column(db.DateTime, nullable=True)

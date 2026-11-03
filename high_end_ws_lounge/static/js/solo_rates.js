@@ -1,4 +1,6 @@
 document.addEventListener("DOMContentLoaded", () => {
+    const accountPlanBlocked =
+        document.querySelector('.solo-page')?.dataset.accountPlanBlocked === 'true';
     const menuButton = document.getElementById('soloMenuToggle');
     const menuBackdrop = document.getElementById('soloSidebarBackdrop');
     const sidebar = document.querySelector('.sidebar');
@@ -84,7 +86,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function showModal() {
-        if (!selectedPlan) return;
+if (!selectedPlan || accountPlanBlocked) return;
         planTitle.textContent = `Purchase ${selectedPlan.name}`;
         planPrice.textContent = selectedPlan.price;
         paymentDetails.classList.add('d-none');
@@ -235,7 +237,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     async function submitPayment() {
-        if (!validateModal()) return;
+if (accountPlanBlocked) return;
+if (!validateModal()) return;
 
         submitButton.disabled = true;
         errorContainer.textContent = '';
@@ -265,8 +268,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     document.querySelectorAll('.purchase-plan-btn').forEach(button => {
         button.addEventListener('click', () => {
-            selectedPlan = {
-                name: button.dataset.planName,
+if (accountPlanBlocked) return;
+selectedPlan = {
+name: button.dataset.planName,
                 price: button.dataset.planPrice,
             };
             showModal();

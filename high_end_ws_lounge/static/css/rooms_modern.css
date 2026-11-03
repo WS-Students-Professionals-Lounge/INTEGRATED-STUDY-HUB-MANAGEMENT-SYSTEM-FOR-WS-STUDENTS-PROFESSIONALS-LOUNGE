@@ -93,6 +93,32 @@ body {
     border-left-color: var(--danger);
 }
 
+#conflict-warning-banner,
+.alert-container .room-conflict-alert {
+    text-align: center;
+}
+
+#conflict-warning-banner {
+    margin-top: 12px;
+}
+
+html[data-theme="dark"] .rooms-container #conflict-warning-banner,
+html[data-theme="dark"] .alert-container .room-conflict-alert {
+    border-color: #334155 !important;
+    background: #172033 !important;
+    color: #e2e8f0 !important;
+}
+
+html[data-theme="dark"] .rooms-container #conflict-warning-banner .admin-alert-text,
+html[data-theme="dark"] .alert-container .room-conflict-alert .admin-alert-text {
+    color: #cbd5e1 !important;
+}
+
+html[data-theme="dark"] .rooms-container #conflict-warning-banner .admin-alert-title,
+html[data-theme="dark"] .alert-container .room-conflict-alert .admin-alert-title {
+    color: #e2e8f0 !important;
+}
+
 .alert-info {
     background: rgba(31, 78, 121, 0.08);
     color: var(--primary);

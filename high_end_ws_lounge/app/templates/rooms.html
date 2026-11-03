@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/rooms_modern.css') }}?v=4">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/rooms_modern.css') }}?v=6">
 {% endblock %}
 
 {% block content %}
@@ -78,7 +78,13 @@
         </div>
         <div class="reservation-form-card">
             <h5 class="form-section-title">Reservation</h5>
-            <form method="POST" id="booking-form" enctype="multipart/form-data" novalidate>
+            {% if has_blocking_reservation|default(false) %}
+                <div class="alert alert-warning" role="alert" aria-live="polite">
+                    You already have a pending or active reservation.
+                </div>
+            {% endif %}
+            <form method="POST" id="booking-form" enctype="multipart/form-data" novalidate
+                data-account-booking-blocked="{{ 'true' if has_blocking_reservation|default(false) else 'false' }}">
                 {{ form.hidden_tag() }}
                 {{ form.is_open_time(class="d-none", id="form-open-time") }}
 
@@ -290,7 +296,15 @@
                     </div>
                 </div>
 
-                {% if current_user.is_authenticated and current_user.role != 'member' %}
+                <div id="conflict-warning-banner" class="alert alert-danger admin-alert-card d-none py-2 px-3 text-center mb-0 border-0 shadow-sm small fw-semibold" role="alert" aria-live="polite">
+                    <span class="admin-alert-icon" aria-hidden="true"><i class="fas fa-triangle-exclamation"></i></span>
+                    <span class="admin-alert-content">
+                        <strong class="admin-alert-title">Schedule conflict</strong>
+                        <span class="admin-alert-text"></span>
+                    </span>
+                </div>
+
+                {% if (current_user.is_authenticated and current_user.role != 'member') or has_blocking_reservation|default(false) %}
                    <button type="button" class="form-submit-btn" id="submit-booking" disabled="disabled">Reserve Space</button>
                 {% else %}
                     <button type="button" class="form-submit-btn" id="submit-booking">Reserve Space</button>
@@ -383,5 +397,5 @@
 <div id="currentUserRole" data-role="{{ current_user.role }}" hidden></div>
 
 {% block extra_js %}
-<script src="{{ url_for('static', filename='js/rooms.js') }}"></script>
+<script src="{{ url_for('static', filename='js/rooms.js') }}?v=20261028-realtime-availability-2"></script>
 {% endblock %}

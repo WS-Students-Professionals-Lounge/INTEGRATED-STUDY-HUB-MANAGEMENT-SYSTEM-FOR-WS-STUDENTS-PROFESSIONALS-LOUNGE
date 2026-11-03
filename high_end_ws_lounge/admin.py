@@ -5,7 +5,7 @@ Contains the admin blueprint with all admin routes and daily report helpers.
 import os
 import secrets
 from io import BytesIO
-from datetime import datetime, timezone, timedelta
+from datetime import date, datetime, timezone, timedelta
 import pytz
 from zoneinfo import ZoneInfo
 
@@ -22,7 +22,7 @@ from flask_mail import Message
 from werkzeug.utils import secure_filename
 from flask_login import current_user, login_required
 from flask_socketio import join_room
-from sqlalchemy import and_, func, inspect, or_, text
+from sqlalchemy import String, and_, cast, func, inspect, or_, text
 from time_utils import format_checkin_time, format_checkout_time, format_date, decimal_hours_to_readable
 from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, send_file, session, url_for
 
@@ -345,7 +345,12 @@ def get_common_area_dashboard_counts(now):
         active_walkins_query = active_walkins_query.filter(
             Reservation.deleted_at.is_(None)
         )
-    active_walkins_count = active_walkins_query.count()
+    active_walkins_count = int(
+        active_walkins_query.with_entities(
+            func.coalesce(func.sum(func.coalesce(Reservation.pax_count, 1)), 0)
+        ).scalar()
+        or 0
+    )
 
     active_members_count = db.session.query(AttendanceLog.id).join(Membership).filter(
         Membership.status == "active",
@@ -538,8 +543,7 @@ def refresh_daily_report(report_date):
     report.total_check_ins = Reservation.query.filter(
         Reservation.end_time >= start,
         Reservation.end_time <= end,
-        Reservation.status == "Checked-Out",
-        Reservation.paid == True,
+        *_completed_paid_reservation_filters(),
     ).count()
 
     report.total_logins = TimeLog.query.filter(
@@ -551,8 +555,7 @@ def refresh_daily_report(report_date):
         .filter(
             Reservation.end_time >= start,
             Reservation.end_time <= end,
-            Reservation.status == "Checked-Out",
-            Reservation.paid == True,
+            *_completed_paid_reservation_filters(),
         )
         .scalar()
         or 0
@@ -637,6 +640,8 @@ def check_availability():
 
     try:
         room = Room.query.get(room_id) if room_id else None
+        if not room:
+            return jsonify({"status": "error", "message": "Please select a valid room."}), 400
         is_common_area = room and room.name.strip().lower() == "common area"
 
         if start_str and "T" in start_str:
@@ -665,15 +670,31 @@ def check_availability():
         if not is_common_area:
             conflict = Reservation.query.filter(
                 Reservation.room_id == room_id,
-                Reservation.status.in_(["Confirmed", "APPROVED", "Pending", "Walk-in", "Checked-in"]),
+                func.lower(Reservation.status).in_([
+                    "confirmed",
+                    "approved",
+                    "pending",
+                    "walk-in",
+                    "checked-in",
+                    "in_progress",
+                    "active",
+                    "occupied",
+                ]),
                 Reservation.start_time < end_dt,
-                Reservation.end_time.isnot(None),
-                Reservation.end_time > start_dt,
+                or_(
+                    Reservation.end_time.is_(None),
+                    Reservation.end_time > start_dt,
+                ),
             ).first()
             if conflict:
+                conflict_end = (
+                    conflict.end_time.strftime("%I:%M %p")
+                    if conflict.end_time
+                    else "Open Time"
+                )
                 return jsonify({
                     "status": "conflict",
-                    "message": f"Time Conflict: Reserved until {conflict.end_time.strftime('%I:%M %p')}",
+                    "message": f"Time Conflict: Reserved until {conflict_end}",
                 })
 
             active_session = db.session.query(AttendanceLog).join(Membership).join(
@@ -681,7 +702,11 @@ def check_availability():
                 Reservation.user_id == Membership.user_id,
             ).filter(
                 Reservation.room_id == room_id,
-                Reservation.status.in_(["Confirmed", "Checked-in", "Walk-in"]),
+                func.lower(Reservation.status).in_([
+                    "confirmed",
+                    "checked-in",
+                    "walk-in",
+                ]),
                 AttendanceLog.check_out_time.is_(None),
                 Membership.is_checked_in == True,
                 Membership.status == "active",
@@ -731,8 +756,7 @@ def _get_dashboard_revenue(today_start, today_end):
         .filter(
             Reservation.end_time >= today_start,
             Reservation.end_time < today_end,
-            Reservation.paid == True,
-            func.lower(Reservation.status) == "checked-out",
+            *_completed_paid_reservation_filters(),
         )
         .scalar()
         or 0
@@ -743,7 +767,18 @@ def _get_dashboard_revenue(today_start, today_end):
         .filter(
             ReservationBalancePayment.paid_at >= today_start,
             ReservationBalancePayment.paid_at < today_end,
-            func.lower(Reservation.status) != "checked-out",
+            ~_status_matches(
+                Reservation.status,
+                "CHECKED-OUT",
+                "COMPLETED",
+            ),
+            ~_status_matches(
+                Reservation.status,
+                "PENDING",
+                "CANCELLED",
+                "CANCELED",
+                "REJECTED",
+            ),
         )
         .scalar()
         or 0
@@ -1437,7 +1472,11 @@ def _process_walkin_checkin():
             return redirect(url_for("admin.dashboard"))
 
         start_time = now
-        end_time = start_time if is_open_time else start_time + timedelta(hours=duration_hours)
+        is_common_area = room.name.strip().lower() == "common area"
+        if is_open_time:
+            end_time = None if is_common_area else start_time
+        else:
+            end_time = start_time + timedelta(hours=duration_hours)
 
         if room.name.strip().lower() != "common area":
             reservation_query = Reservation.query.filter(
@@ -1473,7 +1512,18 @@ def _process_walkin_checkin():
                 flash(conflict_message, "danger")
                 return redirect(url_for("admin.dashboard"))
         else:
-            if get_common_area_dashboard_counts(now)[2] >= 70:
+            requested_pax = (
+                form.pax_count.data
+                if form.pax_count.data is not None
+                else 1
+            )
+            if requested_pax < 1:
+                message = "Enter at least one person for the Common Area walk-in."
+                if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                    return jsonify({"success": False, "message": message}), 400
+                flash(message, "danger")
+                return redirect(url_for("admin.dashboard"))
+            if get_common_area_dashboard_counts(now)[2] + requested_pax > 70:
                 message = "Common Area is currently at full capacity."
                 if request.headers.get("X-Requested-With") == "XMLHttpRequest":
                     return jsonify({"success": False, "message": message}), 400
@@ -1823,7 +1873,11 @@ def admin_reservations():
                     full_start = datetime.now()
 
                 if is_open_time:
-                    full_end = full_start + timedelta(hours=12)
+                    full_end = (
+                        None
+                        if room_name_lower == "common area"
+                        else full_start + timedelta(hours=12)
+                    )
                 else:
                     if form.end_time.data:
                         if isinstance(form.end_time.data, str):
@@ -1838,28 +1892,60 @@ def admin_reservations():
                 if room_name_lower != "common area":
                     reservation_conflict = Reservation.query.filter(
                         Reservation.room_id == room.id,
-                        Reservation.status.in_(["Confirmed", "APPROVED", "Pending", "Walk-in", "Checked-in"]),
+                        func.lower(Reservation.status).in_([
+                            "confirmed",
+                            "approved",
+                            "pending",
+                            "walk-in",
+                            "checked-in",
+                            "in_progress",
+                            "active",
+                            "occupied",
+                        ]),
                         Reservation.start_time < full_end,
-                        Reservation.end_time.isnot(None),
-                        Reservation.end_time > full_start,
+                        or_(
+                            Reservation.end_time.is_(None),
+                            Reservation.end_time > full_start,
+                        ),
                     ).first()
                     if reservation_conflict:
+                        conflict_end = (
+                            reservation_conflict.end_time.strftime('%I:%M %p')
+                            if reservation_conflict.end_time
+                            else "open time"
+                        )
                         flash(
-                            f"Time Conflict: Reserved until {reservation_conflict.end_time.strftime('%I:%M %p')}",
+                            f"Time Conflict: Reserved until {conflict_end}",
                             "danger",
                         )
                         return render_template("admin/admin_reservations.html", form=form, rooms=rooms)
 
                     conflict = Reservation.query.filter(
                         Reservation.room_id == room.id,
-                        Reservation.status.in_(["Confirmed", "Walk-in", "Pending"]),
+                        func.lower(Reservation.status).in_([
+                            "confirmed",
+                            "walk-in",
+                            "pending",
+                            "approved",
+                            "checked-in",
+                            "in_progress",
+                            "active",
+                            "occupied",
+                        ]),
                         Reservation.start_time < full_end,
-                        Reservation.end_time > full_start,
+                        or_(
+                            Reservation.end_time.is_(None),
+                            Reservation.end_time > full_start,
+                        ),
                     ).first()
-
                     if conflict:
+                        conflict_end = (
+                            conflict.end_time.strftime('%I:%M %p')
+                            if conflict.end_time
+                            else "open time"
+                        )
                         flash(
-                            f"Cannot book: {room.name} is already reserved by {conflict.customer_name} from {conflict.start_time.strftime('%I:%M %p')} to {conflict.end_time.strftime('%I:%M %p')}."
+                            f"Cannot book: {room.name} is already reserved by {conflict.customer_name} from {conflict.start_time.strftime('%I:%M %p')} to {conflict_end}."
                         )
                         return render_template(
                             "admin/admin_reservations.html", form=form, rooms=rooms
@@ -2734,6 +2820,86 @@ def delete_reservation(res_id):
     return redirect(next_url or url_for("admin.dashboard"))
 
 
+def _status_matches(status, *expected_values):
+    normalized_values = tuple(
+        str(value or "").strip().upper() for value in expected_values
+    )
+    if isinstance(status, str) or status is None:
+        return str(status or "").strip().upper() in normalized_values
+    return func.upper(func.trim(status)).in_(normalized_values)
+
+
+def _completed_paid_reservation_filters():
+    return (
+        _status_matches(
+            Reservation.status,
+            "CHECKED-OUT",
+            "COMPLETED",
+        ),
+        Reservation.paid.is_(True),
+    )
+
+
+def _report_datetime(value, field_name):
+    """Normalize aware timestamps to Manila and interpret naive values as Manila time."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        parsed = value
+    elif isinstance(value, date):
+        parsed = datetime.combine(value, datetime.min.time())
+    elif isinstance(value, str):
+        value = value.strip()
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            parsed = None
+            for date_format in (
+                "%Y/%m/%d %H:%M:%S",
+                "%m/%d/%Y %H:%M:%S",
+                "%Y-%m-%d %H:%M",
+                "%Y/%m/%d",
+                "%m/%d/%Y",
+                "%Y%m%d",
+            ):
+                try:
+                    parsed = datetime.strptime(value, date_format)
+                    break
+                except ValueError:
+                    continue
+            if parsed is None:
+                current_app.logger.warning(
+                    "Ignoring malformed report timestamp in %s: %r",
+                    field_name,
+                    value,
+                )
+                return None
+    else:
+        current_app.logger.warning(
+            "Ignoring unsupported report timestamp in %s: %r",
+            field_name,
+            value,
+        )
+        return None
+
+    if parsed.tzinfo is not None:
+        return parsed.astimezone(ZoneInfo("Asia/Manila")).replace(tzinfo=None)
+    return parsed
+
+
+def _report_timestamp_in_year(value, year, field_name):
+    parsed = _report_datetime(value, field_name)
+    return parsed if parsed is not None and parsed.year == year else None
+
+
+def _report_timestamp_filter(column, query_start, query_end, year):
+    # Match legacy text formats too; parsed timestamps are checked against the year later.
+    return or_(
+        and_(column >= query_start, column < query_end),
+        cast(column, String).like(f"%{year}%"),
+    )
+
+
 @admin_bp.route("/reports", methods=["GET", "POST"])
 @login_required
 def reports():
@@ -2794,7 +2960,7 @@ def reports():
     sessions_query = Reservation.query.filter(
         func.date(Reservation.end_time) >= start_date,
         func.date(Reservation.end_time) <= end_date,
-        Reservation.status.in_(["Checked-Out", "Cancelled"]),
+        *_completed_paid_reservation_filters(),
     )
 
     if room_id:
@@ -2816,6 +2982,788 @@ def reports():
         rooms=rooms,
         selected_room_id=room_id,
     )
+
+
+def _reservation_revenue_by_payment_month(
+    year_start,
+    year_end,
+    source_totals=None,
+    payment_date_stats=None,
+    report_now=None,
+):
+    query_start = year_start - timedelta(days=1)
+    query_end = year_end + timedelta(days=1)
+    year = year_start.year
+    balance_reservation_ids = db.session.query(
+        ReservationBalancePayment.reservation_id
+    ).filter(
+        _report_timestamp_filter(
+            ReservationBalancePayment.paid_at,
+            query_start,
+            query_end,
+            year,
+        )
+    )
+    reservations = db.session.query(
+        Reservation.id.label("id"),
+        Reservation.room_id.label("room_id"),
+        Reservation.total_amount.label("total_amount"),
+        Reservation.amount_paid.label("amount_paid"),
+        Reservation.status.label("status"),
+        Reservation.paid.label("paid"),
+        Reservation.walkin.has().label("is_walkin"),
+        cast(Reservation.downpayment_date, String).label("downpayment_date"),
+        cast(Reservation.created_at, String).label("created_at"),
+        cast(Reservation.end_time, String).label("end_time"),
+        cast(Reservation.start_time, String).label("start_time"),
+    ).filter(
+        or_(
+            _report_timestamp_filter(
+                Reservation.downpayment_date,
+                query_start,
+                query_end,
+                year,
+            ),
+            _report_timestamp_filter(
+                Reservation.created_at,
+                query_start,
+                query_end,
+                year,
+            ),
+            _report_timestamp_filter(
+                Reservation.start_time,
+                query_start,
+                query_end,
+                year,
+            ),
+            and_(
+                _report_timestamp_filter(
+                    Reservation.end_time,
+                    query_start,
+                    query_end,
+                    year,
+                ),
+                _status_matches(
+                    Reservation.status,
+                    "CHECKED-OUT",
+                    "COMPLETED",
+                ),
+                Reservation.paid.is_(True),
+            ),
+            Reservation.id.in_(balance_reservation_ids),
+        )
+    ).all()
+    if not reservations:
+        return [0.0] * 12, {}
+
+    reservation_ids = [reservation.id for reservation in reservations]
+    balance_payments = db.session.query(
+        ReservationBalancePayment.reservation_id.label("reservation_id"),
+        ReservationBalancePayment.amount.label("amount"),
+        cast(ReservationBalancePayment.paid_at, String).label("paid_at"),
+    ).filter(
+        ReservationBalancePayment.reservation_id.in_(reservation_ids)
+    ).all()
+    balances_by_reservation = {}
+    for payment in balance_payments:
+        balances_by_reservation.setdefault(payment.reservation_id, []).append(payment)
+
+    monthly_revenue = [0.0] * 12
+    room_revenue = {}
+    for reservation in reservations:
+        if _status_matches(
+            reservation.status,
+            "PENDING",
+            "CANCELLED",
+            "CANCELED",
+            "REJECTED",
+        ):
+            continue
+
+        total_amount = max(float(reservation.total_amount or 0), 0.0)
+        balance_payments_for_reservation = balances_by_reservation.get(
+            reservation.id, []
+        )
+        normalized_payments = sorted([
+            (
+                payment,
+                _report_datetime(
+                    payment.paid_at,
+                    "reservation_balance_payments.paid_at",
+                ),
+            )
+            for payment in balance_payments_for_reservation
+        ], key=lambda payment_and_date: (
+            payment_and_date[1] is None,
+            payment_and_date[1] or datetime.max,
+        ))
+        recorded_balances = min(
+            sum(
+                max(float(payment.amount or 0), 0.0)
+                for payment in balance_payments_for_reservation
+            ),
+            total_amount,
+        )
+        initial_payment = min(
+            max(float(reservation.amount_paid or 0) - recorded_balances, 0.0),
+            total_amount - recorded_balances,
+        )
+        remaining_balance = max(total_amount - initial_payment, 0.0)
+        source_name = "Walk-ins" if reservation.is_walkin else "Reservations"
+        initial_payment_date = _report_datetime(
+            reservation.downpayment_date,
+            "reservations.downpayment_date",
+        )
+        initial_payment_date_estimated = initial_payment_date is None
+        if initial_payment_date is None:
+            for value, field_name in (
+                (reservation.created_at, "reservations.created_at"),
+                (reservation.end_time, "reservations.end_time"),
+                (reservation.start_time, "reservations.start_time"),
+            ):
+                initial_payment_date = _report_datetime(value, field_name)
+                if initial_payment_date is not None:
+                    break
+        if (
+            initial_payment
+            and initial_payment_date
+            and year_start <= initial_payment_date < year_end
+            and (report_now is None or initial_payment_date <= report_now)
+        ):
+            month_index = initial_payment_date.month - 1
+            monthly_revenue[month_index] += initial_payment
+            room_revenue[reservation.room_id] = (
+                room_revenue.get(reservation.room_id, 0.0) + initial_payment
+            )
+            if source_totals is not None:
+                source_totals[source_name] = (
+                    source_totals.get(source_name, 0.0) + initial_payment
+                )
+            if payment_date_stats is not None:
+                payment_date_stats["total"] += 1
+                if initial_payment_date_estimated:
+                    payment_date_stats["estimated"] += 1
+
+        for payment, payment_date in normalized_payments:
+            amount = min(
+                max(float(payment.amount or 0), 0.0),
+                remaining_balance,
+            )
+            remaining_balance -= amount
+            if (
+                amount
+                and payment_date
+                and year_start <= payment_date < year_end
+                and (report_now is None or payment_date <= report_now)
+            ):
+                month_index = payment_date.month - 1
+                monthly_revenue[month_index] += amount
+                room_revenue[reservation.room_id] = (
+                    room_revenue.get(reservation.room_id, 0.0) + amount
+                )
+                if source_totals is not None:
+                    source_totals[source_name] = (
+                        source_totals.get(source_name, 0.0) + amount
+                    )
+                if payment_date_stats is not None:
+                    payment_date_stats["total"] += 1
+
+        checkout_balance = max(total_amount - initial_payment - recorded_balances, 0.0)
+        checkout_date = _report_datetime(
+            reservation.end_time,
+            "reservations.end_time",
+        )
+        if (
+            checkout_balance
+            and checkout_date
+            and year_start <= checkout_date < year_end
+            and (report_now is None or checkout_date <= report_now)
+            and _status_matches(
+                reservation.status,
+                "CHECKED-OUT",
+                "COMPLETED",
+            )
+            and reservation.paid is True
+        ):
+            month_index = checkout_date.month - 1
+            monthly_revenue[month_index] += checkout_balance
+            room_revenue[reservation.room_id] = (
+                room_revenue.get(reservation.room_id, 0.0) + checkout_balance
+            )
+            if source_totals is not None:
+                source_totals[source_name] = (
+                    source_totals.get(source_name, 0.0) + checkout_balance
+                )
+            if payment_date_stats is not None:
+                payment_date_stats["total"] += 1
+
+    return monthly_revenue, room_revenue
+
+
+def _solo_plan_revenue_by_purchase_month(
+    year_start,
+    year_end,
+    report_now=None,
+    payment_date_stats=None,
+):
+    query_start = year_start - timedelta(days=1)
+    query_end = year_end + timedelta(days=1)
+    year = year_start.year
+    solo_plans = db.session.query(
+        SoloPlan.status.label("status"),
+        SoloPlan.amount.label("amount"),
+        cast(SoloPlan.approved_at, String).label("approved_at"),
+        cast(SoloPlan.purchase_date, String).label("purchase_date"),
+        cast(SoloPlan.created_at, String).label("created_at"),
+    ).filter(
+        SoloPlan.amount > 0,
+        or_(
+            _report_timestamp_filter(
+                SoloPlan.approved_at,
+                query_start,
+                query_end,
+                year,
+            ),
+            _report_timestamp_filter(
+                SoloPlan.purchase_date,
+                query_start,
+                query_end,
+                year,
+            ),
+            _report_timestamp_filter(
+                SoloPlan.created_at,
+                query_start,
+                query_end,
+                year,
+            ),
+        ),
+    ).all()
+
+    monthly_revenue = [0.0] * 12
+    for solo_plan in solo_plans:
+        if _status_matches(
+            solo_plan.status,
+            "REJECTED",
+            "PENDING",
+            "REFUNDED",
+        ):
+            continue
+
+        approval_date = _report_datetime(
+            solo_plan.approved_at,
+            "solo_plans.approved_at",
+        )
+        approval_date_estimated = approval_date is None
+        if approval_date is None:
+            for value, field_name in (
+                (solo_plan.purchase_date, "solo_plans.purchase_date"),
+                (solo_plan.created_at, "solo_plans.created_at"),
+            ):
+                approval_date = _report_datetime(value, field_name)
+                if approval_date is not None:
+                    break
+        amount = max(float(solo_plan.amount or 0), 0.0)
+        if (
+            approval_date is not None
+            and amount
+            and year_start <= approval_date < year_end
+            and (report_now is None or approval_date <= report_now)
+        ):
+            monthly_revenue[approval_date.month - 1] += amount
+            if payment_date_stats is not None:
+                payment_date_stats["total"] += 1
+                if approval_date_estimated:
+                    payment_date_stats["estimated"] += 1
+
+    return monthly_revenue
+
+
+def reports_data_api():
+    access_response = require_super_admin_json()
+    if access_response:
+        return access_response
+
+    now = datetime.utcnow() + timedelta(hours=8)
+    year_start = datetime(now.year, 1, 1)
+    year_end = datetime(now.year + 1, 1, 1)
+    month_labels = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December",
+    ]
+    monthly_revenue, room_payment_revenue = _reservation_revenue_by_payment_month(
+        year_start, year_end
+    )
+    room_usage = {}
+    unpriced_memberships = 0
+    included_statuses = {"confirmed", "checked-out", "checked_out", "completed"}
+    room_category_labels = {
+        "meeting": "Small Meeting Rooms",
+        "lecture": "Lecture Room",
+        "conference": "Conference Room",
+        "comfy": "Comfy Room",
+        "event": "Event Rooms",
+        "solo": "Common Area",
+    }
+
+    reservations = Reservation.query.filter(
+        Reservation.start_time >= year_start,
+        Reservation.start_time < year_end,
+    ).all()
+    for reservation in reservations:
+        if (reservation.status or "").strip().lower() not in included_statuses:
+            continue
+
+        room = reservation.room
+        if not room:
+            continue
+
+        category = (room.category or "").strip().lower()
+        room_label = room_category_labels.get(
+            category, category.title() if category else room.name
+        )
+        usage = room_usage.setdefault(
+            room_label,
+            {"label": room_label, "hours": 0.0, "revenue": 0.0, "bookings": 0},
+        )
+        usage["bookings"] += 1
+        if reservation.end_time and reservation.end_time > reservation.start_time:
+            usage["hours"] += (
+                reservation.end_time - reservation.start_time
+            ).total_seconds() / 3600
+
+    revenue_rooms = Room.query.filter(
+        Room.id.in_(room_payment_revenue)
+    ).all()
+    for room in revenue_rooms:
+        category = (room.category or "").strip().lower()
+        room_label = room_category_labels.get(
+            category, category.title() if category else room.name
+        )
+        usage = room_usage.setdefault(
+            room_label,
+            {"label": room_label, "hours": 0.0, "revenue": 0.0, "bookings": 0},
+        )
+        usage["revenue"] += room_payment_revenue[room.id]
+
+    active_memberships = Membership.query.filter(
+        func.lower(Membership.status) == "active",
+        Membership.start_date >= year_start,
+        Membership.start_date < year_end,
+    ).all()
+    for membership in active_memberships:
+        plan_name = (membership.plan_name or "").strip().upper()
+        plan_price = _MEMBERSHIP_RENEWAL_PRICES.get(plan_name)
+        if plan_price is None:
+            unpriced_memberships += 1
+            continue
+        monthly_revenue[membership.start_date.month - 1] += plan_price
+
+    room_items = sorted(
+        room_usage.values(),
+        key=lambda item: (-item["hours"], item["label"].lower()),
+    )
+    top_month_index = max(range(12), key=lambda index: monthly_revenue[index])
+    top_month = (
+        {
+            "label": month_labels[top_month_index],
+            "revenue": round(monthly_revenue[top_month_index], 2),
+        }
+        if any(monthly_revenue) else None
+    )
+    top_room = room_items[0] if room_items else None
+
+    return jsonify({
+        "year": now.year,
+        "monthly_revenue": [round(amount, 2) for amount in monthly_revenue],
+        "months": month_labels,
+        "rooms": [
+            {
+                **item,
+                "hours": round(item["hours"], 2),
+                "revenue": round(item["revenue"], 2),
+            }
+            for item in room_items
+        ],
+        "summary": {
+            "top_month": top_month,
+            "most_active_room": (
+                {
+                    "label": top_room["label"],
+                    "hours": round(top_room["hours"], 2),
+                    "bookings": top_room["bookings"],
+                }
+                if top_room else None
+            ),
+            "unpriced_memberships": unpriced_memberships,
+        },
+    })
+
+
+reports_data_api = login_required(reports_data_api)
+
+
+@admin_bp.record_once
+def register_reports_data_api(state):
+    state.app.add_url_rule(
+        "/api/admin/reports-data",
+        endpoint="reports_data_api",
+        view_func=reports_data_api,
+        methods=["GET"],
+    )
+
+
+@admin_bp.route("/api/admin/reports-analytics", methods=["GET"])
+@login_required
+def reports_analytics_api():
+    access_response = require_super_admin_json()
+    if access_response:
+        return access_response
+
+    ph_now = datetime.now(ZoneInfo("Asia/Manila"))
+    try:
+        year = int(request.args.get("year", ph_now.year))
+        if year < 1900 or year > 9998:
+            raise ValueError
+    except (TypeError, ValueError):
+        return jsonify({"status": "error", "message": "A valid year is required."}), 400
+
+    year_start = datetime(year, 1, 1)
+    year_end = datetime(year + 1, 1, 1)
+    query_start = year_start - timedelta(days=1)
+    query_end = year_end + timedelta(days=1)
+    report_now = ph_now.replace(tzinfo=None)
+    visible_month_count = (
+        12 if year < ph_now.year else
+        ph_now.month if year == ph_now.year else
+        0
+    )
+    finished_month_count = (
+        12 if year < ph_now.year else
+        ph_now.month - 1 if year == ph_now.year else
+        0
+    )
+    payment_date_stats = {"estimated": 0, "total": 0}
+    completed_filters = _completed_paid_reservation_filters()
+    revenue_sources = {
+        "Reservations": 0.0,
+        "Walk-ins": 0.0,
+        "Solo plans": 0.0,
+        "Membership renewals": 0.0,
+    }
+    monthly_revenue, room_payment_revenue = _reservation_revenue_by_payment_month(
+        year_start,
+        year_end,
+        source_totals=revenue_sources,
+        payment_date_stats=payment_date_stats,
+        report_now=report_now,
+    )
+    monthly_reservation_revenue = monthly_revenue[:]
+    solo_plan_revenue = _solo_plan_revenue_by_purchase_month(
+        year_start,
+        year_end,
+        report_now=report_now,
+        payment_date_stats=payment_date_stats,
+    )
+    revenue_sources["Solo plans"] = sum(solo_plan_revenue)
+    monthly_revenue = [
+        reservation_revenue + solo_revenue
+        for reservation_revenue, solo_revenue in zip(
+            monthly_revenue, solo_plan_revenue
+        )
+    ]
+    monthly_sessions = [0] * 12
+    completed_reservations = db.session.query(
+        Reservation.room_id.label("room_id"),
+        cast(Reservation.end_time, String).label("end_time"),
+    ).filter(
+        _report_timestamp_filter(
+            Reservation.end_time,
+            query_start,
+            query_end,
+            year,
+        ),
+        *completed_filters,
+    ).all()
+    room_sessions = {}
+    for reservation in completed_reservations:
+        checkout_date = _report_timestamp_in_year(
+            reservation.end_time,
+            year,
+            "reservations.end_time",
+        )
+        if checkout_date is None or checkout_date > report_now:
+            continue
+        monthly_sessions[checkout_date.month - 1] += 1
+        room_sessions[reservation.room_id] = (
+            room_sessions.get(reservation.room_id, 0) + 1
+        )
+
+    renewal_logs = db.session.query(
+        UserActivityLog.id.label("id"),
+        UserActivityLog.activity_type.label("activity_type"),
+        cast(UserActivityLog.activity_time, String).label("activity_time"),
+    ).filter(
+        _report_timestamp_filter(
+            UserActivityLog.activity_time,
+            query_start,
+            query_end,
+            year,
+        ),
+        UserActivityLog.activity_type.like("renewal:%"),
+    ).all()
+    for payment_log in renewal_logs:
+        payment_date = _report_timestamp_in_year(
+            payment_log.activity_time,
+            year,
+            "user_activity_logs.activity_time",
+        )
+        if payment_date is None or payment_date > report_now:
+            continue
+        try:
+            amount = int(payment_log.activity_type.rsplit(":", 1)[1]) / 100
+        except (AttributeError, ValueError, IndexError):
+            current_app.logger.warning(
+                "Ignoring malformed membership renewal revenue log %s",
+                payment_log.id,
+            )
+            continue
+        month_index = payment_date.month - 1
+        monthly_revenue[month_index] += amount
+        revenue_sources["Membership renewals"] += amount
+        if amount > 0:
+            payment_date_stats["total"] += 1
+
+    room_rows = Room.query.filter(Room.id.in_(room_sessions)).all()
+    rooms_by_id = {
+        room.id: {
+            "name": room.name,
+            "sessions": room_sessions[room.id],
+            "revenue": 0.0,
+        }
+        for room in room_rows
+    }
+
+    for room in Room.query.filter(Room.id.in_(room_payment_revenue)).all():
+        if room.id in rooms_by_id:
+            rooms_by_id[room.id]["revenue"] += room_payment_revenue[room.id]
+        else:
+            rooms_by_id[room.id] = {
+                "name": room.name,
+                "sessions": 0,
+                "revenue": room_payment_revenue[room.id],
+            }
+
+    weekday_counts = [0] * 7
+    weekday_reservations = db.session.query(
+        cast(Reservation.start_time, String).label("start_time"),
+        cast(Reservation.end_time, String).label("end_time"),
+    ).filter(
+        _report_timestamp_filter(
+            Reservation.start_time,
+            query_start,
+            query_end,
+            year,
+        ),
+        Reservation.end_time.isnot(None),
+        *completed_filters,
+    ).all()
+    for reservation in weekday_reservations:
+        session_date = _report_timestamp_in_year(
+            reservation.start_time,
+            year,
+            "reservations.start_time",
+        )
+        checkout_date = _report_timestamp_in_year(
+            reservation.end_time,
+            year,
+            "reservations.end_time",
+        )
+        if (
+            session_date is not None
+            and checkout_date is not None
+            and session_date <= report_now
+            and checkout_date <= report_now
+        ):
+            weekday_counts[session_date.weekday()] += 1
+
+    month_labels = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December",
+    ]
+    visible_months_with_revenue = [
+        index
+        for index, revenue in enumerate(monthly_revenue[:visible_month_count])
+        if revenue > 0
+    ]
+    finished_months_with_revenue = [
+        index
+        for index, revenue in enumerate(monthly_revenue[:finished_month_count])
+        if revenue > 0
+    ]
+    completed_session_count = sum(monthly_sessions)
+    reservation_revenue = sum(monthly_reservation_revenue)
+    total_revenue = sum(monthly_revenue[:visible_month_count])
+    room_items = sorted(
+        (
+            {
+                "name": room["name"],
+                "sessions": room["sessions"],
+                "revenue": round(room["revenue"], 2),
+            }
+            for room in rooms_by_id.values()
+        ),
+        key=lambda item: (-item["sessions"], item["name"].lower()),
+    )
+    room_revenue_items = sorted(
+        (item for item in room_items if item["revenue"] > 0),
+        key=lambda item: (-item["revenue"], item["name"].lower()),
+    )
+    best_month_index = (
+        max(
+            visible_months_with_revenue,
+            key=lambda index: monthly_revenue[index],
+        )
+        if visible_months_with_revenue
+        else None
+    )
+    best_finished_month_index = (
+        max(
+            finished_months_with_revenue,
+            key=lambda index: monthly_revenue[index],
+        )
+        if finished_months_with_revenue
+        else None
+    )
+    weakest_month_index = (
+        min(
+            finished_months_with_revenue,
+            key=lambda index: monthly_revenue[index],
+        )
+        if finished_months_with_revenue
+        else None
+    )
+    top_room = room_items[0] if room_items and room_items[0]["sessions"] else None
+    average_revenue = (
+        sum(monthly_revenue[index] for index in finished_months_with_revenue)
+        / len(finished_months_with_revenue)
+        if finished_months_with_revenue
+        else 0
+    )
+
+    insights = []
+    if best_finished_month_index is not None:
+        insights.append(
+            f"{month_labels[best_finished_month_index]} was the strongest finished "
+            f"month at PHP{monthly_revenue[best_finished_month_index]:,.2f}."
+        )
+    if weakest_month_index is not None and average_revenue:
+        below_average = (
+            (average_revenue - monthly_revenue[weakest_month_index])
+            / average_revenue
+            * 100
+        )
+        insights.append(
+            f"{month_labels[weakest_month_index]} was the weakest month with sales, "
+            f"{below_average:.1f}% below the average of months with sales."
+        )
+    if top_room:
+        insights.append(
+            f"{top_room['name']} was the most-used room with "
+            f"{top_room['sessions']} completed sessions."
+        )
+    if len(room_items) > 1:
+        least_used_room = min(
+            room_items,
+            key=lambda item: (item["sessions"], item["name"].lower()),
+        )
+        insights.append(
+            f"{least_used_room['name']} had the fewest completed sessions "
+            f"({least_used_room['sessions']})."
+        )
+    for index in range(1, finished_month_count):
+        previous_revenue = monthly_revenue[index - 1]
+        current_revenue = monthly_revenue[index]
+        if previous_revenue > 0 and current_revenue < previous_revenue:
+            drop_percent = (
+                (previous_revenue - current_revenue) / previous_revenue * 100
+            )
+            insights.append(
+                f"Sales fell {drop_percent:.1f}% from "
+                f"{month_labels[index - 1]} to {month_labels[index]}."
+            )
+            break
+
+    forecast_available = finished_month_count >= 3
+    forecast_amount = None
+    forecast_month_index = visible_month_count
+    forecast_year = year + (forecast_month_index // 12)
+    if forecast_available:
+        trailing_months = [
+            monthly_revenue[index]
+            for index in range(finished_month_count - 3, finished_month_count)
+        ]
+        if len(trailing_months) == 3:
+            forecast_amount = round(sum(trailing_months) / 3, 2)
+
+    if year == ph_now.year:
+        month_labels[ph_now.month - 1] = (
+            f"{month_labels[ph_now.month - 1]} (Month so far)"
+        )
+
+    return jsonify({
+        "year": year,
+        "months": month_labels,
+        "visible_month_count": visible_month_count,
+        "finished_month_count": finished_month_count,
+        "monthly_revenue": [
+            round(amount, 2) if index < visible_month_count else None
+            for index, amount in enumerate(monthly_revenue)
+        ],
+        "reservation_revenue": round(reservation_revenue, 2),
+        "payment_date_stats": payment_date_stats,
+        "kpis": {
+            "total_revenue": round(total_revenue, 2),
+            "completed_sessions": completed_session_count,
+            "average_reservation_bill": round(
+                reservation_revenue / completed_session_count, 2
+            ) if completed_session_count else 0,
+            "best_month": (
+                {
+                    "label": month_labels[best_month_index],
+                    "revenue": round(monthly_revenue[best_month_index], 2),
+                }
+                if best_month_index is not None else None
+            ),
+            "most_used_room": top_room,
+        },
+        "rooms": room_items,
+        "room_revenue": room_revenue_items,
+        "sources": [
+            {"label": label, "revenue": round(amount, 2)}
+            for label, amount in revenue_sources.items()
+            if amount > 0
+        ],
+        "weekdays": [
+            {
+                "label": label,
+                "sessions": weekday_counts[index],
+            }
+            for index, label in enumerate(
+                ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+            )
+        ],
+        "insights": insights,
+        "forecast": {
+            "available": forecast_amount is not None,
+            "label": month_labels[forecast_month_index % 12]
+            if forecast_amount is not None else None,
+            "month_index": (
+                forecast_month_index % 12 if forecast_amount is not None else None
+            ),
+            "year": forecast_year if forecast_amount is not None else None,
+            "amount": forecast_amount,
+        },
+    })
 
 
 @admin_bp.route("/generate_pdf")
@@ -2855,9 +3803,7 @@ def generate_completed_sessions_pdf():
         except ValueError:
             parsed_end_date = None
 
-    query = Reservation.query.filter(
-        Reservation.status.in_(["Checked-Out", "Cancelled"])
-    )
+    query = Reservation.query.filter(*_completed_paid_reservation_filters())
 
     if parsed_start_date:
         query = query.filter(func.date(Reservation.end_time) >= parsed_start_date)
@@ -3076,9 +4022,23 @@ def members():
         .all()
     )
 
+    active_members = [
+        member for member in all_members
+        if member.membership and member.membership.is_checked_in
+    ]
+    history_members = [
+        member for member in all_members
+        if member.membership
+        and not member.membership.is_checked_in
+        and (member.membership.status or "").strip().lower()
+        in {"active", "expired", "checked_out", "checked-out", "checked out", "completed"}
+    ]
+
     return render_template(
         "admin/members.html",
         members=all_members,
+        active_members=active_members,
+        history_members=history_members,
         search=search,
         membership_requests=membership_requests,
         active_tab=active_tab,
