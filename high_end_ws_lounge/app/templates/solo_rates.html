@@ -7,8 +7,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="solo-page container"
-    data-account-plan-blocked="{{ 'true' if has_blocking_solo_plan|default(false) else 'false' }}">
+<div class="solo-page container">
     <div class="solo-mobile-bar">
         <img src="{{ url_for('static', filename='img/main_logo.png') }}" alt="WS Lounge" class="solo-mobile-logo">
         <button type="button" class="solo-menu-toggle" id="soloMenuToggle"
@@ -30,11 +29,6 @@
             <p class="solo-intro">Choose your plan, upload your payment receipt, and wait for admin approval. Your current solo plan status is shown below.</p>
         </div>
     </div>
-    {% if has_blocking_solo_plan|default(false) %}
-        <div class="alert alert-warning" role="alert" aria-live="polite">
-            You currently have an active or pending SoloPlan membership request. You cannot purchase another plan until your current plan is completed or processed.
-        </div>
-    {% endif %}
 
     <!-- Solo Status and Membership Info Cards -->
     <div class="solo-status-grid">
@@ -167,11 +161,7 @@
                 </ul>
             </div>
             <div class="plan-card-footer">
-                {% if has_blocking_solo_plan|default(false) %}
-                    <button class="btn btn-secondary btn-block" type="button" disabled>
-                        {{ 'Pending approval' if has_pending else 'Active plan in use' }}
-                    </button>
-                {% elif active_solo_plan %}
+                {% if active_solo_plan %}
                     <button class="btn btn-secondary btn-block" disabled>Active plan in use</button>
                 {% elif has_pending %}
                     <button class="btn btn-secondary btn-block" disabled>Pending approval</button>

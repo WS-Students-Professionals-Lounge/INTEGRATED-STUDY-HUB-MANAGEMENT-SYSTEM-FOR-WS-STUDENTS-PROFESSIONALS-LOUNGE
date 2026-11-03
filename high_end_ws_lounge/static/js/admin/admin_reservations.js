@@ -360,12 +360,11 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'conflict') {
-                    const conflictMessage = formatConflictMessage(data.message) || 'Time conflict detected.';
-                    setAvailabilityState(conflictMessage, true);
+                    setAvailabilityState(data.message || 'Time conflict detected.', true);
                     Swal.fire({
                         icon: 'error',
                         title: 'Schedule Conflict',
-                        text: conflictMessage,
+                        text: data.message || 'The selected room is already booked for the requested time slot.',
                         confirmButtonColor: '#d90429'
                     });
                 } else {
@@ -398,23 +397,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const confirmButton = document.getElementById('confirmReservation');
     const cancelButton = document.getElementById('cancelReservation');
 
-    function formatConflictMessage(message) {
-        const conflictMatch = String(message || '').trim().match(
-            /^(?:Time Conflict:\s*)?Reserved until\s+(.+)$/i
-        );
-        if (!conflictMatch || !startTime?.value) return message;
-
-        const startDate = new Date(startTime.value);
-        if (Number.isNaN(startDate.getTime())) return message;
-
-        const reservedStart = startDate.toLocaleTimeString('en-US', {
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: true
-        });
-        return `Room is already reserved from ${reservedStart} to ${conflictMatch[1]}.`;
-    }
-
     function setAvailabilityState(message, isConflict) {
         const conflictIndicator = document.getElementById('time-conflict-indicator');
         if (confirmButton) {
@@ -425,7 +407,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (isConflict) {
             conflictIndicator.innerHTML = '<span class="admin-alert-icon" aria-hidden="true"><i class="fas fa-triangle-exclamation"></i></span><span class="admin-alert-content"><strong class="admin-alert-title">Schedule conflict</strong><span class="admin-alert-text"></span></span>';
-            conflictIndicator.querySelector('.admin-alert-text').textContent = formatConflictMessage(message) || 'Time conflict detected.';
+            conflictIndicator.querySelector('.admin-alert-text').textContent = message || 'Time conflict detected.';
             conflictIndicator.classList.remove('d-none');
             conflictIndicator.className = 'alert alert-danger admin-alert-card py-2 px-3 text-center mb-0 border-0 shadow-sm small fw-semibold';
         } else {

@@ -860,9 +860,6 @@ function initializeMemberSoloPlanNotifications() {
     const dashboardBadge = document.getElementById('member-dashboard-notif-badge');
     if (!dashboardBadge) return;
 
-    dashboardBadge.classList.add('d-none');
-    dashboardBadge.style.display = 'none';
-
     const memberId = dashboardBadge.dataset.memberId || 'current';
     const stateKey = `member-solo-last-state:${memberId}`;
     const pendingToastKey = `member-solo-pending-toast:${memberId}`;

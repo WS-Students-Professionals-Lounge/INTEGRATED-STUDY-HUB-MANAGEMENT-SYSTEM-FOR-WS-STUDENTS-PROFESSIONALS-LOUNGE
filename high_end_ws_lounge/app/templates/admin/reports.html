@@ -1,13 +1,8 @@
 {% extends "base.html" %}
 
-{% block chart_js %}
-<script src="{{ url_for('static', filename='vendor/chartjs-4.6.1/chart.umd.min.js') }}?v=4.6.1"></script>
-{% endblock %}
-
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/admin/reports.css') }}?v=2">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/admin/reports_responsive.css') }}?v=1">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/admin/reports_analytics.css') }}?v=2">
 <style>
     /* Custom Spreadsheet Grid Styling */
     .spreadsheet-table {
@@ -235,113 +230,9 @@
             <small class="text-muted">Data automatically stored upon session end.</small>
         </div>
     </div>
-
-    <section class="analytics-section" aria-labelledby="reportsAnalyticsTitle"
-             data-endpoint="{{ url_for('admin.reports_analytics_api') }}">
-        <div class="analytics-heading">
-            <div>
-                <h3 id="reportsAnalyticsTitle"><i class="fas fa-chart-pie" aria-hidden="true"></i> Sales Analytics</h3>
-                <p>Sales and room activity for the selected year</p>
-                <p class="analytics-revenue-note">
-                    Total revenue includes dated reservation payments, SoloPlan purchases grouped by approval date, and recorded membership renewals. Average reservation bill is reservation revenue divided by paid completed sessions. Fallback dates are included in the estimated-date count below.
-                </p>
-            </div>
-            <label class="analytics-year-control" for="analyticsYear">
-                <span>Analytics year</span>
-                <select id="analyticsYear" aria-label="Analytics year"></select>
-            </label>
-        </div>
-
-        <div class="analytics-empty" id="analyticsEmpty" hidden>
-            <i class="fas fa-chart-line" aria-hidden="true"></i>
-            <h4>No sales data for this year yet</h4>
-            <p>Completed sessions and recorded payments will appear here when available.</p>
-        </div>
-
-        <div class="analytics-content" id="analyticsContent" hidden>
-            <div class="analytics-kpis" aria-label="Sales key performance indicators">
-                <article class="analytics-kpi analytics-kpi-revenue">
-                    <span class="analytics-kpi-icon"><i class="fas fa-coins" aria-hidden="true"></i></span>
-                    <span class="analytics-kpi-label">Total Revenue</span>
-                    <strong id="analyticsTotalRevenue">—</strong>
-                </article>
-                <article class="analytics-kpi analytics-kpi-sessions">
-                    <span class="analytics-kpi-icon"><i class="fas fa-door-open" aria-hidden="true"></i></span>
-                    <span class="analytics-kpi-label">Completed Sessions</span>
-                    <strong id="analyticsCompletedSessions">—</strong>
-                </article>
-                <article class="analytics-kpi analytics-kpi-average">
-                    <span class="analytics-kpi-icon"><i class="fas fa-receipt" aria-hidden="true"></i></span>
-                    <span class="analytics-kpi-label">Average reservation bill</span>
-                    <strong id="analyticsAverageBill">—</strong>
-                </article>
-                <article class="analytics-kpi analytics-kpi-best">
-                    <span class="analytics-kpi-icon"><i class="fas fa-trophy" aria-hidden="true"></i></span>
-                    <span class="analytics-kpi-label">Best Month</span>
-                    <strong id="analyticsBestMonth">—</strong>
-                </article>
-                <article class="analytics-kpi analytics-kpi-room">
-                    <span class="analytics-kpi-icon"><i class="fas fa-couch" aria-hidden="true"></i></span>
-                    <span class="analytics-kpi-label">Most-Used Room</span>
-                    <strong id="analyticsMostUsedRoom">—</strong>
-                </article>
-            </div>
-
-            <div class="analytics-grid">
-                <article class="analytics-card analytics-card-monthly">
-                    <header><h4><i class="fas fa-chart-area" aria-hidden="true"></i> Monthly Revenue</h4></header>
-                    <div class="analytics-chart-wrap"><canvas id="analyticsMonthlyChart" role="img" aria-label="Monthly revenue chart"></canvas></div>
-                    <p class="analytics-month-badge" id="analyticsMonthStatus"></p>
-                    <p class="analytics-forecast-status" id="analyticsForecastStatus"></p>
-                </article>
-                <article class="analytics-card">
-                    <header><h4><i class="fas fa-chart-pie" aria-hidden="true"></i> Revenue by Room</h4></header>
-                    <div class="analytics-chart-wrap analytics-chart-doughnut">
-                        <canvas id="analyticsRoomRevenueChart" role="img" aria-label="Revenue by room doughnut chart"></canvas>
-                        <p class="analytics-chart-empty" id="analyticsRoomRevenueEmpty" hidden>No room revenue recorded for this year.</p>
-                    </div>
-                    <p class="analytics-forecast-status">Shows recorded reservation payments, including downpayments and balances, grouped by room. Membership renewals and SoloPlan purchases are included in Total Revenue but excluded here because they are not tied to a room.</p>
-                </article>
-                <article class="analytics-card">
-                    <header><h4><i class="fas fa-money-bill-wave" aria-hidden="true"></i> Revenue by Source</h4></header>
-                    <div class="analytics-chart-wrap">
-                        <canvas id="analyticsSourceChart" role="img" aria-label="Revenue by payment source chart"></canvas>
-                        <p class="analytics-chart-empty" id="analyticsSourceEmpty" hidden>No source revenue recorded for this year.</p>
-                    </div>
-                    <p class="analytics-forecast-status">Includes reservation payments, walk-ins, approved SoloPlan purchases, and recorded membership renewals.</p>
-                </article>
-                <article class="analytics-card">
-                    <header><h4><i class="fas fa-chart-bar" aria-hidden="true"></i> Room Usage</h4></header>
-                    <div class="analytics-chart-wrap">
-                        <canvas id="analyticsRoomUsageChart" role="img" aria-label="Completed sessions by room chart"></canvas>
-                        <p class="analytics-chart-empty" id="analyticsRoomUsageEmpty" hidden>No completed room sessions recorded for this year.</p>
-                    </div>
-                </article>
-                <article class="analytics-card">
-                    <header><h4><i class="fas fa-calendar-week" aria-hidden="true"></i> Busiest Day of Week</h4></header>
-                    <div class="analytics-chart-wrap">
-                        <canvas id="analyticsWeekdayChart" role="img" aria-label="Completed sessions by weekday chart"></canvas>
-                        <p class="analytics-chart-empty" id="analyticsWeekdayEmpty" hidden>No completed sessions recorded for this year.</p>
-                    </div>
-                </article>
-                <article class="analytics-card analytics-insights-card">
-                    <header><h4><i class="fas fa-lightbulb" aria-hidden="true"></i> Insights</h4></header>
-                    <ul id="analyticsInsights" class="analytics-insights"></ul>
-                </article>
-            </div>
-        </div>
-
-        <p class="analytics-estimated-date-note" id="analyticsEstimatedPaymentDates" aria-live="polite">
-            0 of 0 payments use an estimated date
-        </p>
-        <p class="analytics-error" id="analyticsError" role="alert" hidden>
-            Analytics could not be loaded. Please try selecting the year again.
-        </p>
-    </section>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/admin/reports.js') }}?v=1"></script>
-<script src="{{ url_for('static', filename='js/admin/reports_analytics.js') }}?v=5"></script>
 {% endblock %}

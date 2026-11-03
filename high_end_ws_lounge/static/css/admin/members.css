@@ -546,7 +546,6 @@
 .member-card-actions button,
 .member-card-actions .btn,
 .member-card-actions .btn-deactivate,
-.member-card-actions .btn-checkout-session,
 .member-card-actions .btn-check-in,
 .member-card-actions .btn-view-records {
     width: 100% !important;
@@ -562,7 +561,6 @@
 }
 
 .btn-check-in,
-.btn-checkout-session,
 .btn-view-records,
 .btn-renew,
 .btn-reactivate,
@@ -578,7 +576,6 @@
 }
 
 .btn-check-in:hover,
-.btn-checkout-session:hover,
 .btn-view-records:hover,
 .btn-renew:hover,
 .btn-reactivate:hover,
@@ -594,14 +591,9 @@
     background: var(--danger);
 }
 
-.btn-checkout-session {
-    background: var(--danger);
-}
-
 .btn-renew:hover,
 .btn-reactivate:hover,
 .btn-check-in:hover,
-.btn-checkout-session:hover,
 .btn-view-records:hover,
 .btn-deactivate:hover {
     transform: translateY(-1px);

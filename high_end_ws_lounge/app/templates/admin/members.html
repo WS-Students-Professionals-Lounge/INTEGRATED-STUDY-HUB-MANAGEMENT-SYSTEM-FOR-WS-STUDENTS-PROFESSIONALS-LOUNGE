@@ -70,11 +70,6 @@
                 {% endif %}
             </button>
 
-            <button class="tab-btn {{ 'active' if active_tab == 'history' else '' }}"
-                    data-tab="history">
-                <span>History</span>
-            </button>
-
             <button class="tab-btn {{ 'active' if active_tab == 'deactivated' else '' }}"
                     data-tab="deactivated">
                 <span>Deactivated Accounts</span>
@@ -152,7 +147,10 @@
             </div>
 
             <div class="members-card-list">
-                {% for member in active_members %}
+                {% set ns = namespace(count=0) %}
+                {% for member in members %}
+                    {% if member.membership and member.membership.status == 'active' %}
+                        {% set ns.count = ns.count + 1 %}
                         <div class="member-list-card" data-searchable="{{ member.name }} {{ member.email }} WS-WLK-{{ member.id }}" data-user-id="{{ member.id }}" data-membership-id="{{ member.membership.id if member.membership else member.id }}" data-end-time="{{ member.membership.expiry_date.isoformat() if member.membership and member.membership.expiry_date else '' }}">
                             {% set is_checked_in_val = member.membership and member.membership.is_checked_in %}
                             {% set raw_paused = (member.membership and member.membership.is_paused) or (member.is_paused if member.is_paused is defined else False) %}
@@ -210,16 +208,26 @@
                                                 {% if is_paused_val %}Resume Session{% else %}Pause Session{% endif %}
                                             </button>
 
-                                            <button type="button" class="btn-checkout-session" style="width: 100%;" onclick="handleCheckout('{{ member.id }}')">Check-Out Customer</button>
+                                            <button type="button" class="btn-deactivate" style="width: 100%; background-color: #dc3545; color: white;" onclick="handleCheckout('{{ member.id }}')">Check-Out Customer</button>
 
                                         {% elif member.membership and member.membership.is_checked_out and not (member.id in approved_solo_user_ids) %}
-                                            <button type="button" class="btn-checkout-session" style="width: 100%; opacity: 0.65; cursor: not-allowed;" disabled>Checked Out</button>
+                                            <button type="button" class="btn-deactivate" style="width: 100%; opacity: 0.65; cursor: not-allowed; background-color: #dc3545; color: white;" disabled>Checked Out</button>
                                         {% else %}
                                             <button class="btn-check-in btn-action" type="button" data-user-id="{{ member.id }}" data-membership-id="{{ member.membership.id if member.membership else member.id }}" data-is-checked-in="false" style="width: 100%; background-color: #10b981; color: #ffffff; cursor: pointer;">Check In</button>
                                         {% endif %}
                                     </div>
 
                                     <button class="btn-view-records" type="button" data-user-id="{{ member.id }}" data-membership-id="{{ member.membership.id if member.membership else '' }}">View Records</button>
+
+                                    <div class="manage-action-group">
+                                    {% if member.membership and member.membership.is_checked_in %}
+                                        <button type="button" class="btn renew-btn" style="font-weight: bold; background-color: #153d70; color: white; opacity: 0.65; cursor: not-allowed;" disabled>Renew Membership</button>
+                                    {% else %}
+                                        <button class="btn renew-btn btn-action" type="button" data-user-id="{{ member.id }}" style="font-weight: bold; background-color: #153d70; color: white; cursor: pointer;">Renew Membership</button>
+                                    {% endif %}
+
+                                    <button class="btn-deactivate" type="button" data-user-id="{{ member.id }}">Deactivate</button>
+                                    </div>
                                 </div>
                             </div>
 
@@ -233,106 +241,18 @@
                                 </div>
                             </div>
                         </div> <!-- End of .member-list-card -->
+                    {% endif %}
                 {% endfor %}
 
-                {% if not active_members %}
+                {% if ns.count == 0 %}
                 <div class="no-data-placeholder">
-                    <p>No members have an ongoing session.</p>
+                    <p>No official members found.</p>
                 </div>
                 {% endif %}
             </div>
         </div>
 
-        <!-- Tab 3: History -->
-        <div id="history" class="tab-panel {{ 'active' if active_tab == 'history' else '' }}">
-            <div class="list-controls">
-                <div class="list-title-group">
-                    <h2 class="section-heading">Member History</h2>
-                    <p class="section-subtext">Review completed sessions and manage memberships without an ongoing session.</p>
-                </div>
-                <div class="list-search-box">
-                    <i class="fas fa-search"></i>
-                    <input type="text" id="historyListSearch" placeholder="Search member history...">
-                </div>
-            </div>
-
-            <div class="members-card-list">
-                {% for member in history_members %}
-                    {% set membership_status = (member.membership.status or '')|lower %}
-                    {% set is_checked_out_val = member.membership.is_checked_out or membership_status in ['checked_out', 'checked-out', 'checked out', 'completed'] %}
-                    {% set visit_count = member.membership.attendance_logs.count() %}
-                    <div class="member-list-card history-member-card" data-searchable="{{ member.name }} {{ member.email }} WS-WLK-{{ member.id }}" data-user-id="{{ member.id }}" data-membership-id="{{ member.membership.id }}" data-end-time="{{ member.membership.expiry_date.isoformat() if member.membership.expiry_date else '' }}">
-                        <div class="member-card-header">
-                            <div class="member-header-info">
-                                <h3 class="member-name">{{ member.name }}</h3>
-                                <div class="member-sub-info">
-                                    <span>WS-WLK-{{ member.id }}</span>
-                                    <div class="member-contact-stack">
-                                        <span>Email: {{ member.email }}</span>
-                                        <span>Contact: {{ member.phone or 'N/A' }}</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="member-header-plan">
-                                <span>Plan: {{ member.membership.plan_name or 'Solo Plan' }}</span>
-                                <span>Status:
-                                    {% if is_checked_out_val %}
-                                        <strong id="status-text-{{ member.id }}" class="status-checkout">Checked Out</strong>
-                                    {% elif member.membership.status == 'expired' %}
-                                        <strong id="status-text-{{ member.id }}" class="status-checkout">Expired</strong>
-                                    {% else %}
-                                        <strong id="status-text-{{ member.id }}" class="status-ready">Ready to check in</strong>
-                                    {% endif %}
-                                </span>
-                            </div>
-                            <div class="remaining-time-badge">
-                                <span>Remaining Time</span>
-                                <strong>{{ '%.2f'|format(member.membership.hours_left or 0) }} hrs</strong>
-                            </div>
-                        </div>
-                        <div class="member-card-left-column">
-                            <div class="member-status-icon">
-                                <div class="status-indicator-box active">
-                                    <i class="fas fa-file-invoice"></i>
-                                    <span>Active</span>
-                                </div>
-                            </div>
-                            <div class="member-card-actions">
-                                <div class="session-action-group">
-                                    {% if is_checked_out_val %}
-                                        <button type="button" class="btn-checkout-session" style="width: 100%; opacity: 0.65; cursor: not-allowed;" disabled>Checked Out</button>
-                                    {% elif member.membership.status == 'expired' %}
-                                        <button type="button" class="btn-checkout-session" style="width: 100%; opacity: 0.65; cursor: not-allowed;" disabled>Expired</button>
-                                    {% else %}
-                                        <button class="btn-check-in btn-action" type="button" data-user-id="{{ member.id }}" data-membership-id="{{ member.membership.id }}" data-is-checked-in="false" style="width: 100%; background-color: #10b981; color: #ffffff; cursor: pointer;">Check In</button>
-                                    {% endif %}
-                                </div>
-                                <button class="btn-view-records" type="button" data-user-id="{{ member.id }}" data-membership-id="{{ member.membership.id }}">View Records</button>
-                                <div class="manage-action-group">
-                                    <button class="btn renew-btn btn-action" type="button" data-user-id="{{ member.id }}" style="font-weight: bold; background-color: #153d70; color: white; cursor: pointer;">Renew Membership</button>
-                                    <button class="btn-deactivate" type="button" data-user-id="{{ member.id }}">Deactivate</button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="member-activity-logs-container" aria-label="Recent activity">
-                            <div class="member-activity-logs-header">
-                                <span>SESSION ACTIVITY</span>
-                                <span class="member-activity-logs-count">Daily session history {{ visit_count }} visits</span>
-                            </div>
-                            <div class="member-activity-logs" data-activity-membership-id="{{ member.membership.id }}">
-                                <p class="member-activity-log-empty">Loading activity...</p>
-                            </div>
-                        </div>
-                    </div>
-                {% else %}
-                    <div class="no-data-placeholder">
-                        <p>No finished or checked-out memberships found.</p>
-                    </div>
-                {% endfor %}
-            </div>
-        </div>
-
-  <!-- Tab 4: Deactivated Accounts -->
+  <!-- Tab 3: Deactivated Accounts -->
         <div id="deactivated" class="tab-panel {{ 'active' if active_tab == 'deactivated' else '' }}">
             <div class="list-controls">
                 <div class="list-title-group">
