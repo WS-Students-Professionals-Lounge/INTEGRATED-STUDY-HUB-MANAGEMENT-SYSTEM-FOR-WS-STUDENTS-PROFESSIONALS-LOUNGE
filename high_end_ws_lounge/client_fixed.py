@@ -5,7 +5,6 @@ Contains all client-facing blueprints: auth, main, and api.
 
 import os
 import logging
-from functools import wraps
 from datetime import datetime, timedelta
 import pytz
 import stripe
@@ -44,7 +43,6 @@ from flask import (
     render_template,
 )
 from sqlalchemy import and_, case, func, or_
-from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.utils import secure_filename
 from flask_login import current_user, login_required, login_user, logout_user
 from flask_mail import Message
@@ -66,36 +64,6 @@ _SOLO_PLAN_PRICES = {
     "WORKSTATION (24HRS)": 3000.0,
 }
 
-_DATABASE_FALLBACK_ERRORS = (
-    SQLAlchemyError,
-    AttributeError,
-    TypeError,
-    ValueError,
-    OverflowError,
-)
-
-
-def _with_database_fallback(fallback_factory):
-    def decorate(view):
-        @wraps(view)
-        def wrapped(*args, **kwargs):
-            try:
-                return view(*args, **kwargs)
-            except _DATABASE_FALLBACK_ERRORS:
-                current_app.logger.exception(
-                    "Database-backed route %s failed; returning its safe fallback",
-                    view.__name__,
-                )
-                try:
-                    db.session.rollback()
-                except SQLAlchemyError:
-                    current_app.logger.exception(
-                        "Could not roll back the failed database session"
-                    )
-                return fallback_factory()
-        return wrapped
-    return decorate
-
 
 def _customer_hidden_attendance_ids():
     return {
@@ -110,19 +78,8 @@ def _save_customer_hidden_attendance_ids(log_ids):
     session.modified = True
 
 
-def _login_database_fallback():
-    flash("Sign-in is temporarily unavailable. Please try again shortly.", "danger")
-    return redirect(url_for("main.index", show_login="true"))
-
-
 @main_bp.route("/api/customer/attendance/<int:log_id>/delete", methods=["DELETE"])
 @login_required
-@_with_database_fallback(
-    lambda: (
-        jsonify({"success": False, "message": "Attendance history is unavailable."}),
-        503,
-    )
-)
 def delete_customer_attendance(log_id):
     log = (
         AttendanceLog.query
@@ -141,12 +98,6 @@ def delete_customer_attendance(log_id):
 
 @main_bp.route("/api/customer/attendance/clear-all", methods=["DELETE"])
 @login_required
-@_with_database_fallback(
-    lambda: (
-        jsonify({"success": False, "message": "Attendance history is unavailable."}),
-        503,
-    )
-)
 def clear_customer_attendance():
     membership_ids = [
         membership.id
@@ -190,7 +141,6 @@ def get_custom_tier_rate(room_name, pax_count, default_base_rate):
 
 
 @auth_bp.route("/login", methods=["GET", "POST"])
-@_with_database_fallback(_login_database_fallback)
 def login():
     if current_user.is_authenticated:
         return redirect(url_for("main.dashboard"))
@@ -411,50 +361,50 @@ def get_admin_stats():
 
 @auth_bp.app_context_processor
 def inject_member_notifications():
-    if current_user.is_authenticated and getattr(current_user, "role", "") == "member":
-        try:
-            unread_approval_count = SoloPlan.query.filter(
-                SoloPlan.user_id == current_user.id,
-                SoloPlan.status.ilike("approved"),
-                SoloPlan.member_notification_seen == False
-            ).count()
-            unread_renewal_count = SoloPlan.query.filter(
-                SoloPlan.user_id == current_user.id,
-                SoloPlan.status.ilike("approved"),
-                SoloPlan.renewal_notification_seen == False
-            ).count()
-            unread_reservation_notification_count = Reservation.query.filter(
-                Reservation.user_id == current_user.id,
-                func.lower(Reservation.status).in_(
-                    ["confirmed", "in_progress", "checked-in", "paused"]
-                ),
-                Reservation.confirmation_notification_seen == False
-            ).count()
-            member_membership = Membership.query.filter_by(
-                user_id=current_user.id
-            ).order_by(Membership.updated_at.desc(), Membership.id.desc()).first()
-            member_session_notification_active = bool(
-                member_membership
-                and (
-                    getattr(member_membership, "is_checked_in", False)
-                    or getattr(member_membership, "is_paused", False)
-                )
+    if current_user.is_authenticated and current_user.role == "member":
+
+        # Membership approval notifications
+        unread_approval_count = SoloPlan.query.filter(
+            SoloPlan.user_id == current_user.id,
+            SoloPlan.status.ilike("approved"),
+            SoloPlan.member_notification_seen == False
+        ).count()
+
+        # Membership renewal notifications
+        unread_renewal_count = SoloPlan.query.filter(
+            SoloPlan.user_id == current_user.id,
+            SoloPlan.status.ilike("approved"),
+            SoloPlan.renewal_notification_seen == False
+        ).count()
+
+        # Confirmed room reservation notifications
+        unread_reservation_notification_count = Reservation.query.filter(
+            Reservation.user_id == current_user.id,
+            func.lower(Reservation.status).in_(
+                ["confirmed", "in_progress", "checked-in", "paused"]
+            ),
+            Reservation.confirmation_notification_seen == False
+        ).count()
+
+        unread_membership_notification_count = (
+            unread_approval_count + unread_renewal_count
+        )
+        member_membership = Membership.query.filter_by(
+            user_id=current_user.id
+        ).order_by(Membership.updated_at.desc(), Membership.id.desc()).first()
+        member_session_notification_active = bool(
+            member_membership
+            and (
+                getattr(member_membership, "is_checked_in", False)
+                or getattr(member_membership, "is_paused", False)
             )
-            return dict(
-                unread_membership_notification_count=unread_approval_count + unread_renewal_count,
-                unread_reservation_notification_count=unread_reservation_notification_count,
-                member_session_notification_active=member_session_notification_active,
-            )
-        except _DATABASE_FALLBACK_ERRORS:
-            current_app.logger.exception(
-                "Could not load member notification counts; using empty counts"
-            )
-            try:
-                db.session.rollback()
-            except SQLAlchemyError:
-                current_app.logger.exception(
-                    "Could not roll back the failed member notification query"
-                )
+        )
+
+        return dict(
+            unread_membership_notification_count=unread_membership_notification_count,
+            unread_reservation_notification_count=unread_reservation_notification_count,
+            member_session_notification_active=member_session_notification_active,
+        )
 
     return dict(
         unread_membership_notification_count=0,
@@ -464,12 +414,6 @@ def inject_member_notifications():
 
 @main_bp.route("/api/notifications/membership/read", methods=["POST"])
 @login_required
-@_with_database_fallback(
-    lambda: (
-        jsonify({"status": "error", "message": "Notifications could not be updated."}),
-        503,
-    )
-)
 def mark_membership_notifications_read():
     if current_user.role != "member":
         return jsonify({
@@ -507,12 +451,6 @@ def mark_membership_notifications_read():
 
 @main_bp.route("/api/notifications/reservations/read", methods=["POST"])
 @login_required
-@_with_database_fallback(
-    lambda: (
-        jsonify({"status": "error", "message": "Notifications could not be updated."}),
-        503,
-    )
-)
 def mark_reservation_notifications_read():
     if current_user.role != "member":
         return jsonify({
@@ -599,11 +537,7 @@ def index():
 
 @main_bp.route("/dashboard")
 @login_required
-@_with_database_fallback(lambda: _member_dashboard_fallback())
 def dashboard():
-    if getattr(current_user, "role", "") in ["admin", "staff"]:
-        return redirect(url_for("admin.dashboard"))
-
     ph_tz = pytz.timezone("Asia/Manila")
     now_ph = datetime.now(ph_tz)
     now_naive = now_ph.replace(second=0, microsecond=0, tzinfo=None)
@@ -647,6 +581,9 @@ def dashboard():
         .order_by(TimeLog.time_in.desc())
         .first()
     )
+
+    if current_user.role in ["admin", "staff"]:
+        return redirect(url_for("admin.dashboard"))
 
     # 1. Fetch Membership Data
     membership = Membership.query.filter(
@@ -815,47 +752,8 @@ def dashboard():
     )
 
 
-def _member_dashboard_fallback():
-    flash(
-        "Some dashboard data is temporarily unavailable. Please try again shortly.",
-        "warning",
-    )
-    return render_template(
-        "dashboard/member_dashboard.html",
-        reservations=[],
-        total_reservations=0,
-        active_plan=None,
-        active_session=None,
-        active_reservation=None,
-        is_reservation_paused=False,
-        remaining_days=None,
-        solo_plans=[],
-        total_solo_plans=0,
-        total_solo_hours=0,
-        membership=None,
-        attendance_logs=[],
-        now_ph=datetime.now(pytz.timezone("Asia/Manila")),
-        is_session_paused=False,
-        membership_notifications=[],
-        unread_membership_notification_count=0,
-    )
-
-
 @main_bp.route("/api/user-active-reservation", methods=["GET"])
 @login_required
-@_with_database_fallback(
-    lambda: (
-        jsonify({
-            "status": "error",
-            "message": "Reservation status is temporarily unavailable.",
-            "has_active": False,
-            "session_started": False,
-            "started_session_id": None,
-            "unread_confirmation_ids": [],
-        }),
-        503,
-    )
-)
 def user_active_reservation():
     now_naive = datetime.now(pytz.timezone("Asia/Manila")).replace(
         second=0, microsecond=0, tzinfo=None
@@ -1588,7 +1486,6 @@ def rooms():
 
 @main_bp.route("/timelog")
 @login_required
-@_with_database_fallback(lambda: _timelog_fallback())
 def timelog():
     ph_tz = pytz.timezone("Asia/Manila")
     now_ph = datetime.now(ph_tz)
@@ -1772,25 +1669,6 @@ def timelog():
         totals=totals,
         active_session=active_session,
         completed_sessions=completed_sessions_count
-    )
-
-
-def _timelog_fallback():
-    flash("Usage history is temporarily unavailable. Please try again shortly.", "warning")
-    return render_template(
-        "timelog.html",
-        logs=[],
-        current_plan=None,
-        totals={
-            "all_time_minutes": 0,
-            "month_time_minutes": 0,
-            "today_time_minutes": 0,
-            "plan_totals": {},
-            "most_used_room": "None",
-            "avg_session_length": 0,
-        },
-        active_session=None,
-        completed_sessions=0,
     )
 
 
@@ -2462,15 +2340,6 @@ def checkout_solo_plan():
 
 @api_bp.route("/membership/status", methods=["GET"])
 @login_required
-@_with_database_fallback(
-    lambda: (
-        jsonify({
-            "status": "error",
-            "message": "Membership status is temporarily unavailable.",
-        }),
-        503,
-    )
-)
 def membership_status():
     """Get current user's membership status"""
     ph_tz = pytz.timezone("Asia/Manila")
@@ -2694,15 +2563,6 @@ def membership_status():
 
 @api_bp.route("/membership/current-session", methods=["GET"])
 @login_required
-@_with_database_fallback(
-    lambda: (
-        jsonify({
-            "status": "error",
-            "message": "Current session is temporarily unavailable.",
-        }),
-        503,
-    )
-)
 def membership_current_session():
     """Get current user's active session (check-in time) - PAUSE FREEZE FIXED"""
     ph_tz = pytz.timezone("Asia/Manila")
